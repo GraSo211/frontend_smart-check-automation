@@ -34,30 +34,30 @@ export function KpiCards({ runs }: KpiCardsProps) {
 
   const cards = [
     {
-      label: "Total Units Processed",
+      label: "Unidades procesadas totales",
       value: formatNumber(m.totalUnits),
-      hint: `${runs.length} production runs`,
+      hint: `${runs.length} lotes de producción`,
       icon: Boxes,
       accent: "bg-primary/10 text-primary",
     },
     {
-      label: "Overall Quality Rate",
+      label: "Tasa de calidad general",
       value: `${m.qualityRate.toFixed(1)}%`,
-      hint: "Correct vs total units",
+      hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
       accent: "bg-emerald-50 text-emerald-600",
     },
     {
-      label: "Defect Rate (Merma)",
+      label: "Tasa de merma",
       value: `${m.defectRate.toFixed(1)}%`,
-      hint: "Burnt units / total",
+      hint: "Unidades quemadas / total",
       icon: Flame,
       accent: "bg-red-50 text-red-600",
     },
     {
-      label: "Avg Oven Overview",
+      label: "Promedio de hornos",
       value: `${Math.round(m.avgTemp)}°C`,
-      hint: `Speed ${m.avgSpeed.toFixed(1)} u/min`,
+      hint: `Velocidad ${m.avgSpeed.toFixed(1)} u/min`,
       icon: Gauge,
       accent: "bg-amber-50 text-amber-600",
     },
@@ -65,7 +65,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
 
   return (
     <section
-      aria-label="Summary metrics"
+      aria-label="Métricas de resumen"
       className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
     >
       {cards.map((card) => {

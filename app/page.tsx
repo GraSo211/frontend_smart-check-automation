@@ -12,10 +12,10 @@ export default function Page() {
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h2 className="text-balance text-xl font-bold tracking-tight text-foreground">
-            Supervision de Produccion
+            Supervisión de Producción
           </h2>
           <p className="text-sm text-muted-foreground">
-            Informacion de Telemetria y Calidad en todas las Lineas de Produccion.
+            Información de telemetría y calidad en todas las líneas de producción.
           </p>
         </div>
 

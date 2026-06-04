@@ -11,7 +11,7 @@ export function DashboardFooter() {
   useEffect(() => {
     const update = () =>
       setLastSync(
-        new Date().toLocaleTimeString("en-US", {
+        new Date().toLocaleTimeString("es-AR", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
@@ -32,8 +32,8 @@ export function DashboardFooter() {
         </p>
         <p className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <Radio className="size-3.5 text-emerald-600" aria-hidden="true" />
-          Ultima Sincronizacion: <span className="font-mono text-foreground">{lastSync || "--:--:--"}</span>
-          <span className="text-muted-foreground">· Real-time via IoT Edge</span>
+          Última sincronización: <span className="font-mono text-foreground">{lastSync || "--:--:--"}</span>
+          <span className="text-muted-foreground">· En tiempo real vía IoT Edge</span>
         </p>
       </div>
     </footer>

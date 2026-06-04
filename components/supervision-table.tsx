@@ -26,18 +26,18 @@ export function SupervisionTable() {
 
   return (
     <section
-      aria-label="Production supervision table"
+      aria-label="Tabla de supervisión de producción"
       className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Lotes de Produccion</h2>
+          <h2 className="text-sm font-semibold text-foreground">Lotes de Producción</h2>
           <p className="text-xs text-muted-foreground">
-            Real-time line supervision per shift
+            Supervisión en tiempo real por turno
           </p>
         </div>
         <span className="text-xs font-medium text-muted-foreground">
-          {formatNumber(total)} total records
+          {formatNumber(total)} registros totales
         </span>
       </div>
 
@@ -45,14 +45,14 @@ export function SupervisionTable() {
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-border bg-secondary/50 text-left">
-              <Th>Product</Th>
-              <Th>Shift</Th>
-              <Th>Time Window</Th>
+              <Th>Producto</Th>
+              <Th>Turno</Th>
+              <Th>Franja horaria</Th>
               <Th className="text-right">Total</Th>
-              <Th className="text-right">Quality</Th>
-              <Th className="text-right">Burnt</Th>
-              <Th className="text-center">Oven Temps</Th>
-              <Th className="text-right">Speed</Th>
+              <Th className="text-right">Calidad</Th>
+              <Th className="text-right">Quemados</Th>
+              <Th className="text-center">Temperaturas de horno</Th>
+              <Th className="text-right">Velocidad</Th>
             </tr>
           </thead>
           <tbody>
@@ -124,9 +124,9 @@ export function SupervisionTable() {
       {/* Pagination controls */}
       <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
-          Showing <span className="font-medium text-foreground">{rangeStart}</span>–
-          <span className="font-medium text-foreground">{rangeEnd}</span> of{" "}
-          <span className="font-medium text-foreground">{formatNumber(total)}</span> items
+          Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
+          <span className="font-medium text-foreground">{rangeEnd}</span> de{" "}
+          <span className="font-medium text-foreground">{formatNumber(total)}</span> elementos
         </p>
         <div className="flex items-center gap-2">
           <PageButton
@@ -134,16 +134,16 @@ export function SupervisionTable() {
             disabled={page === 1}
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Previous
+            Anterior
           </PageButton>
           <span className="px-2 text-xs font-medium text-muted-foreground">
-            Page {page} of {totalPages}
+            Página {page} de {totalPages}
           </span>
           <PageButton
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >
-            Next
+            Siguiente
             <ChevronRight className="size-4" aria-hidden="true" />
           </PageButton>
         </div>
