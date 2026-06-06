@@ -1,4 +1,5 @@
 import { Activity, Factory } from "lucide-react"
+import { ModeToggle } from "@/components/mode-toggle"
 
 // Top application header with branding, enterprise badge and live system status.
 export function DashboardHeader() {
@@ -32,6 +33,7 @@ export function DashboardHeader() {
             <Activity className="size-3.5 text-primary" aria-hidden="true" />
             IoT Edge En Vivo
           </span>
+          <ModeToggle />
         </div>
       </div>
     </header>
