@@ -2,6 +2,8 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
+import { Header } from '@/components/header'
+import { Footer } from '@/components/footer'
 
 export const metadata: Metadata = {
   title: 'Smart-Check Automation | Fermar S.A.',
@@ -40,7 +42,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Header></Header>
           {children}
+          <Footer></Footer>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

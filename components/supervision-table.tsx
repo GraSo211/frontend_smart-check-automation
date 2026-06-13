@@ -1,28 +1,39 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TurnoBadge } from "@/components/turno-badge"
-import { getProductionPage } from "@/lib/production-data"
 import { formatNumber, formatWindow, qualityRate } from "@/lib/format"
+import type { ProductionRun } from "@/lib/production-data"
 
 const PAGE_SIZE = 10
 // Burnt-unit ratio above which a row is flagged as a potential line failure.
 const BURNT_WARNING_RATIO = 0.05
 
-// Main supervision data table with client-side pagination over the simulated API.
-export function SupervisionTable() {
+interface SupervisionTableProps {
+  runs: ProductionRun[]
+}
+
+// Main supervision data table with client-side pagination.
+export function SupervisionTable({ runs }: SupervisionTableProps) {
   const [page, setPage] = useState(1)
 
-  const { data, total, pageSize } = useMemo(
-    () => getProductionPage(page, PAGE_SIZE),
-    [page],
+  const total = runs.length
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const rangeStart = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0
+  const rangeEnd = Math.min(page * PAGE_SIZE, total)
+
+  const data = useMemo(
+    () => runs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [runs, page],
   )
 
-  const totalPages = Math.ceil(total / pageSize)
-  const rangeStart = (page - 1) * pageSize + 1
-  const rangeEnd = Math.min(page * pageSize, total)
+  useEffect(() => {
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages)
+    }
+  }, [totalPages, page])
 
   return (
     <section
@@ -41,6 +52,15 @@ export function SupervisionTable() {
         </span>
       </div>
 
+      {total === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
+          <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
+          <p className="text-sm font-medium text-foreground">Sin resultados</p>
+          <p className="text-xs text-muted-foreground">
+            No se encontraron lotes con los filtros seleccionados.
+          </p>
+        </div>
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
@@ -120,8 +140,9 @@ export function SupervisionTable() {
           </tbody>
         </table>
       </div>
+      )}
 
-      {/* Pagination controls */}
+      {total > 0 && (
       <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
@@ -148,6 +169,7 @@ export function SupervisionTable() {
           </PageButton>
         </div>
       </div>
+      )}
     </section>
   )
 }

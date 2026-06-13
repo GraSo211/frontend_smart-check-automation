@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Radio } from "lucide-react"
 
 // Bottom footer with copyright and a simulated real-time IoT sync timestamp.
-export function DashboardFooter() {
+export function Footer() {
   const [lastSync, setLastSync] = useState<string>("")
 
   // Update the "last sync" clock every second to mimic a live IoT feed.

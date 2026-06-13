@@ -19,18 +19,22 @@ const THEME_OPTIONS = [
 ]
 
 export function ModeToggle() {
-  const { theme, resolvedTheme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const active = mounted ? (theme ?? "system") : "system"
-  const ActiveIcon =
-    active === "dark" || (active === "system" && resolvedTheme === "dark")
-      ? Moon
-      : Sun
+  if (!mounted) {
+    return (
+      <Button variant="outline" size="icon" aria-label="Cambiar tema" disabled>
+        <Sun aria-hidden="true" />
+      </Button>
+    )
+  }
+
+  const ActiveIcon = theme === "dark" ? Moon : Sun
 
   return (
     <DropdownMenu>
@@ -48,7 +52,7 @@ export function ModeToggle() {
       />
       <DropdownMenuContent align="end" className="min-w-36">
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
-          const isActive = mounted && value === theme
+          const isActive = value === theme
           return (
             <DropdownMenuItem
               key={value}

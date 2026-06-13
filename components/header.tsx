@@ -2,7 +2,7 @@ import { Activity, Factory } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 
 // Top application header with branding, enterprise badge and live system status.
-export function DashboardHeader() {
+export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">

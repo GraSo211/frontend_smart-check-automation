@@ -1,14 +1,20 @@
-import { DashboardHeader } from "@/components/header"
-import { KpiCards } from "@/components/kpi-cards"
-import { SupervisionTable } from "@/components/supervision-table"
-import { DashboardFooter } from "@/components/footer"
-import { PRODUCTION_RUNS } from "@/lib/production-data"
+import { DashboardContent } from "@/components/dashboard-content"
+import { getAllProductionRuns } from "@/actions/api"
+import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
 
-export default function Page() {
+export default async function Page() {
+  let runs: ProductionRun[] = []
+  let error: string | null = null
+
+  try {
+    runs = await getAllProductionRuns()
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Error desconocido"
+    runs = PRODUCTION_RUNS
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <DashboardHeader />
-
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h2 className="text-balance text-xl font-bold tracking-tight text-foreground">
@@ -19,13 +25,14 @@ export default function Page() {
           </p>
         </div>
 
-        <div className="space-y-6">
-          <KpiCards runs={PRODUCTION_RUNS} />
-          <SupervisionTable />
-        </div>
-      </main>
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
-      <DashboardFooter />
+        <DashboardContent runs={runs} />
+      </main>
     </div>
   )
 }
