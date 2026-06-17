@@ -1,6 +1,6 @@
 import { Boxes, ShieldCheck, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatNumber } from "@/lib/format"
+import { formatKg, formatNumber } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
 interface KpiCardsProps {
@@ -9,17 +9,22 @@ interface KpiCardsProps {
 
 // Computes the top-row summary metrics across the full production dataset.
 function computeMetrics(runs: ProductionRun[]) {
-  const totalUnits = runs.reduce((sum, r) => sum + r.totalUnidades, 0)
+  const totalKg = runs.reduce(
+    (sum, r) => sum + r.correctosKg + r.quemadosKg + (r.crudosKg ?? 0),
+    0,
+  )
   const totalCorrect = runs.reduce((sum, r) => sum + r.correctos, 0)
+  const totalUnits = runs.reduce((sum, r) => sum + r.totalUnidades, 0)
   const totalBurnt = runs.reduce((sum, r) => sum + r.quemados, 0)
   const avgTemp = runs.length
-    ? runs.reduce((sum, r) => sum + (r.temp_horno_1 + r.temp_horno_2) / 2, 0) / runs.length
+    ? runs.reduce((sum, r) => sum + (r.tempHorno1 + r.tempHorno2) / 2, 0) / runs.length
     : 0
   const avgSpeed = runs.length
-    ? runs.reduce((sum, r) => sum + r.velocidad_horno, 0) / runs.length
+    ? runs.reduce((sum, r) => sum + r.velocidadCinta, 0) / runs.length
     : 0
 
   return {
+    totalKg,
     totalUnits,
     qualityRate: totalUnits ? (totalCorrect / totalUnits) * 100 : 0,
     defectRate: totalUnits ? (totalBurnt / totalUnits) * 100 : 0,
@@ -34,8 +39,8 @@ export function KpiCards({ runs }: KpiCardsProps) {
 
   const cards = [
     {
-      label: "Unidades procesadas totales",
-      value: formatNumber(m.totalUnits),
+      label: "Unidades procesadas totales en Kg",
+      value: formatKg(m.totalKg),
       hint: `${runs.length} lotes de producción`,
       icon: Boxes,
       accent: "bg-primary/10 text-primary",
@@ -57,7 +62,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
     {
       label: "Promedio de hornos",
       value: `${Math.round(m.avgTemp)}°C`,
-      hint: `Velocidad ${m.avgSpeed.toFixed(1)} u/min`,
+      hint: `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min`,
       icon: Gauge,
       accent: "bg-amber-50 text-amber-600",
     },

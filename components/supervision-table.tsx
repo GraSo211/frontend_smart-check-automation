@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TurnoBadge } from "@/components/turno-badge"
-import { formatNumber, formatWindow, qualityRate } from "@/lib/format"
+import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
 const PAGE_SIZE = 10
@@ -62,17 +62,18 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
         </div>
       ) : (
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] border-collapse text-sm">
+        <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-border bg-secondary/50 text-left">
               <Th>Producto</Th>
               <Th>Turno</Th>
               <Th>Franja horaria</Th>
               <Th className="text-right">Total</Th>
-              <Th className="text-right">Calidad</Th>
+              <Th className="text-right">Correctos</Th>
               <Th className="text-right">Quemados</Th>
+              <Th className="text-right">Crudas</Th>
               <Th className="text-center">Temperaturas de horno</Th>
-              <Th className="text-right">Velocidad</Th>
+              <Th className="text-right">Vel. cinta</Th>
             </tr>
           </thead>
           <tbody>
@@ -80,6 +81,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
               const burntRatio = run.quemados / run.totalUnidades
               const isWarning = burntRatio >= BURNT_WARNING_RATIO
               const quality = qualityRate(run.correctos, run.totalUnidades)
+              const hasCrudas = run.crudas !== null && run.crudas > 0
 
               return (
                 <tr
@@ -108,6 +110,9 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                       {formatNumber(run.correctos)}
                     </div>
                     <div className="text-xs text-muted-foreground">
+                      {formatKg(run.correctosKg)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
                       {quality.toFixed(1)}%
                     </div>
                   </td>
@@ -123,16 +128,27 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                       )}
                       {formatNumber(run.quemados)}
                     </span>
+                    <div className="text-xs text-muted-foreground">
+                      {formatKg(run.quemadosKg)}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <span className="font-mono tabular-nums text-amber-700">
+                      {run.crudas !== null ? formatNumber(run.crudas) : "—"}
+                    </span>
+                    <div className="text-xs text-muted-foreground">
+                      {run.crudosKg !== null ? formatKg(run.crudosKg) : "—"}
+                    </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-center gap-3 text-xs">
-                      <OvenTemp label="H1" temp={run.temp_horno_1} />
-                      <OvenTemp label="H2" temp={run.temp_horno_2} />
+                    <div className="flex items-center justify-center gap-2 text-xs">
+                      <OvenTemp label="H1" temp={run.tempHorno1} comb={run.tempCombHorno1} />
+                      <OvenTemp label="H2" temp={run.tempHorno2} comb={run.tempCombHorno2} />
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
-                    {run.velocidad_horno}
-                    <span className="ml-1 text-xs text-muted-foreground">u/min</span>
+                    {run.velocidadCinta.toFixed(1)}
+                    <span className="ml-1 text-xs text-muted-foreground">m/min</span>
                   </td>
                 </tr>
               )
@@ -188,8 +204,8 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   )
 }
 
-// Compact oven temperature pill with color coded high-heat states.
-function OvenTemp({ label, temp }: { label: string; temp: number }) {
+// Compact oven temperature pill with color coded high-heat states and combustion temp.
+function OvenTemp({ label, temp, comb }: { label: string; temp: number; comb: number }) {
   const hot = temp >= 225
   return (
     <span
@@ -203,6 +219,7 @@ function OvenTemp({ label, temp }: { label: string; temp: number }) {
       <Thermometer className="size-3" aria-hidden="true" />
       <span className="text-[10px] font-semibold opacity-70">{label}</span>
       {temp}°
+      <span className="text-[10px] opacity-50">{comb}°</span>
     </span>
   )
 }

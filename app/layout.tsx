@@ -1,9 +1,20 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
+import { Outfit, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-sans',
+})
+
+const sora = Sora({
+  subsets: ['latin'],
+  variable: '--font-heading',
+})
 
 export const metadata: Metadata = {
   title: 'Smart-Check Automation | Fermar S.A.',
@@ -34,7 +45,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="bg-background" suppressHydrationWarning>
+    <html lang="es" className={`${outfit.variable} ${sora.variable} bg-background`} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider
           attribute="class"

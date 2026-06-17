@@ -9,13 +9,15 @@ export interface ProductionRun {
   totalUnidades: number
   correctos: number
   quemados: number
-  temp_horno_1: number
-  temp_comb_horno_1: number
-  temp_horno_2: number
-  temp_comb_horno_2: number
-  velocidad_horno: number
-  correctos_kg: number
-  quemados_kg: number
+  crudas: number | null
+  correctosKg: number
+  quemadosKg: number
+  crudosKg: number | null
+  tempHorno1: number
+  tempCombHorno1: number
+  tempHorno2: number
+  tempCombHorno2: number
+  velocidadCinta: number
   createdAt: string
   updatedAt: string
 }
@@ -62,7 +64,10 @@ function buildRuns(count: number): ProductionRun[] {
     const quemados = failure
       ? Math.floor(total * (0.06 + rand() * 0.05))
       : Math.floor(total * (0.005 + rand() * 0.02))
-    const correctos = total - quemados
+    const crudas = failure
+      ? Math.floor(total * (0.02 + rand() * 0.03))
+      : 0
+    const correctos = total - quemados - crudas
 
     const baseHour = turno === "mañana" ? 6 : turno === "tarde" ? 14 : 22
     const day = 2 + (i % 12)
@@ -82,13 +87,15 @@ function buildRuns(count: number): ProductionRun[] {
       totalUnidades: total,
       correctos,
       quemados,
-      temp_horno_1: tempH1,
-      temp_comb_horno_1: tempH1 - 12 - Math.floor(rand() * 8),
-      temp_horno_2: tempH2,
-      temp_comb_horno_2: tempH2 - 12 - Math.floor(rand() * 8),
-      velocidad_horno: 12 + Math.floor(rand() * 8),
-      correctos_kg: Math.round(correctos * 0.18 * 10) / 10,
-      quemados_kg: Math.round(quemados * 0.19 * 10) / 10,
+      crudas,
+      correctosKg: Math.round(correctos * 0.18 * 10) / 10,
+      quemadosKg: Math.round(quemados * 0.19 * 10) / 10,
+      crudosKg: crudas > 0 ? Math.round(crudas * 0.17 * 10) / 10 : null,
+      tempHorno1: tempH1,
+      tempCombHorno1: tempH1 - 12 - Math.floor(rand() * 8),
+      tempHorno2: tempH2,
+      tempCombHorno2: tempH2 - 12 - Math.floor(rand() * 8),
+      velocidadCinta: 2 + Math.floor(rand() * 20) / 10,
       createdAt: inicio.toISOString(),
       updatedAt: fin.toISOString(),
     })

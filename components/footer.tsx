@@ -1,39 +1,47 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import Image from "next/image"
+import { useSyncExternalStore } from "react"
 import { Radio } from "lucide-react"
+import { getLastSync, subscribeToLastSync } from "@/lib/sync-store"
 
-// Bottom footer with copyright and a simulated real-time IoT sync timestamp.
+// Bottom footer showing the timestamp of the last successful backend sync.
 export function Footer() {
-  const [lastSync, setLastSync] = useState<string>("")
+  const lastSyncISO = useSyncExternalStore(
+    subscribeToLastSync,
+    getLastSync,
+    () => null,
+  )
 
-  // Update the "last sync" clock every second to mimic a live IoT feed.
-  useEffect(() => {
-    const update = () =>
-      setLastSync(
-        new Date().toLocaleTimeString("es-AR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        }),
-      )
-    update()
-    const id = setInterval(update, 1000)
-    return () => clearInterval(id)
-  }, [])
+  const lastSyncDisplay = lastSyncISO
+    ? new Date(lastSyncISO).toLocaleTimeString("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      })
+    : null
 
   return (
-    <footer className="mt-10 border-t border-border bg-card">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-center sm:flex-row sm:text-left sm:px-6 lg:px-8">
-        <p className="text-xs text-muted-foreground">
-          Smart-Check Automation © 2026 | Desarrollado por SmarTeam – Sistema 
-          de Control de Calidad Industrial.
-        </p>
-        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Radio className="size-3.5 text-emerald-600" aria-hidden="true" />
-          Última sincronización: <span className="font-mono text-foreground">{lastSync || "--:--:--"}</span>
-          <span className="text-muted-foreground">· En tiempo real vía IoT Edge</span>
+    <footer className="mt-10 border-t border-sidebar-border bg-sidebar">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-center sm:flex-row sm:text-left sm:px-6 lg:px-8">
+        <div className="flex items-center gap-4">
+          <Image
+            src="/Imagotipo - Versión Principal.webp"
+            alt="Smart-Check Automation"
+            width={100}
+            height={44}
+            className="h-10 w-auto shrink-0"
+          />
+          <p className="text-xs text-sidebar-foreground/65">
+            Smart-Check Automation © 2026 | Desarrollado por SmarTeam – Sistema 
+            de Control de Calidad Industrial.
+          </p>
+        </div>
+        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-sidebar-foreground/65">
+          <Radio className="size-3.5 text-sidebar-primary" aria-hidden="true" />
+          Última sincronización: <span className="font-mono text-sidebar-foreground">{lastSyncDisplay ?? "--:--:--"}</span>
+
         </p>
       </div>
     </footer>

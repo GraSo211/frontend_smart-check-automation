@@ -5,9 +5,11 @@ import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
 export default async function Page() {
   let runs: ProductionRun[] = []
   let error: string | null = null
+  let lastSyncAt: string | null = null
 
   try {
     runs = await getAllProductionRuns()
+    lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
     runs = PRODUCTION_RUNS
@@ -31,7 +33,7 @@ export default async function Page() {
           </div>
         )}
 
-        <DashboardContent runs={runs} />
+        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} />
       </main>
     </div>
   )
