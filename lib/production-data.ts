@@ -23,6 +23,8 @@ export interface ProductionRun {
 }
 
 export interface ProductionResponse {
+  success: boolean
+  message: string
   data: ProductionRun[]
   total: number
   page: number
