@@ -15,6 +15,12 @@ interface SupervisionTableProps {
   runs: ProductionRun[]
 }
 
+
+
+//! VERIFICAR LA VELOCIDAD DE LA CINTA 
+//! VERIFICAR LOSVALORES DE CRUDAS Y CRUDOS
+//! AMBOS ESTAN SIENDO HARDCODEADOS
+
 // Main supervision data table with client-side pagination.
 export function SupervisionTable({ runs }: SupervisionTableProps) {
   const [page, setPage] = useState(1)
@@ -134,10 +140,10 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     <span className="font-mono tabular-nums text-amber-700">
-                      {run.crudas !== null ? formatNumber(run.crudas) : "—"}
+                      {run.crudas !== null ? /*formatNumber(run.crudas)*/"-" : "—"}
                     </span>
                     <div className="text-xs text-muted-foreground">
-                      {run.crudosKg !== null ? formatKg(run.crudosKg) : "—"}
+                      {run.crudosKg !== null ? /*formatKg(run.crudosKg)*/"-" : "—"}
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
@@ -147,7 +153,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
-                    {run.velocidadCinta.toFixed(1)}
+                    {1||run.velocidadCinta.toFixed(1)}
                     <span className="ml-1 text-xs text-muted-foreground">m/min</span>
                   </td>
                 </tr>

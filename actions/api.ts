@@ -22,6 +22,6 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
   if (!result.success) {
     throw new Error(result.message ?? "Error desconocido del servidor")
   }
-
-  return result.data
+  
+  return result.data.items
 }

@@ -25,10 +25,11 @@ export interface ProductionRun {
 export interface ProductionResponse {
   success: boolean
   message: string
-  data: ProductionRun[]
+  data: {items: ProductionRun[]}
   total: number
   page: number
   pageSize: number
+  totalPages: number
 }
 
 const PRODUCTS = [
@@ -112,9 +113,12 @@ export const PRODUCTION_RUNS = buildRuns(50);
 export function getProductionPage(page: number, pageSize: number): ProductionResponse {
   const start = (page - 1) * pageSize
   return {
-    data: PRODUCTION_RUNS.slice(start, start + pageSize),
+    success: true,
+    message: "Datos de producción simulados",
+    data: { items: PRODUCTION_RUNS.slice(start, start + pageSize) },
     total: PRODUCTION_RUNS.length,
     page,
     pageSize,
+    totalPages: Math.ceil(PRODUCTION_RUNS.length / pageSize),
   }
 }

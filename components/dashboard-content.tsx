@@ -13,6 +13,7 @@ interface DashboardContentProps {
 }
 
 function filterRuns(runs: ProductionRun[], filters: FiltersState): ProductionRun[] {
+  if (!Array.isArray(runs) || runs.length === 0) return []
   return runs.filter((run) => {
     if (filters.search) {
       const q = filters.search.toLowerCase()
@@ -26,14 +27,49 @@ function filterRuns(runs: ProductionRun[], filters: FiltersState): ProductionRun
   })
 }
 
-export function DashboardContent({ runs, lastSyncAt }: DashboardContentProps) {
+export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardContentProps) {
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS)
+  const [allRuns, setAllRuns] = useState<ProductionRun[]>(initialRuns)
 
   useEffect(() => {
     if (lastSyncAt) setLastSync(lastSyncAt)
   }, [lastSyncAt])
 
-  const filteredRuns = useMemo(() => filterRuns(runs, filters), [runs, filters])
+  useEffect(() => {
+    setAllRuns(initialRuns)
+  }, [initialRuns])
+
+  useEffect(() => {
+    const eventSource = new EventSource("http://localhost:8080/api/v1/lotes-productivos/events")
+    /*eventSource.onmessage = (event) => {
+      const newRun: ProductionRun = JSON.parse(event.data)
+      console.log("Nuevo lote recibido:")
+    }*/
+
+    eventSource.addEventListener("lote.created", (event) => {
+      const response = JSON.parse((event as MessageEvent).data)
+      const newRun: ProductionRun = response.data
+      console.log("Nuevo lote recibido:", newRun)
+      setAllRuns((prevRuns) => [newRun, ...prevRuns])
+    })
+
+    eventSource.onerror = () => {
+      console.error('Error al conectarse con el servidor:', eventSource.readyState);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log("Conexión cerrada definitivamente por el navegador.");
+        eventSource.close();
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+
+  }, [])
+
+
+
+  const filteredRuns = useMemo(() => filterRuns(allRuns, filters), [allRuns, filters])
 
   return (
     <div className="space-y-6">
@@ -42,7 +78,7 @@ export function DashboardContent({ runs, lastSyncAt }: DashboardContentProps) {
         filters={filters}
         onChange={setFilters}
         resultsCount={filteredRuns.length}
-        totalCount={runs.length}
+        totalCount={allRuns.length}
       />
       <SupervisionTable runs={filteredRuns} />
     </div>
