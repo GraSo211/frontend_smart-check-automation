@@ -26,8 +26,10 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
     if (!result.success) {
       throw new Error(result.message ?? "Error desconocido del servidor")
     }
-
+    console.log("Resultado de la API:", result.data.items)
     return result.data.items
+
+
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.")
