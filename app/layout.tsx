@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import { Outfit, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
-import { Header } from '@/components/header'
-import { Footer } from '@/components/footer'
+import { Header } from '@/components/layout/header'
+import { Footer } from '@/components/layout/footer'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -30,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`${outfit.variable} ${sora.variable} bg-background`} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+    <html lang="es" className={`bg-background`} suppressHydrationWarning> 
+      <body className={`${outfit.variable} ${sora.variable} font-sans bg-background`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

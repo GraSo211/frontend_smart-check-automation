@@ -46,6 +46,9 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
       aria-label="Tabla de supervisión de producción"
       className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
+
+
+      {/*TITULO TABLA*/}
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Lotes de Producción</h2>
@@ -58,6 +61,8 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
         </span>
       </div>
 
+
+      {/*TABLA*/}
       {total === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
           <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
@@ -66,131 +71,162 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
             No se encontraron lotes con los filtros seleccionados.
           </p>
         </div>
+
+
       ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border bg-secondary/50 text-left">
-              <Th>Producto</Th>
-              <Th>Turno</Th>
-              <Th>Franja horaria</Th>
-              <Th className="text-right">Total</Th>
-              <Th className="text-right">Correctos</Th>
-              <Th className="text-right">Quemados</Th>
-              <Th className="text-right">Crudas</Th>
-              <Th className="text-center">Temperaturas de horno</Th>
-              <Th className="text-right">Vel. cinta</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((run) => {
-              const burntRatio = run.quemados / run.totalUnidades
-              const isWarning = burntRatio >= BURNT_WARNING_RATIO
-              const quality = qualityRate(run.correctos, run.totalUnidades)
-              const hasCrudas = run.crudas !== null && run.crudas > 0
 
-              return (
-                <tr
-                  key={run.id}
-                  className={cn(
-                    "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40",
-                    isWarning && "bg-red-50/40",
-                  )}
-                >
-                  <td className="px-4 py-3.5">
-                    <span className="font-medium text-foreground">
-                      {run.productoNombre}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <TurnoBadge turno={run.turno} />
-                  </td>
-                  <td className="px-4 py-3.5 font-mono text-xs text-muted-foreground">
-                    {formatWindow(run.inicioAt, run.finAt)}
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
-                    {formatNumber(run.totalUnidades)}
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <div className="font-mono tabular-nums text-emerald-700">
-                      {formatNumber(run.correctos)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatKg(run.correctosKg)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {quality.toFixed(1)}%
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 font-mono tabular-nums",
-                        isWarning ? "font-semibold text-red-600" : "text-muted-foreground",
-                      )}
-                    >
-                      {isWarning && (
-                        <AlertTriangle className="size-3.5" aria-hidden="true" />
-                      )}
-                      {formatNumber(run.quemados)}
-                    </span>
-                    <div className="text-xs text-muted-foreground">
-                      {formatKg(run.quemadosKg)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <span className="font-mono tabular-nums text-amber-700">
-                      {run.crudas !== null ? /*formatNumber(run.crudas)*/"-" : "—"}
-                    </span>
-                    <div className="text-xs text-muted-foreground">
-                      {run.crudosKg !== null ? /*formatKg(run.crudosKg)*/"-" : "—"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-center gap-2 text-xs">
-                      <OvenTemp label="H1" temp={run.tempHorno1} comb={run.tempCombHorno1} />
-                      <OvenTemp label="H2" temp={run.tempHorno2} comb={run.tempCombHorno2} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
-                    {1||run.velocidadCinta.toFixed(1)}
-                    <span className="ml-1 text-xs text-muted-foreground">m/min</span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      )}
 
-      {total > 0 && (
-      <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">
-          Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
-          <span className="font-medium text-foreground">{rangeEnd}</span> de{" "}
-          <span className="font-medium text-foreground">{formatNumber(total)}</span> elementos
-        </p>
-        <div className="flex items-center gap-2">
-          <PageButton
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            Anterior
-          </PageButton>
-          <span className="px-2 text-xs font-medium text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-          <PageButton
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            Siguiente
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </PageButton>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-275 border-collapse text-sm">
+
+
+            <thead>
+              <tr className="border-b border-border bg-secondary/50 text-left">
+                <Th>Producto</Th>
+                <Th>Turno</Th>
+                <Th>Franja horaria</Th>
+                <Th className="text-right">Total</Th>
+                <Th className="text-right">Correctos</Th>
+                <Th className="text-right">Quemados</Th>
+                <Th className="text-right">Crudas</Th>
+                <Th className="text-center">Temperaturas de horno</Th>
+                <Th className="text-right">Vel. cinta</Th>
+              </tr>
+            </thead>
+
+
+            <tbody>
+              {data.map((run) => {
+                const burntRatio = run.quemados / run.totalUnidades
+                const isWarning = burntRatio >= BURNT_WARNING_RATIO
+                const quality = qualityRate(run.correctos, run.totalUnidades)
+                const hasCrudas = run.crudas !== null && run.crudas >= 0
+
+                return (
+                  <tr
+                    key={run.id}
+                    className={cn(
+                      "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40 ",
+                      isWarning && "bg-red-50/40",
+                    )}
+                  >
+
+
+                    {/* //? NOMBRE */}
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-medium text-foreground">
+                        {run.productoNombre}
+                      </span>
+                    </td>
+
+
+                    {/* //? TURNO */}
+                    <td className="px-4 py-3.5 text-center">
+                      <TurnoBadge turno={run.turno} />
+                    </td>
+
+
+                    {/* //? FRANJA HORARIA */}
+                    <td className="px-4 py-3.5 font-mono text-xs text-center text-muted-foreground">
+                      {formatWindow(run.inicioAt, run.finAt)}
+                    </td>
+
+                    {/* //? TOTAL UNIDADES */}
+                    <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
+                      {formatNumber(run.totalUnidades)}
+                    </td>
+
+                    {/* //? CORRECTOS */}
+                    <td className="px-4 py-3.5 text-center">
+                      <div className="font-mono tabular-nums text-emerald-700">
+                        {formatNumber(run.correctos)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatKg(run.correctosKg)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {quality.toFixed(1)}%
+                      </div>
+                    </td>
+
+
+                    {/* //? QUEMADOS */}
+                    <td className="px-4 py-3.5    text-center">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 font-mono tabular-nums",
+                          isWarning ? "font-semibold text-red-600" : "text-muted-foreground",
+                        )}
+                      >
+                        {isWarning && (
+                          <AlertTriangle className="size-3.5" aria-hidden="true" />
+                        )}
+                        {formatNumber(run.quemados)}
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        {formatKg(run.quemadosKg)}
+                      </div>
+                    </td>
+
+
+                    {/* //? CRUDAS */}
+                    <td className="px-4 py-3.5    text-center">
+                      <span className="inline-flex items-center gap-1 font-mono  tabular-nums text-amber-700">
+                        {hasCrudas ? formatNumber(run.crudas!) : "—"}
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        {hasCrudas && run.crudosKg ? formatKg(run.crudosKg) : "—"}
+                      </div>
+                    </td>
+
+
+                    <td className="px-4 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-2 text-xs">
+                        <OvenTemp label="H1" temp={run.tempHorno1} comb={run.tempCombHorno1} />
+                        <OvenTemp label="H2" temp={run.tempHorno2} comb={run.tempCombHorno2} />
+                      </div>
+                    </td>
+
+
+                    <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
+                      {1 || run.velocidadCinta.toFixed(1)}
+                      <span className="ml-1 text-xs text-muted-foreground">m/min</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
+      {/*FOOTER DE LA TABLA*/}
+      {total > 0 && (
+        <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
+            <span className="font-medium text-foreground">{rangeEnd}</span> de{" "}
+            <span className="font-medium text-foreground">{formatNumber(total)}</span> elementos
+          </p>
+          <div className="flex items-center gap-2">
+            <PageButton
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              Anterior
+            </PageButton>
+            <span className="px-2 text-xs font-medium text-muted-foreground">
+              Página {page} de {totalPages}
+            </span>
+            <PageButton
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+            >
+              Siguiente
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </PageButton>
+          </div>
+        </div>
       )}
     </section>
   )
