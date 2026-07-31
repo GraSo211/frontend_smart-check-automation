@@ -41,10 +41,7 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardCon
 
   useEffect(() => {
     const eventSource = new EventSource("http://localhost:8080/api/v1/lotes-productivos/events")
-    /*eventSource.onmessage = (event) => {
-      const newRun: ProductionRun = JSON.parse(event.data)
-      console.log("Nuevo lote recibido:")
-    }*/
+
 
     eventSource.addEventListener("lote.created", (event) => {
       const response = JSON.parse((event as MessageEvent).data)
