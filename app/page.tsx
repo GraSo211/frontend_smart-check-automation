@@ -3,6 +3,8 @@ import { DashboardContent } from "@/components/dashboard-content"
 import { getAllProductionRuns } from "@/actions/api"
 import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
 
+export const dynamic = "force-dynamic"
+
 export default async function Page() {
   let runs: ProductionRun[] = []
   let error: string | null = null

@@ -9,19 +9,31 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
     )
   }
 
-  const response = await fetch(`${API_URL}/api/v1/lotes-productivos?page=1&pageSize=100`, {
-    next: { revalidate: 60 },
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetch(`${API_URL}/api/v1/lotes-productivos?page=1&pageSize=100`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
 
-  if (!response.ok) {
-    throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+    if (!response.ok) {
+      throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+    }
+
+    const result: ProductionResponse = await response.json()
+
+    if (!result.success) {
+      throw new Error(result.message ?? "Error desconocido del servidor")
+    }
+
+    return result.data.items
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.")
+    }
+    throw e
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const result: ProductionResponse = await response.json()
-
-  if (!result.success) {
-    throw new Error(result.message ?? "Error desconocido del servidor")
-  }
-  
-  return result.data.items
 }
