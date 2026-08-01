@@ -34,12 +34,12 @@ export default function RootLayout({
   return (
     <html lang="es" className={`bg-background`} suppressHydrationWarning> 
       <body className={`${outfit.variable} ${sora.variable} font-sans bg-background`} suppressHydrationWarning>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+          <ThemeProvider
+            attribute="data-theme"
+            defaultTheme="fermar-light"
+            disableTransitionOnChange
+            themes={["fermar-light", "fermar-dark", "sca-light", "sca-dark"]}
+          >
           <SidebarProvider>
             <AppSidebar />
             <div className="flex min-h-svh flex-1 flex-col">
