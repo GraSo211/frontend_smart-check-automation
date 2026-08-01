@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`bg-background`} suppressHydrationWarning> 
-      <body className={`${outfit.variable} ${sora.variable} font-sans bg-background`} suppressHydrationWarning>
+      <body className={`${outfit.variable} ${sora.variable} font-sans bg-background grid  min-h-dvh grid-rows-[auto_1fr_auto]`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
