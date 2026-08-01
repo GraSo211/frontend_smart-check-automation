@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { TurnoBadge } from "@/components/turno-badge"
+import { TurnoBadge } from "@/components/dashboard/turno-badge"
 import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
