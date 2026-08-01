@@ -10,21 +10,21 @@ export function Header() {
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
         <div className="flex items-center gap-3">
           <SidebarTriggerButton />
-          <div className="flex size-11 items-center justify-center rounded-xl bg-primary/20 p-1 shadow-sm">
+          <div className="flex size-14 items-center justify-center rounded-xl bg-primary/20 p-1 shadow-sm">
             <Image
-              src="/Isotipo ⁄ Icono.webp"
+              src="/sca/logo_image_only.svg"
               alt="Smart-Check Automation"
-              width={26}
+              width={60}
               height={40}
-              className="h-full w-auto object-contain"
+              className="h-full w-full "
             />
           </div>
           <Image
-            src="/Logotipo - Versión Clara.webp"
+            src="/sca/logo_title.svg"
             alt="Smart-Check Automation"
             width={120}
             height={42}
-            className="h-8 w-auto"
+            className="h-10 w-auto"
           />
         </div>
 

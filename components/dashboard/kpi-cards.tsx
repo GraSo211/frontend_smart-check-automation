@@ -20,7 +20,7 @@ function computeMetrics(runs: ProductionRun[]) {
     ? runs.reduce((sum, r) => sum + (r.tempHorno1 + r.tempHorno2) / 2, 0) / runs.length
     : 0
   const avgSpeed = runs.length
-    ? runs.reduce((sum, r) => sum + r.velocidadCinta, 0) / runs.length
+    ? runs.reduce((sum, r) => sum + r.velocidadHorno, 0) / runs.length
     : 0
 
   return {

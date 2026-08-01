@@ -23,7 +23,7 @@ export default function AppSidebar() {
   const sidebar = useSidebar()
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="z-100">
       <SidebarHeader onClick={() => sidebar.toggleSidebar()} >
         <div className="flex items-center gap-2  py-1 ">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/20 " >
