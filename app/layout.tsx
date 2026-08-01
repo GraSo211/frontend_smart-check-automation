@@ -2,9 +2,11 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Outfit, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import './globals.css'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
+import AppSidebar from '@/components/layout/sidebar'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -38,9 +40,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header></Header>
-          {children}
-          <Footer></Footer>
+          <SidebarProvider>
+            <AppSidebar />
+            <div className="flex min-h-svh flex-1 flex-col">
+              <Header></Header>
+              <div className="flex flex-1 flex-col">{children}</div>
+              <Footer></Footer>
+            </div>
+          </SidebarProvider>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
