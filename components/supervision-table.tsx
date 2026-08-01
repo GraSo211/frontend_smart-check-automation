@@ -17,10 +17,6 @@ interface SupervisionTableProps {
 
 
 
-//! VERIFICAR LA VELOCIDAD DE LA CINTA 
-//! VERIFICAR LOSVALORES DE CRUDAS Y CRUDOS
-//! AMBOS ESTAN SIENDO HARDCODEADOS
-
 // Main supervision data table with client-side pagination.
 export function SupervisionTable({ runs }: SupervisionTableProps) {
   const [page, setPage] = useState(1)
