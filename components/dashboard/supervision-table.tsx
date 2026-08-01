@@ -103,7 +103,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                     key={run.id}
                     className={cn(
                       "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40 ",
-                      isWarning && "bg-red-50/40",
+                      isWarning && "bg-red-500/50",
                     )}
                   >
 
