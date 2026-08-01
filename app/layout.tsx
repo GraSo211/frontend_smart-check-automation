@@ -36,7 +36,7 @@ export default function RootLayout({
       <body className={`${outfit.variable} ${sora.variable} font-sans bg-background`} suppressHydrationWarning>
           <ThemeProvider
             attribute="data-theme"
-            defaultTheme="fermar-light"
+            defaultTheme="sca-dark"
             disableTransitionOnChange
             themes={["fermar-light", "fermar-dark", "sca-light", "sca-dark"]}
           >
