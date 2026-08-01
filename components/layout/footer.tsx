@@ -23,7 +23,7 @@ export function Footer() {
     : null
 
   return (
-    <footer className="mt-10 border-t border-sidebar-border bg-sidebar">
+    <footer className=" border-t border-sidebar-border bg-sidebar">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-center sm:flex-row sm:text-left sm:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <Image

@@ -2,9 +2,11 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Outfit, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import './globals.css'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
+import AppSidebar from '@/components/layout/sidebar'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -31,16 +33,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`bg-background`} suppressHydrationWarning> 
-      <body className={`${outfit.variable} ${sora.variable} font-sans bg-background grid  min-h-dvh grid-rows-[auto_1fr_auto]`} suppressHydrationWarning>
+      <body className={`${outfit.variable} ${sora.variable} font-sans bg-background`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <Header></Header>
-          {children}
-          <Footer></Footer>
+          <SidebarProvider>
+            <AppSidebar />
+            <div className="flex min-h-svh flex-1 flex-col">
+              <Header></Header>
+              <div className="flex flex-1 flex-col">{children}</div>
+              <Footer></Footer>
+            </div>
+          </SidebarProvider>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
