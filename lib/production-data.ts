@@ -17,7 +17,7 @@ export interface ProductionRun {
   tempCombHorno1: number
   tempHorno2: number
   tempCombHorno2: number
-  velocidadHorno: number
+  velocidadCinta: number
   createdAt: string
   updatedAt: string
 }
@@ -98,7 +98,7 @@ function buildRuns(count: number): ProductionRun[] {
       tempCombHorno1: tempH1 - 12 - Math.floor(rand() * 8),
       tempHorno2: tempH2,
       tempCombHorno2: tempH2 - 12 - Math.floor(rand() * 8),
-      velocidadHorno: 2 + Math.floor(rand() * 20) / 10,
+      velocidadCinta: 2 + Math.floor(rand() * 20) / 10,
       createdAt: inicio.toISOString(),
       updatedAt: fin.toISOString(),
     })

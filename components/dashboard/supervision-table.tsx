@@ -185,7 +185,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
 
                     <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
-                      {run.velocidadHorno.toFixed(2)}
+                      {run.velocidadCinta.toFixed(2)}
                       <span className="ml-1 text-xs text-muted-foreground">m/min</span>
                     </td>
                   </tr>
