@@ -14,7 +14,7 @@ export function Header() {
             <Image
               src="/sca/logo_image_only.svg"
               alt="Smart-Check Automation"
-              width={60}
+              width={40}
               height={40}
               className="h-full w-full "
             />
