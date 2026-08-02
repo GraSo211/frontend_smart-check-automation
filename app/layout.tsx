@@ -23,7 +23,6 @@ export const metadata: Metadata = {
   description:
     'Panel de supervisión de producción para la panificadora industrial Fermar S.A. — control de calidad en tiempo real y telemetría de hornos vía IoT Edge.',
 
-
 }
 
 export default function RootLayout({

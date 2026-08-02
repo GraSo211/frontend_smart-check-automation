@@ -39,3 +39,28 @@ export function qualityRate(correctos: number, total: number): number {
   if (total === 0) return 0
   return (correctos / total) * 100
 }
+
+// Formats a chip temperature with one decimal and the °C unit (e.g. "46,8 °C").
+export function formatTemp(value: number): string {
+  return `${value.toLocaleString("es-AR", { maximumFractionDigits: 1 })} °C`
+}
+
+// Formats available RAM, switching to GB once >= 1024 MB (e.g. "3,04 GB" / "900 MB").
+export function formatRam(megabytes: number): string {
+  if (megabytes >= 1024) {
+    return `${(megabytes / 1024).toLocaleString("es-AR", { maximumFractionDigits: 2 })} GB`
+  }
+  return `${formatNumber(Math.round(megabytes))} MB`
+}
+
+// Returns a relative "time ago" label in es-AR (e.g. "hace 5 min", "hace 3 h").
+export function formatLastSeen(iso: string): string {
+  const elapsedMs = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(elapsedMs / 60000)
+  if (minutes < 1) return "hace momentos"
+  if (minutes < 60) return `hace ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `hace ${hours} h`
+  const days = Math.floor(hours / 24)
+  return `hace ${days} d`
+}
