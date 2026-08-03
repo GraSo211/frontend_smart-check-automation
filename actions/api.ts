@@ -60,7 +60,7 @@ export async function getDevices() {
         if (!result.success) {
             throw new Error(result.message ?? "Error desconocido del servidor");
         }
-        console.log("Resultado de la API:", result.data);
+        console.log("Resultado de la API:", result);
         return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
@@ -81,7 +81,7 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(
-            `${API_URL}/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/metricas?page=${page}&pageSize=${pageSize}`,
+            `${API_URL}/api/v1/dispositivos/metricas?dispositivoId=${dispositivoId}&page=${page}&pageSize=${pageSize}`,
             {
                 cache: "no-store",
                 signal: controller.signal,
