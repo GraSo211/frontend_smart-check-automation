@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
 import { getDeviceHistory } from "@/actions/api"
 import { setLastSync } from "@/lib/sync-store"
 import type { Device, DeviceResponse, SpecificDevice } from "@/lib/devices-data"
+
+const HISTORY_CAP = 100
 
 interface DevicesStateProps {
   devices: Device[]
@@ -20,6 +22,12 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
   const [history, setHistory] = useState<SpecificDevice[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
 
+  const selectedDeviceIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    selectedDeviceIdRef.current = selectedDeviceId
+  }, [selectedDeviceId])
+
   useEffect(() => {
     if (lastSyncAt) setLastSync(lastSyncAt)
   }, [lastSyncAt])
@@ -32,10 +40,7 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
     if (typeof window === "undefined") return
     const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/dispositivos/events`)
 
-    eventSource.addEventListener("dispositivo.metric", (event) => {
-      const response = JSON.parse((event as MessageEvent).data)
-      const update: Device = response.data
-      console.log("Métrica de dispositivo recibida:", update)
+    const applyDeviceUpdate = (update: Device, addToHistory: boolean) => {
       setAllDevices((prev) =>
         prev.map((d) => {
           if (d.dispositivoId !== update.dispositivoId) return d
@@ -48,26 +53,39 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
           }
         }),
       )
+
+      if (addToHistory && update.ultimaMetrica && selectedDeviceIdRef.current === update.dispositivoId) {
+        const m = update.ultimaMetrica
+        const row: SpecificDevice = {
+          id: m.id,
+          dispositivoId: update.dispositivoId,
+          nombre: update.nombre,
+          cpuPct: m.cpuPct,
+          memRamDisponibleMb: m.memRamDisponibleMb,
+          tempChip: m.tempChip,
+          receivedAt: m.receivedAt,
+        }
+        setHistory((prev) => {
+          if (prev.some((r) => r.id === row.id)) return prev
+          return [row, ...prev].slice(0, HISTORY_CAP)
+        })
+      }
+
       setLastSync(new Date().toISOString())
+    }
+
+    eventSource.addEventListener("dispositivo.metric", (event) => {
+      const response = JSON.parse((event as MessageEvent).data)
+      const update: Device = response.data
+      console.log("Métrica de dispositivo recibida:", update)
+      applyDeviceUpdate(update, true)
     })
 
     eventSource.addEventListener("dispositivo.state", (event) => {
       const response = JSON.parse((event as MessageEvent).data)
       const update: Device = response.data
-      console.log("Métrica de dispositivo recibida:", update)
-      setAllDevices((prev) =>
-        prev.map((d) => {
-          if (d.dispositivoId !== update.dispositivoId) return d
-          return {
-            ...d,
-            ...update,
-            ultimaMetrica: update.ultimaMetrica
-              ? { ...d.ultimaMetrica, ...update.ultimaMetrica }
-              : d.ultimaMetrica,
-          }
-        }),
-      )
-      setLastSync(new Date().toISOString())
+      console.log("Estado de dispositivo recibido:", update)
+      applyDeviceUpdate(update, false)
     })
 
     eventSource.onerror = () => {
