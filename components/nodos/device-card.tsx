@@ -1,6 +1,6 @@
 "use client"
 
-import { Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, type LucideIcon } from "lucide-react"
+import { Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, SearchX, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import type { Device } from "@/lib/devices-data"
@@ -36,7 +36,7 @@ interface DeviceCardProps {
 export function DeviceCard({ device, selected, onSelect }: DeviceCardProps) {
   const status = STATUS_CONFIG[device.estado]
   const StatusIcon = status.icon
-  const { cpuPct, memRamDisponibleMb, tempChip, receivedAt } = device.ultimaMetrica
+  const metrica = device.ultimaMetrica ?? null
   const shortId =
     device.dispositivoId.length > ID_PREVIEW_LENGTH
       ? `${device.dispositivoId.slice(0, ID_PREVIEW_LENGTH)}…`
@@ -88,19 +88,37 @@ export function DeviceCard({ device, selected, onSelect }: DeviceCardProps) {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <MetricTile
-          icon={Cpu}
-          label="CPU"
-          value={`${cpuPct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`}
-        />
-        <MetricTile icon={MemoryStick} label="RAM libre" value={formatRam(memRamDisponibleMb)} />
-        <MetricTile icon={Thermometer} label="Chip" value={formatTemp(tempChip)} />
+        {metrica ? (
+          <>
+            <MetricTile
+              icon={Cpu}
+              label="CPU"
+              value={`${metrica.cpuPct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`}
+            />
+            <MetricTile
+              icon={MemoryStick}
+              label="RAM libre"
+              value={formatRam(metrica.memRamDisponibleMb)}
+            />
+            <MetricTile icon={Thermometer} label="Chip" value={formatTemp(metrica.tempChip)} />
+          </>
+        ) : (
+          <div className="col-span-3 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-secondary/40 px-2 py-4 text-center">
+            <SearchX className="size-4 text-muted-foreground" aria-hidden="true" />
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Sin telemetría
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Este nodo todavía no reportó datos.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/70 pt-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Clock className="size-3.5 shrink-0" aria-hidden="true" />
-          {formatLastSeen(receivedAt)}
+          {metrica ? formatLastSeen(metrica.receivedAt) : "Sin actividad"}
         </span>
         <span className="truncate font-mono text-[11px] tracking-tight" title={device.dispositivoId}>
           {shortId}

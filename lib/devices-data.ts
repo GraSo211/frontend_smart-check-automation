@@ -9,7 +9,7 @@ export type Device = {
     nombre: string;
     ubicacion: string;
     estado: "online" | "offline";
-    ultimaMetrica: {
+    ultimaMetrica?: {
         id: string;
         dispositivoId: string;
         cpuPct: number;

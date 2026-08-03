@@ -16,14 +16,17 @@ describe("DEVICES", () => {
 
   it("every device has required fields", () => {
     for (const device of DEVICES) {
+      const { ultimaMetrica } = device
       expect(device.nombre).toBeTruthy()
       expect(device.ubicacion).toBeTruthy()
       expect(["online", "offline"]).toContain(device.estado)
-      expect(device.ultimaMetrica.dispositivoId).toBe(device.dispositivoId)
-      expect(device.ultimaMetrica.cpuPct).toBeGreaterThanOrEqual(0)
-      expect(device.ultimaMetrica.memRamDisponibleMb).toBeGreaterThan(0)
-      expect(device.ultimaMetrica.tempChip).toBeGreaterThan(0)
-      expect(new Date(device.ultimaMetrica.receivedAt).getTime()).not.toBeNaN()
+      expect(ultimaMetrica).toBeTruthy()
+      if (!ultimaMetrica) return
+      expect(ultimaMetrica.dispositivoId).toBe(device.dispositivoId)
+      expect(ultimaMetrica.cpuPct).toBeGreaterThanOrEqual(0)
+      expect(ultimaMetrica.memRamDisponibleMb).toBeGreaterThan(0)
+      expect(ultimaMetrica.tempChip).toBeGreaterThan(0)
+      expect(new Date(ultimaMetrica.receivedAt).getTime()).not.toBeNaN()
       expect(device.lastSeen).toBeTruthy()
     }
   })

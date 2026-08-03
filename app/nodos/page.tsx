@@ -9,6 +9,34 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
+// Coerces an arbitrary backend payload into the safe Device shape. The API can
+// return nodes without telemetry yet (e.g. freshly registered or offline ones),
+// so missing ultimaMetrica is preserved as undefined instead of crashing
+// downstream components like DeviceCard.
+function normalizeDevice(raw: unknown): Device {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
+  const nombre = typeof r.nombre === "string" ? r.nombre : (dispositivoId || "Nodo")
+  const ubicacion = typeof r.ubicacion === "string" ? r.ubicacion : "—"
+  const estado = r.estado === "online" ? "online" : "offline"
+  const lastSeen = typeof r.lastSeen === "string" ? r.lastSeen : ""
+
+  const metrica = r.ultimaMetrica as Record<string, unknown> | null | undefined
+  const ultimaMetrica =
+    metrica && typeof metrica === "object"
+      ? {
+          id: typeof metrica.id === "string" ? metrica.id : `metric-${dispositivoId}`,
+          dispositivoId: typeof metrica.dispositivoId === "string" ? metrica.dispositivoId : dispositivoId,
+          cpuPct: typeof metrica.cpuPct === "number" ? metrica.cpuPct : 0,
+          memRamDisponibleMb: typeof metrica.memRamDisponibleMb === "number" ? metrica.memRamDisponibleMb : 0,
+          tempChip: typeof metrica.tempChip === "number" ? metrica.tempChip : 0,
+          receivedAt: typeof metrica.receivedAt === "string" ? metrica.receivedAt : "",
+        }
+      : undefined
+
+  return { dispositivoId, nombre, ubicacion, estado, ultimaMetrica, lastSeen }
+}
+
 export default async function Page() {
   let devices: Device[] = []
   let error: string | null = null
@@ -17,17 +45,17 @@ export default async function Page() {
   try {
     const response = await getDevices()
     if (Array.isArray(response)) {
-      devices = response
+      devices = response.map(normalizeDevice)
     } else if (response && Array.isArray((response as any).data)) {
-      devices = (response as any).data
+      devices = (response as any).data.map(normalizeDevice)
     } else {
-      devices = DEVICES
+      devices = DEVICES.map(normalizeDevice)
     }
 
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    devices = DEVICES
+    devices = DEVICES.map(normalizeDevice)
   }
 
   return (
