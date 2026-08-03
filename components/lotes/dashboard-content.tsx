@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { KpiCards } from "@/components/kpi-cards"
-import { SupervisionTable } from "@/components/supervision-table"
-import { FiltersBar, DEFAULT_FILTERS, type FiltersState } from "@/components/filters-bar"
+import { KpiCards } from "@/components/lotes/kpi-cards"
+import { SupervisionTable } from "@/components/lotes/supervision-table"
+import { FiltersBar, DEFAULT_FILTERS, type FiltersState } from "@/components/lotes/filters-bar"
 import { setLastSync } from "@/lib/sync-store"
 import type { ProductionRun } from "@/lib/production-data"
 

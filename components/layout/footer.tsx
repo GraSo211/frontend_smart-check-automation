@@ -23,11 +23,18 @@ export function Footer() {
     : null
 
   return (
-    <footer className="mt-10 border-t border-sidebar-border bg-sidebar">
+    <footer className=" border-t border-sidebar-border bg-sidebar">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-center sm:flex-row sm:text-left sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-center gap-4">
           <Image
-            src="/Imagotipo - Versión Principal.webp"
+            src="/sca/logo_horizontal.svg"
+            alt="Smart-Check Automation"
+            width={100}
+            height={44}
+            className="h-10 w-auto shrink-0"
+          />
+          <Image
+            src="/fermar/Imagotipo - Versión Principal.webp"
             alt="Smart-Check Automation"
             width={100}
             height={44}

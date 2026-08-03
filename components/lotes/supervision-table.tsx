@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { TurnoBadge } from "@/components/turno-badge"
+import { TurnoBadge } from "@/components/lotes/turno-badge"
 import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
@@ -16,10 +16,6 @@ interface SupervisionTableProps {
 }
 
 
-
-//! VERIFICAR LA VELOCIDAD DE LA CINTA 
-//! VERIFICAR LOSVALORES DE CRUDAS Y CRUDOS
-//! AMBOS ESTAN SIENDO HARDCODEADOS
 
 // Main supervision data table with client-side pagination.
 export function SupervisionTable({ runs }: SupervisionTableProps) {
@@ -107,7 +103,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                     key={run.id}
                     className={cn(
                       "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40 ",
-                      isWarning && "bg-red-50/40",
+                      isWarning && "bg-red-500/50",
                     )}
                   >
 
@@ -189,7 +185,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
 
                     <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
-                      {run.velocidadHorno.toFixed(2)}
+                      {run.velocidadCinta.toFixed(2)}
                       <span className="ml-1 text-xs text-muted-foreground">m/min</span>
                     </td>
                   </tr>
