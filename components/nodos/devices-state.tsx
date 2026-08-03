@@ -5,7 +5,7 @@ import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
 import { getDeviceHistory } from "@/actions/api"
 import { setLastSync } from "@/lib/sync-store"
-import type { Device, SpecificDevice } from "@/lib/devices-data"
+import type { Device, DeviceResponse, SpecificDevice } from "@/lib/devices-data"
 
 interface DevicesStateProps {
   devices: Device[]
@@ -32,7 +32,26 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
     if (typeof window === "undefined") return
     const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/dispositivos/events`)
 
-    eventSource.addEventListener("dispositivo.metrica", (event) => {
+    eventSource.addEventListener("dispositivo.metric", (event) => {
+      const response = JSON.parse((event as MessageEvent).data)
+      const update: Device = response.data
+      console.log("Métrica de dispositivo recibida:", update)
+      setAllDevices((prev) =>
+        prev.map((d) => {
+          if (d.dispositivoId !== update.dispositivoId) return d
+          return {
+            ...d,
+            ...update,
+            ultimaMetrica: update.ultimaMetrica
+              ? { ...d.ultimaMetrica, ...update.ultimaMetrica }
+              : d.ultimaMetrica,
+          }
+        }),
+      )
+      setLastSync(new Date().toISOString())
+    })
+
+    eventSource.addEventListener("dispositivo.state", (event) => {
       const response = JSON.parse((event as MessageEvent).data)
       const update: Device = response.data
       console.log("Métrica de dispositivo recibida:", update)
