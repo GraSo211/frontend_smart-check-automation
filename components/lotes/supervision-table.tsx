@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ChevronLeft, ChevronRight, Thermometer, SearchX } from "lucide-react"
+import { AlertTriangle, ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TurnoBadge } from "@/components/lotes/turno-badge"
+import { OvenTemp } from "@/components/shared/oven-temp"
+import { PageButton } from "@/components/shared/page-button"
 import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
@@ -239,47 +241,5 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
     >
       {children}
     </th>
-  )
-}
-
-// Compact oven temperature pill with color coded high-heat states and combustion temp.
-function OvenTemp({ label, temp, comb }: { label: string; temp: number; comb: number }) {
-  const hot = temp >= 225
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono tabular-nums ring-1 ring-inset",
-        hot
-          ? "bg-amber-50 text-amber-700 ring-amber-200"
-          : "bg-secondary text-muted-foreground ring-border",
-      )}
-    >
-      <Thermometer className="size-3" aria-hidden="true" />
-      <span className="text-[10px] font-semibold opacity-70">{label}</span>
-      {temp}°
-      <span className="text-[10px] opacity-50">{comb}°</span>
-    </span>
-  )
-}
-
-// Pagination button with disabled styling.
-function PageButton({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-card"
-    >
-      {children}
-    </button>
   )
 }

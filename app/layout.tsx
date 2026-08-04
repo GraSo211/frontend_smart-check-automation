@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Outfit, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import './globals.css'
 import { Header } from '@/components/layout/header'
@@ -46,6 +47,7 @@ export default function RootLayout({
               <div className="flex flex-1 flex-col">{children}</div>
               <Footer></Footer>
             </div>
+            <Toaster />
           </SidebarProvider>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
