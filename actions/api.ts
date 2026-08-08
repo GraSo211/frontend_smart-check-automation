@@ -1,9 +1,10 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { DeviceResponse, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
-import { getDeviceHistoryPage } from "@/lib/devices-data";
-import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
+import { cookies } from "next/headers"
+import { DeviceResponse, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data"
+import { getDeviceHistoryPage } from "@/lib/devices-data"
+import type { ProductionRun, ProductionResponse } from "@/lib/production-data"
 import {
     PARAMETROS_PRODUCTOS_MOCK,
     getLotesMockPorProducto,
@@ -11,22 +12,35 @@ import {
     type LoteProductivo,
     type ParametroProducto,
     type ParametroProductoRequest,
-} from "@/lib/parametros-producto";
+} from "@/lib/parametros-producto"
+import { ApiError } from "@/lib/api-client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+const SESSION_COOKIE = "session_token"
 
 export async function getAllProductionRuns(): Promise<ProductionRun[]> {
     if (!API_URL) {
         throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
     }
 
+    const cookieStore = await cookies();
+    const token = cookieStore.get(SESSION_COOKIE)?.value;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(`${API_URL}/api/v1/lotes-productivos?page=1&pageSize=100`, {
+            headers: {
+                "Content-Type": "application/json",
+                Cookie: `${SESSION_COOKIE}=${token || ""}`,
+            },
             cache: "no-store",
             signal: controller.signal,
         });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);

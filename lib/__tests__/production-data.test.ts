@@ -27,7 +27,7 @@ describe("PRODUCTION_RUNS", () => {
 describe("getProductionPage", () => {
   it("returns first page of 10 items", () => {
     const page = getProductionPage(1, 10)
-    expect(page.data).toHaveLength(10)
+    expect(page.data.items).toHaveLength(10)
     expect(page.total).toBe(50)
     expect(page.page).toBe(1)
     expect(page.pageSize).toBe(10)
@@ -35,11 +35,11 @@ describe("getProductionPage", () => {
 
   it("returns last page with remaining items", () => {
     const page = getProductionPage(5, 10)
-    expect(page.data).toHaveLength(10)
+    expect(page.data.items).toHaveLength(10)
   })
 
   it("returns page beyond total as empty", () => {
     const page = getProductionPage(10, 10)
-    expect(page.data).toHaveLength(0)
+    expect(page.data.items).toHaveLength(0)
   })
 })
