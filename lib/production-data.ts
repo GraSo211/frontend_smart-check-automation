@@ -25,7 +25,7 @@ export interface ProductionRun {
 export interface ProductionResponse {
   success: boolean
   message: string
-  data: {items: ProductionRun[]}
+  data: ProductionRun[]
   total: number
   page: number
   pageSize: number
