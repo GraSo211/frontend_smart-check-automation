@@ -16,14 +16,12 @@ export default async function Page() {
       runs = response
     } else if (response && Array.isArray((response as any).data)) {
       runs = (response as any).data
-    } else {
-      runs = PRODUCTION_RUNS
-    }
+    } 
 
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    runs = PRODUCTION_RUNS
+    //runs = PRODUCTION_RUNS
   }
 
   return (
