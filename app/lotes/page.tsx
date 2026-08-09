@@ -21,7 +21,7 @@ export default async function Page() {
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    //runs = PRODUCTION_RUNS
+    runs = PRODUCTION_RUNS
   }
 
   return (
