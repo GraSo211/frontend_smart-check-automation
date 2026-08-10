@@ -1,12 +1,21 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { DeviceResponse, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
-import { getDeviceHistoryPage } from "@/lib/devices-data";
-import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
+import {
+    DEVICES,
+    DeviceResponse,
+    buildDeviceHistory,
+    getDeviceHistoryPage,
+    type Device,
+    type DeviceHistoryResponse,
+    type SpecificDevice,
+} from "@/lib/devices-data";
+import { PRODUCTION_RUNS, type ProductionRun, type ProductionResponse } from "@/lib/production-data";
 import {
     PARAMETROS_PRODUCTOS_MOCK,
+    buildLotesMockPorProducto,
     getLotesMockPorProducto,
+    getParametrosMockPorProducto,
     type LotesPorProducto,
     type LoteProductivo,
     type ParametroProducto,
@@ -14,6 +23,43 @@ import {
 } from "@/lib/parametros-producto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// Merges mock data below the backend data, deduplicating by a stable key.
+// Backend (primary) records win on collisions; the mock only fills gaps so the
+// MVP always renders a complete dataset even while the backend is warming up.
+function mergeUnique<T>(items: T[], mock: T[], keyOf: (item: T) => string): T[] {
+    const seen = new Set(items.map(keyOf))
+    const extras = mock.filter((item) => !seen.has(keyOf(item)))
+    return [...items, ...extras]
+}
+
+// Coerces an arbitrary backend payload into the safe Device shape. The API can
+// return nodes without telemetry yet (e.g. freshly registered or offline ones),
+// so missing ultimaMetrica is preserved as undefined instead of crashing
+// downstream components like DeviceCard.
+function normalizeDevice(raw: unknown): Device {
+    const r = (raw ?? {}) as Record<string, unknown>
+    const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
+    const nombre = typeof r.nombre === "string" ? r.nombre : (dispositivoId || "Nodo")
+    const ubicacion = typeof r.ubicacion === "string" ? r.ubicacion : "—"
+    const estado = r.estado === "online" ? "online" : "offline"
+    const lastSeen = typeof r.lastSeen === "string" ? r.lastSeen : ""
+
+    const metrica = r.ultimaMetrica as Record<string, unknown> | null | undefined
+    const ultimaMetrica =
+        metrica && typeof metrica === "object"
+            ? {
+                  id: typeof metrica.id === "string" ? metrica.id : `metric-${dispositivoId}`,
+                  dispositivoId: typeof metrica.dispositivoId === "string" ? metrica.dispositivoId : dispositivoId,
+                  cpuPct: typeof metrica.cpuPct === "number" ? metrica.cpuPct : 0,
+                  memRamDisponibleMb: typeof metrica.memRamDisponibleMb === "number" ? metrica.memRamDisponibleMb : 0,
+                  tempChip: typeof metrica.tempChip === "number" ? metrica.tempChip : 0,
+                  receivedAt: typeof metrica.receivedAt === "string" ? metrica.receivedAt : "",
+              }
+            : undefined
+
+    return { dispositivoId, nombre, ubicacion, estado, ultimaMetrica, lastSeen }
+}
 
 export async function getAllProductionRuns(): Promise<ProductionRun[]> {
     if (!API_URL) {
@@ -39,7 +85,8 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
         }
         console.log("Resultado de la API:", result.data
         );
-        return result.data;
+        const dbRuns = Array.isArray(result.data) ? result.data : [];
+        return mergeUnique(dbRuns, PRODUCTION_RUNS, (run) => run.id);
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
@@ -72,8 +119,9 @@ export async function getDevices() {
         if (!result.success) {
             throw new Error(result.message ?? "Error desconocido del servidor");
         }
+        const dbDevices = (Array.isArray(result.data) ? result.data : []).map(normalizeDevice);
         console.log("Resultado de la API:", result);
-        return result.data;
+        return mergeUnique(dbDevices, DEVICES, (device) => device.dispositivoId);
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
@@ -109,8 +157,14 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
         if (!result.success) {
             throw new Error(result.message ?? "Error desconocido del servidor");
         }
+        const dbHistory = Array.isArray(result.data) ? result.data : [];
+        const mockHistory = buildDeviceHistory(
+            dispositivoId,
+            DEVICES.find((d) => d.dispositivoId === dispositivoId)?.nombre ?? "Nodo",
+            60,
+        );
         console.log("Historial del dispositivo:", result.data);
-        return result.data;
+        return mergeUnique(dbHistory, mockHistory, (row) => row.id);
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
@@ -147,7 +201,10 @@ export async function getProductosConParametros(): Promise<ParametroProducto[]> 
             throw new Error(result.message ?? "Error desconocido del servidor");
         }
         // The backend sends the array directly under `data` (no .items wrapper).
-        return Array.isArray(result.data) ? (result.data as ParametroProducto[]) : [];
+        // Dedup by productoId, not id: the mock mirrors the backend seed product
+        // (same productoId, different id), and the grid keys cards by productoId.
+        const dbParametros = Array.isArray(result.data) ? (result.data as ParametroProducto[]) : [];
+        return mergeUnique(dbParametros, PARAMETROS_PRODUCTOS_MOCK, (parametro) => parametro.productoId);
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
@@ -193,9 +250,16 @@ export async function getLotesPorProducto(
         }
 
         const items = Array.isArray(result.data) ? (result.data as LoteProductivo[]) : [];
-        return {
+        const mockProductoNombre =
+            getParametrosMockPorProducto(productoId)?.productoNombre ?? items[0]?.productoNombre ?? "Producto";
+        const mergedItems = mergeUnique(
             items,
-            total: typeof result.total === "number" ? result.total : items.length,
+            buildLotesMockPorProducto(productoId, mockProductoNombre),
+            (lote) => lote.id,
+        );
+        return {
+            items: mergedItems,
+            total: mergedItems.length,
             page,
             pageSize,
         };

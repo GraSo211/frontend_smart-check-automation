@@ -11,13 +11,7 @@ export default async function Page() {
   let lastSyncAt: string | null = null
 
   try {
-    const response = await getAllProductionRuns()
-    if (Array.isArray(response)) {
-      runs = response
-    } else if (response && Array.isArray((response as any).data)) {
-      runs = (response as any).data
-    } 
-
+    runs = await getAllProductionRuns()
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"

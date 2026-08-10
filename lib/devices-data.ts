@@ -107,7 +107,7 @@ export const DEVICES: Device[] = buildDevices();
 
 // Builds historical telemetry rows for a device, most recent first, at
 // five-minute intervals over the last `count` measurements.
-function buildDeviceHistory(dispositivoId: string, nombre: string, count: number): SpecificDevice[] {
+export function buildDeviceHistory(dispositivoId: string, nombre: string, count: number): SpecificDevice[] {
     const rand = seeded(hashString(dispositivoId))
     const now = Date.now()
     const rows: SpecificDevice[] = []
