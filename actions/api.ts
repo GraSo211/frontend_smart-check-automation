@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { DeviceResponse, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
+import { DeviceResponse, type CreateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
 import { getDeviceHistoryPage } from "@/lib/devices-data";
 import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
 import {
@@ -235,6 +235,63 @@ export async function updateParametrosProducto(
         if (response.ok && result?.success) {
             revalidatePath("/configuracion");
             return { ok: true, data: result.data as ParametroProducto };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Registers a new Raspberry Pi node in the catalog (POST /api/v1/dispositivos).
+// The backend generates the device UUID, which the Pi must later send as
+// dispositivoId in its pings — the UI surfaces it after creation.
+
+// Coerces the backend EstadoDispositivo payload of a freshly created node into
+// the safe Device shape used by the UI.
+function normalizeCreatedDispositivo(raw: unknown): Device {
+  const r = (raw ?? {}) as Record<string, unknown>
+  return {
+    dispositivoId: typeof r.dispositivoId === "string" ? r.dispositivoId : "",
+    nombre: typeof r.nombre === "string" ? r.nombre : "Nodo",
+    ubicacion: typeof r.ubicacion === "string" ? r.ubicacion : "—",
+    estado: r.estado === "online" ? "online" : "offline",
+    lastSeen: typeof r.lastSeen === "string" ? r.lastSeen : "",
+  }
+}
+
+export async function createDispositivo(
+    payload: CreateDispositivoRequest,
+): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            revalidatePath("/nodos");
+            return { ok: true, data: normalizeCreatedDispositivo(result.data) };
         }
 
         const errors =

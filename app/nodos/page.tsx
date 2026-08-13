@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { getDevices } from "@/actions/api"
 import { DEVICES, type Device } from "@/lib/devices-data"
 import DevicesState from "@/components/nodos/devices-state"
+import CreateDeviceDialog from "@/components/nodos/create-device-dialog"
 
 export const metadata: Metadata = {
   title: "Estado de los Nodos | Smart-Check Automation",
@@ -61,13 +62,16 @@ export default async function Page() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-balance text-xl font-bold tracking-tight text-foreground">
-            Estado de los Nodos
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo.
-          </p>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-balance text-xl font-bold tracking-tight text-foreground">
+              Estado de los Nodos
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo.
+            </p>
+          </div>
+          <CreateDeviceDialog />
         </div>
 
         {error && (
