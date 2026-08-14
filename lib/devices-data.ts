@@ -4,6 +4,11 @@ export type DeviceResponse = {
     data: Device[];
 };
 
+export type CreateDispositivoRequest = {
+    nombre: string;
+    ubicacion: string;
+};
+
 export type Device = {
     dispositivoId: string;
     nombre: string;
