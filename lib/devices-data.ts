@@ -9,6 +9,12 @@ export type CreateDispositivoRequest = {
     ubicacion: string;
 };
 
+export type UpdateDispositivoRequest = {
+    dispositivoId: string;
+    nombre: string;
+    ubicacion: string;
+};
+
 export type Device = {
     dispositivoId: string;
     nombre: string;

@@ -5,7 +5,7 @@ import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
 import { getDeviceHistory } from "@/actions/api"
 import { setLastSync } from "@/lib/sync-store"
-import type { Device, DeviceResponse, SpecificDevice } from "@/lib/devices-data"
+import type { Device, SpecificDevice } from "@/lib/devices-data"
 
 const HISTORY_CAP = 100
 
@@ -129,6 +129,12 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
     setSelectedDeviceId((current) => (current === dispositivoId ? null : dispositivoId))
   }
 
+  // If the selected device is removed, clear the selection so the history
+  // panel doesn't keep pointing at a node that no longer exists.
+  const handleDeviceDeleted = (dispositivoId: string) => {
+    setSelectedDeviceId((current) => (current === dispositivoId ? null : current))
+  }
+
   const selectedDevice = useMemo(
     () => allDevices.find((d) => d.dispositivoId === selectedDeviceId) ?? null,
     [allDevices, selectedDeviceId],
@@ -151,6 +157,7 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
             device={device}
             selected={selectedDeviceId === device.dispositivoId}
             onSelect={handleSelect}
+            onDeleted={handleDeviceDeleted}
           />
         ))}
       </section>

@@ -4,6 +4,7 @@ import { Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, SearchX, t
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import type { Device } from "@/lib/devices-data"
+import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
 
 // Maps each connection state to an icon and color treatment.
 const STATUS_CONFIG: Record<
@@ -30,10 +31,11 @@ interface DeviceCardProps {
   device: Device
   selected: boolean
   onSelect: (dispositivoId: string) => void
+  onDeleted?: (dispositivoId: string) => void
 }
 
 // Renders a selectable card summarizing a single node's state and last telemetry.
-export function DeviceCard({ device, selected, onSelect }: DeviceCardProps) {
+export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCardProps) {
   const status = STATUS_CONFIG[device.estado]
   const StatusIcon = status.icon
   const metrica = device.ultimaMetrica ?? null
@@ -69,14 +71,17 @@ export function DeviceCard({ device, selected, onSelect }: DeviceCardProps) {
         >
           <StatusIcon className="size-5" aria-hidden="true" />
         </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
-            status.badge,
-          )}
-        >
-          {status.label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+              status.badge,
+            )}
+          >
+            {status.label}
+          </span>
+          <DeviceActionsMenu device={device} onDeleted={onDeleted} />
+        </div>
       </div>
 
       <div className="mt-3">
