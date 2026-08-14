@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { DeviceResponse, type CreateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
+import { DeviceResponse, type CreateDispositivoRequest, type UpdateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
 import { getDeviceHistoryPage } from "@/lib/devices-data";
 import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
 import {
@@ -292,6 +292,86 @@ export async function createDispositivo(
         if (response.ok && result?.success) {
             revalidatePath("/nodos");
             return { ok: true, data: normalizeCreatedDispositivo(result.data) };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Updates the name and location of an existing node (PUT /api/v1/dispositivos).
+export async function updateDispositivo(
+    payload: UpdateDispositivoRequest,
+): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            revalidatePath("/nodos");
+            return { ok: true, data: normalizeCreatedDispositivo(result.data) };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Removes a node from the catalog (DELETE /api/v1/dispositivos?dispositivoId=...).
+export async function deleteDispositivo(
+    dispositivoId: string,
+): Promise<{ ok: true } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos?dispositivoId=${dispositivoId}`, {
+            method: "DELETE",
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            revalidatePath("/nodos");
+            return { ok: true };
         }
 
         const errors =
