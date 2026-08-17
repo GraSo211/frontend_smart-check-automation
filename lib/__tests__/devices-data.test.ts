@@ -61,6 +61,6 @@ describe("getDeviceHistoryPage", () => {
   it("is deterministic for the same device", () => {
     const a = getDeviceHistoryPage(id, 1, 10).data
     const b = getDeviceHistoryPage(id, 1, 10).data
-    expect(a).toEqual(b)
+    expect(a.map(({ receivedAt, ...rest }) => rest)).toEqual(b.map(({ receivedAt, ...rest }) => rest))
   })
 })

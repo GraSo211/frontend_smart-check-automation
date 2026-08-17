@@ -1,7 +1,9 @@
 import ProductGrid from "@/components/configuracion/product-card"
 import ProductParameters from "@/components/configuracion/product-parameters"
 import { ParametersHistory } from "@/components/configuracion/parameters-history"
+import { OvenConfigPanel } from "@/components/oven-config-panel"
 import { getLotesPorProducto, getProductosConParametros } from "@/actions/api"
+import { getSession } from "@/lib/auth"
 import type { LotesPorProducto } from "@/lib/parametros-producto"
 import type { Metadata } from "next"
 
@@ -18,6 +20,9 @@ interface PageProps {
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
   const productoId = typeof params.productoId === "string" ? params.productoId : null
+
+  const session = await getSession()
+  const userRole = session?.rol ?? "Operario"
 
   const productos = await getProductosConParametros()
   const selectedProducto = productoId
@@ -37,12 +42,24 @@ export default async function Page({ searchParams }: PageProps) {
             Parámetros de Configuración
           </h1>
           <p className="text-sm text-muted-foreground">
-            Seleccioná un producto para ver sus parámetros recomendados, editarlos y consultar el
+            Seleccioná un producto para ver sus parámetros recomendados, editarlos, ajustar rangos del horno y consultar el
             historial de corridas.
           </p>
         </div>
 
         <div className="space-y-8">
+          <section aria-label="Rangos operativos y control del horno">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                Rangos Operativos del Horno
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Ajuste de variables operativas del horno y control de permisos (RBAC).
+              </p>
+            </div>
+            <OvenConfigPanel userRole={userRole} />
+          </section>
+
           <section aria-labelledby="productos-heading">
             <div className="mb-3">
               <h2 id="productos-heading" className="text-sm font-semibold text-foreground">
@@ -70,3 +87,4 @@ export default async function Page({ searchParams }: PageProps) {
     </div>
   )
 }
+
