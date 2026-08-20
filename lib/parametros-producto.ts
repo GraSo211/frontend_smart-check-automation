@@ -13,6 +13,7 @@ export interface ParametroProducto {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  costoUnitario?: number | null
   activo: boolean
   createdAt: string
   updatedAt: string
@@ -29,6 +30,7 @@ export interface ParametroProductoRequest {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  costoUnitario?: number | null
 }
 
 // A single batch run used by the per-product history. Horno/cinta fields are
@@ -86,6 +88,11 @@ export function validateParametros(
   if (!(values.velocidadCintaMax > values.velocidadCintaMin)) {
     errors.velocidadCintaMax = "Debe ser mayor a la velocidad mínima."
   }
+  if (values.costoUnitario !== undefined && values.costoUnitario !== null && isNaN(values.costoUnitario)) {
+    errors.costoUnitario = "El costo debe ser un número válido."
+  } else if (values.costoUnitario !== undefined && values.costoUnitario !== null && values.costoUnitario < 0) {
+    errors.costoUnitario = "El costo unitario no puede ser negativo."
+  }
 
   return errors
 }
@@ -107,6 +114,7 @@ export const PARAMETROS_PRODUCTOS_MOCK: ParametroProducto[] = [
     tempMax: 180,
     velocidadCintaMin: 0.1,
     velocidadCintaMax: 0.3,
+    costoUnitario: 390.0,
     activo: true,
     createdAt: "2026-07-23T23:10:05Z",
     updatedAt: "2026-07-23T23:10:05Z",
@@ -123,6 +131,7 @@ export const PARAMETROS_PRODUCTOS_MOCK: ParametroProducto[] = [
     tempMax: 220,
     velocidadCintaMin: 0.15,
     velocidadCintaMax: 0.35,
+    costoUnitario: 450.0,
     activo: true,
     createdAt: "2026-07-20T12:00:00Z",
     updatedAt: "2026-07-20T12:00:00Z",
@@ -139,6 +148,7 @@ export const PARAMETROS_PRODUCTOS_MOCK: ParametroProducto[] = [
     tempMax: 190,
     velocidadCintaMin: 0.12,
     velocidadCintaMax: 0.28,
+    costoUnitario: 520.0,
     activo: true,
     createdAt: "2026-07-18T09:30:00Z",
     updatedAt: "2026-07-18T09:30:00Z",
@@ -155,6 +165,7 @@ export const PARAMETROS_PRODUCTOS_MOCK: ParametroProducto[] = [
     tempMax: 165,
     velocidadCintaMin: 0.2,
     velocidadCintaMax: 0.4,
+    costoUnitario: 280.0,
     activo: true,
     createdAt: "2026-07-15T15:45:00Z",
     updatedAt: "2026-07-15T15:45:00Z",
@@ -171,9 +182,27 @@ export const PARAMETROS_PRODUCTOS_MOCK: ParametroProducto[] = [
     tempMax: 205,
     velocidadCintaMin: 0.1,
     velocidadCintaMax: 0.25,
+    costoUnitario: 650.0,
     activo: true,
     createdAt: "2026-07-10T08:00:00Z",
     updatedAt: "2026-07-10T08:00:00Z",
+  },
+  {
+    id: "5f6e7d8c-9b0a-1bc2-3d4e-5f6a7b8c9d0e",
+    productoId: "f1b2c3d4-5678-90ab-cdef-1234567890ab",
+    productoNombre: "Bizcocho de Vainilla",
+    pesoReferenciaKg: 0.5,
+    toleranciaPesoPct: 6,
+    dimensionBaseCm: 22,
+    toleranciaDimensionCm: 0.5,
+    tempMin: 175,
+    tempMax: 195,
+    velocidadCintaMin: 0.1,
+    velocidadCintaMax: 0.22,
+    costoUnitario: null, // Intencionalmente null para probar detección de costo no configurado
+    activo: true,
+    createdAt: "2026-07-08T10:00:00Z",
+    updatedAt: "2026-07-08T10:00:00Z",
   },
 ]
 

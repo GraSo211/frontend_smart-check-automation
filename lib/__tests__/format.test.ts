@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   formatNumber,
+  formatARS,
   formatKg,
   formatDate,
   formatTime,
@@ -23,6 +24,26 @@ describe("formatNumber", () => {
 
   it("formats a large number", () => {
     expect(formatNumber(1_500_000)).toBe("1.500.000")
+  })
+})
+
+describe("formatARS", () => {
+  it("formats standard amounts in ARS with symbol and decimals", () => {
+    const formatted = formatARS(1845000.5)
+    // es-AR currency format contains $ and 1.845.000,50
+    expect(formatted).toContain("$")
+    expect(formatted).toContain("1.845.000,50")
+  })
+
+  it("formats zero correctly", () => {
+    const formatted = formatARS(0)
+    expect(formatted).toContain("$")
+    expect(formatted).toContain("0,00")
+  })
+
+  it("formats integer amounts with 2 decimal places", () => {
+    const formatted = formatARS(420)
+    expect(formatted).toContain("420,00")
   })
 })
 

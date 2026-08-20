@@ -4,6 +4,7 @@ import { useId, useRef, type KeyboardEvent } from "react"
 import { useRouter } from "next/navigation"
 import { Croissant } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatARS } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import type { ParametroProducto } from "@/lib/parametros-producto"
 
@@ -110,6 +111,12 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
               Horno {fmtNum(producto.tempMin)}–{fmtNum(producto.tempMax)} °C
               <br />
               Cinta {fmtNum(producto.velocidadCintaMin)}–{fmtNum(producto.velocidadCintaMax)} m/s
+              <br />
+              {producto.costoUnitario !== undefined && producto.costoUnitario !== null && producto.costoUnitario > 0 ? (
+                <span className="text-foreground/80 font-medium">Costo: {formatARS(producto.costoUnitario)}</span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Sin costo configurado</span>
+              )}
             </span>
             {!producto.activo && (
               <Badge variant="destructive" className="mt-1">

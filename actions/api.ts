@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { DeviceResponse, type CreateDispositivoRequest, type UpdateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
 import { getDeviceHistoryPage } from "@/lib/devices-data";
-import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
+import { PRODUCTION_RUNS, type ProductionRun, type ProductionResponse } from "@/lib/production-data";
 import {
     PARAMETROS_PRODUCTOS_MOCK,
     getLotesMockPorProducto,
@@ -13,6 +13,8 @@ import {
     type ParametroProducto,
     type ParametroProductoRequest,
 } from "@/lib/parametros-producto"
+import { calculateKPIFinancieroMock } from "@/lib/kpi-data"
+import type { KPIFinancieroData, KPIFinancieroResponse, KPIFinancieroFilters } from "@/types/kpi"
 import { ApiError } from "@/lib/api-client"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
@@ -398,6 +400,64 @@ export async function deleteDispositivo(
             return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
         }
         return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Fetches the financial impact KPI (/api/v1/reportes/kpi-financiero) with query filters.
+export async function getKPIFinanciero(
+    filters?: KPIFinancieroFilters,
+): Promise<KPIFinancieroData> {
+    if (!API_URL) {
+        return calculateKPIFinancieroMock(PRODUCTION_RUNS, PARAMETROS_PRODUCTOS_MOCK, filters);
+    }
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get(SESSION_COOKIE)?.value;
+
+    const queryParams = new URLSearchParams();
+    if (filters?.desde) queryParams.set("desde", filters.desde);
+    if (filters?.hasta) queryParams.set("hasta", filters.hasta);
+    if (filters?.productoId) queryParams.set("productoId", filters.productoId);
+    if (filters?.turno && filters.turno !== "todos") queryParams.set("turno", filters.turno);
+
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/reportes/kpi-financiero${queryString}`, {
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                Cookie: `${SESSION_COOKIE}=${token || ""}`,
+            },
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
+
+        if (!response.ok) {
+            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
+        }
+
+        const result: KPIFinancieroResponse = await response.json();
+        if (!result.success) {
+            throw new Error(result.message ?? "Error al obtener el KPI financiero");
+        }
+
+        return result.data;
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Se calculan datos de muestra para el KPI financiero.");
+        } else {
+            console.warn("No se pudo obtener el KPI financiero del backend. Se usan datos de muestra:", e);
+        }
+        return calculateKPIFinancieroMock(PRODUCTION_RUNS, PARAMETROS_PRODUCTOS_MOCK, filters);
     } finally {
         clearTimeout(timeout);
     }

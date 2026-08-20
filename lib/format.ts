@@ -5,6 +5,16 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat("es-AR").format(value)
 }
 
+// Formats a currency value in Argentine Pesos (ARS) (e.g. 1845000.5 -> "$ 1.845.000,50").
+export function formatARS(amount: number): string {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
 // Formats a kilogram value with one decimal (e.g. 220.5 -> "220.5 kg").
 export function formatKg(value: number): string {
   return `${value.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`

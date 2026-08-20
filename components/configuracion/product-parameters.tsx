@@ -39,13 +39,14 @@ const GRUPOS: { titulo: string; icono: LucideIcon; campos: CampoDef[] }[] = [
     ],
   },
   {
-    titulo: "Control de calidad",
+    titulo: "Control de calidad y costo",
     icono: Scale,
     campos: [
       { key: "pesoReferenciaKg", label: "Peso de referencia", unidad: "kg", min: 0.01 },
       { key: "toleranciaPesoPct", label: "Tolerancia de peso", unidad: "%", min: 0 },
       { key: "dimensionBaseCm", label: "Dimensión base", unidad: "cm", min: 0.01 },
       { key: "toleranciaDimensionCm", label: "Tolerancia de dimensión", unidad: "cm", min: 0 },
+      { key: "costoUnitario", label: "Costo de fabricación unitario", unidad: "ARS", min: 0 },
     ],
   },
 ]
@@ -54,18 +55,23 @@ function toFormString(producto: ParametroProducto): Record<string, string> {
   const base: Record<string, string> = {}
   for (const grupo of GRUPOS) {
     for (const campo of grupo.campos) {
-      base[campo.key] = String(producto[campo.key])
+      const val = producto[campo.key]
+      base[campo.key] = val !== undefined && val !== null ? String(val) : ""
     }
   }
   return base
 }
 
 function toRequest(values: Record<string, string>): ParametroProductoRequest {
-  const request: Record<string, string | number> = {}
+  const request: Record<string, string | number | null> = {}
   for (const grupo of GRUPOS) {
     for (const campo of grupo.campos) {
       const raw = values[campo.key]
-      request[campo.key] = raw === "" ? NaN : Number(raw)
+      if (campo.key === "costoUnitario") {
+        request[campo.key] = raw === "" ? null : Number(raw)
+      } else {
+        request[campo.key] = raw === "" ? NaN : Number(raw)
+      }
     }
   }
   return request as unknown as ParametroProductoRequest
@@ -114,9 +120,16 @@ function ParametersForm({ producto }: { producto: ParametroProducto }) {
   }
 
   const isDirty = GRUPOS.some((grupo) =>
-    grupo.campos.some(
-      (campo) => Number(values[campo.key]) !== Number(producto[campo.key]),
-    ),
+    grupo.campos.some((campo) => {
+      const origVal = producto[campo.key]
+      const formVal = values[campo.key]
+      if (campo.key === "costoUnitario") {
+        const origNum = origVal !== undefined && origVal !== null ? Number(origVal) : null
+        const formNum = formVal !== "" ? Number(formVal) : null
+        return origNum !== formNum
+      }
+      return Number(formVal) !== Number(origVal)
+    }),
   )
 
   return (
