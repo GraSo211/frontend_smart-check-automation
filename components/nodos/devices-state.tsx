@@ -63,6 +63,7 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
           cpuPct: m.cpuPct,
           memRamDisponibleMb: m.memRamDisponibleMb,
           tempChip: m.tempChip,
+          aiProcessorPct: m.aiProcessorPct,
           receivedAt: m.receivedAt,
         }
         setHistory((prev) => {

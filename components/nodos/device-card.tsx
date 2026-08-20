@@ -1,6 +1,6 @@
 "use client"
 
-import { Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, SearchX, type LucideIcon } from "lucide-react"
+import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, SearchX, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import type { Device } from "@/lib/devices-data"
@@ -92,7 +92,7 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {metrica ? (
           <>
             <MetricTile
@@ -106,9 +106,14 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
               value={formatRam(metrica.memRamDisponibleMb)}
             />
             <MetricTile icon={Thermometer} label="Chip" value={formatTemp(metrica.tempChip)} />
+            <MetricTile
+              icon={BrainCircuit}
+              label="IA"
+              value={`${metrica.aiProcessorPct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`}
+            />
           </>
         ) : (
-          <div className="col-span-3 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-secondary/40 px-2 py-4 text-center">
+          <div className="col-span-2 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-secondary/40 px-2 py-4 text-center sm:col-span-4">
             <SearchX className="size-4 text-muted-foreground" aria-hidden="true" />
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Sin telemetría

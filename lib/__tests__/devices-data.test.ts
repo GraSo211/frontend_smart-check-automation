@@ -26,6 +26,7 @@ describe("DEVICES", () => {
       expect(ultimaMetrica.cpuPct).toBeGreaterThanOrEqual(0)
       expect(ultimaMetrica.memRamDisponibleMb).toBeGreaterThan(0)
       expect(ultimaMetrica.tempChip).toBeGreaterThan(0)
+      expect(ultimaMetrica.aiProcessorPct).toBeGreaterThanOrEqual(0)
       expect(new Date(ultimaMetrica.receivedAt).getTime()).not.toBeNaN()
       expect(device.lastSeen).toBeTruthy()
     }

@@ -31,6 +31,7 @@ function normalizeDevice(raw: unknown): Device {
           cpuPct: typeof metrica.cpuPct === "number" ? metrica.cpuPct : 0,
           memRamDisponibleMb: typeof metrica.memRamDisponibleMb === "number" ? metrica.memRamDisponibleMb : 0,
           tempChip: typeof metrica.tempChip === "number" ? metrica.tempChip : 0,
+          aiProcessorPct: typeof metrica.aiProcessorPct === "number" ? metrica.aiProcessorPct : 0,
           receivedAt: typeof metrica.receivedAt === "string" ? metrica.receivedAt : "",
         }
       : undefined

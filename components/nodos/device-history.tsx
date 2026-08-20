@@ -95,6 +95,7 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
                   <Th className="text-right">CPU</Th>
                   <Th className="text-right">RAM libre</Th>
                   <Th className="text-right">Chip</Th>
+                  <Th className="text-right">IA</Th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +116,9 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
                       {formatTemp(row.tempChip)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
+                      {row.aiProcessorPct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
                     </td>
                   </tr>
                 ))}
