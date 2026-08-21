@@ -21,6 +21,8 @@ interface UserManagementProps {
   initialUsers: UserDTO[]
 }
 
+type UserRole = 'Administrador' | 'Supervisor' | 'Operario'
+
 const roleBadgeStyles: Record<UserDTO['rol'], string> = {
   Administrador: 'border-primary/30 bg-primary/10 text-primary',
   Supervisor: 'border-accent/30 bg-accent/10 text-accent',
@@ -37,7 +39,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
   // Estado del formulario de creación
   const [newEmail, setNewEmail] = useState('')
   const [newNombre, setNewNombre] = useState('')
-  const [newRol, setNewRol] = useState<'Administrador' | 'Supervisor' | 'Operario'>('Operario')
+  const [newRol, setNewRol] = useState<UserRole>('Operario')
   const [newPassword, setNewPassword] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
@@ -312,8 +314,28 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
           </div>
         )}
 
-        {/* Tabla de Usuarios */}
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        {/* Vista móvil: cada cuenta mantiene sus datos y acciones sin forzar scroll horizontal. */}
+        <div className="space-y-3 2xl:hidden" aria-label="Usuarios en formato compacto">
+          {filteredUsers.length === 0 ? <EmptyUsers /> : filteredUsers.map((user) => (
+            <article key={user.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary ring-1 ring-primary/30" aria-hidden="true">{user.nombre.charAt(0).toUpperCase()}</div>
+                <div className="min-w-0 flex-1"><h3 className="truncate font-semibold text-foreground">{user.nombre}</h3><p className="mt-0.5 break-all text-xs text-muted-foreground">{user.email}</p></div>
+                <StatusBadge active={user.activo} />
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
+                <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rol</dt><dd className="mt-1"><select aria-label={`Rol de ${user.nombre}`} value={user.rol} disabled={loadingId === user.id} onChange={(e) => handleChangeRole(user, e.target.value as UserRole)} className={cn('max-w-full cursor-pointer rounded-full border bg-clip-padding px-2.5 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60', roleBadgeStyles[user.rol])}><option value="Operario">Operario</option><option value="Supervisor">Supervisor</option><option value="Administrador">Administrador</option></select></dd></div>
+                <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Alta</dt><dd className="mt-1 text-xs text-foreground">{new Date(user.createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</dd></div>
+              </dl>
+              <Button size="sm" variant={user.activo ? 'destructive' : 'outline'} disabled={loadingId === user.id} onClick={() => handleToggleStatus(user)} className="mt-4 h-9 w-full gap-1.5 rounded-lg text-xs">
+                {loadingId === user.id ? <Loader2 className="size-3.5 animate-spin" /> : user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+              </Button>
+            </article>
+          ))}
+        </div>
+
+        {/* Tabla de escritorio: conserva la vista densa existente. */}
+        <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm 2xl:block">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border bg-secondary/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -362,7 +384,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                           value={user.rol}
                           disabled={loadingId === user.id}
                           onChange={(e) =>
-                            handleChangeRole(user, e.target.value as any)
+                            handleChangeRole(user, e.target.value as UserRole)
                           }
                           className={cn(
                             'cursor-pointer rounded-full border bg-clip-padding px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
@@ -427,4 +449,20 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
       </section>
     </div>
   )
+}
+
+function StatusBadge({ active }: { active: boolean }) {
+  return active ? (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-950/40 px-2 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+      <CheckCircle2 className="size-3" aria-hidden="true" /> Activo
+    </span>
+  ) : (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950/40 px-2 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-inset ring-zinc-700">
+      <XCircle className="size-3" aria-hidden="true" /> Inactivo
+    </span>
+  )
+}
+
+function EmptyUsers() {
+  return <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground"><SearchX className="size-5" aria-hidden="true" /></span><p className="text-sm font-medium text-foreground">Sin resultados</p><p className="max-w-xs text-xs text-muted-foreground">No se encontraron usuarios que coincidan con la búsqueda.</p></div>
 }
