@@ -233,9 +233,9 @@ export function LoginForm() {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <div className="w-full max-w-md">
         {/* Card principal */}
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-xl sm:p-10">
           {/* Logo y branding */}
-          <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <div className="mb-8 flex flex-col items-center gap-3 text-center">
             <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/15 p-2 shadow-sm ring-1 ring-primary/20">
               <Image
                 src="/Isotipo ⁄ Icono.webp"
@@ -247,11 +247,15 @@ export function LoginForm() {
               />
             </div>
             <div>
-              <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                Smart-Check Automation
+              <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+                <span className="inline-block size-1.5 rounded-full bg-accent" aria-hidden="true" />
+                Acceso Corporativo
+              </div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+                Iniciar Sesión
               </h1>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Fermar S.A. — Control de Calidad y Telemetría
+              <p className="mt-1 text-sm text-muted-foreground">
+                Ingresá con tu cuenta de Google o con tus credenciales corporativas.
               </p>
             </div>
           </div>

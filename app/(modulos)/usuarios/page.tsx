@@ -13,19 +13,23 @@ export default async function Page() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+            <span className="inline-block size-1.5 rounded-full bg-accent" aria-hidden="true" />
+            Usuarios
+          </div>
+          <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Gestión de Usuarios y Permisos
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Administración centralizada de cuentas corporativas, asignación de roles y control de acceso (RBAC).
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Administración centralizada de cuentas corporativas, asignación de roles y control de
+            acceso (RBAC).
           </p>
-        </div>
+        </header>
 
         <UserManagement initialUsers={users} />
       </main>
     </div>
   )
 }
-

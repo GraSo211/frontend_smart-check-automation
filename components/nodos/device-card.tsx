@@ -14,8 +14,8 @@ const STATUS_CONFIG: Record<
   online: {
     label: "Online",
     icon: Wifi,
-    chip: "bg-emerald-50 text-emerald-600",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    badge: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-400",
   },
   offline: {
     label: "Offline",
@@ -58,8 +58,8 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
         }
       }}
       className={cn(
-        "cursor-pointer rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected ? "border-primary ring-2 ring-primary/30" : "border-border",
+        "cursor-pointer rounded-xl border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        selected ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/30" : "border-border",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -113,14 +113,12 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
             />
           </>
         ) : (
-          <div className="col-span-2 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-secondary/40 px-2 py-4 text-center sm:col-span-4">
-            <SearchX className="size-4 text-muted-foreground" aria-hidden="true" />
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Sin telemetría
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Este nodo todavía no reportó datos.
-            </p>
+          <div className="col-span-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-2 py-5 text-center sm:col-span-4">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
+              <SearchX className="size-5" aria-hidden="true" />
+            </span>
+            <p className="text-sm font-medium text-foreground">Sin telemetría</p>
+            <p className="text-xs text-muted-foreground">Este nodo todavía no reportó datos.</p>
           </div>
         )}
       </div>

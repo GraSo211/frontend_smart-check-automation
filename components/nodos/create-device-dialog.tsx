@@ -75,6 +75,9 @@ export default function CreateDeviceDialog() {
       />
       <DialogContent>
         <DialogHeader>
+          <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 text-primary">
+            <Plus className="size-5" aria-hidden="true" />
+          </span>
           <DialogTitle>Agregar dispositivo</DialogTitle>
           <DialogDescription>
             Registrá un nuevo nodo Raspberry Pi en el catálogo.

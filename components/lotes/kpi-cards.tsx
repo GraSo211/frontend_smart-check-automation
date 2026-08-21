@@ -50,21 +50,21 @@ export function KpiCards({ runs }: KpiCardsProps) {
       value: `${m.qualityRate.toFixed(1)}%`,
       hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
-      accent: "bg-emerald-50 text-emerald-600",
+      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     },
     {
       label: "Tasa de merma",
       value: `${m.defectRate.toFixed(1)}%`,
       hint: "Unidades quemadas / total",
       icon: Flame,
-      accent: "bg-red-50 text-red-600",
+      accent: "bg-destructive/10 text-destructive",
     },
     {
       label: "Promedio de hornos",
       value: `${Math.round(m.avgTemp)}°C`,
       hint: `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min`,
       icon: Gauge,
-      accent: "bg-amber-50 text-amber-600",
+      accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     },
   ]
 
@@ -78,7 +78,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
         return (
           <div
             key={card.label}
-            className="rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
