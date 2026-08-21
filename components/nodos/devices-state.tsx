@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Server } from "lucide-react"
 import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
+import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
 import { getDeviceHistory } from "@/actions/api"
 import { setLastSync } from "@/lib/sync-store"
+import { mergeDeviceUpdate, mergeIncomingTelemetrySamples, reconcileDeviceSnapshot, samplesForDevice } from "@/lib/telemetry"
 import type { Device, SpecificDevice } from "@/lib/devices-data"
 
 const HISTORY_CAP = 100
@@ -22,6 +24,7 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [history, setHistory] = useState<SpecificDevice[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
   const selectedDeviceIdRef = useRef<string | null>(null)
 
@@ -39,19 +42,24 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/dispositivos/events`)
+    const reconcile = async () => {
+      try {
+        const response = await fetch("/api/nodos/snapshot", { cache: "no-store" })
+        if (!response.ok) return
+        const payload = await response.json()
+        const snapshot = Array.isArray(payload) ? payload : payload.data
+        if (Array.isArray(snapshot)) {
+          setAllDevices((current) => reconcileDeviceSnapshot(current, snapshot))
+        }
+      } catch { /* SSE remains the source of live updates while a snapshot retries. */ }
+    }
+    const eventSource = new EventSource("/api/nodos/events")
 
     const applyDeviceUpdate = (update: Device, addToHistory: boolean) => {
       setAllDevices((prev) =>
         prev.map((d) => {
           if (d.dispositivoId !== update.dispositivoId) return d
-          return {
-            ...d,
-            ...update,
-            ultimaMetrica: update.ultimaMetrica
-              ? { ...d.ultimaMetrica, ...update.ultimaMetrica }
-              : d.ultimaMetrica,
-          }
+          return mergeDeviceUpdate(d, update)
         }),
       )
 
@@ -63,13 +71,15 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
           nombre: update.nombre,
           cpuPct: m.cpuPct,
           memRamDisponibleMb: m.memRamDisponibleMb,
+          memRamTotalMb: m.memRamTotalMb,
+          almacenamientoDisponibleMb: m.almacenamientoDisponibleMb,
+          almacenamientoTotalMb: m.almacenamientoTotalMb,
           tempChip: m.tempChip,
           aiProcessorPct: m.aiProcessorPct,
           receivedAt: m.receivedAt,
         }
         setHistory((prev) => {
-          if (prev.some((r) => r.id === row.id)) return prev
-          return [row, ...prev].slice(0, HISTORY_CAP)
+          return mergeIncomingTelemetrySamples(prev, [row], HISTORY_CAP)
         })
       }
 
@@ -82,6 +92,10 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
       console.log("Métrica de dispositivo recibida:", update)
       applyDeviceUpdate(update, true)
     })
+
+    eventSource.onopen = reconcile
+    void reconcile()
+    const reconciliationTimer = window.setInterval(reconcile, 60_000)
 
     eventSource.addEventListener("dispositivo.state", (event) => {
       const response = JSON.parse((event as MessageEvent).data)
@@ -100,23 +114,28 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
 
     return () => {
       eventSource.close()
+      window.clearInterval(reconciliationTimer)
     }
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    setHistory([])
+    setHistoryError(null)
     if (!selectedDeviceId) {
-      setHistory([])
+      setLoadingHistory(false)
       return
     }
 
-    let cancelled = false
     setLoadingHistory(true)
     getDeviceHistory(selectedDeviceId)
       .then((rows) => {
-        if (!cancelled) setHistory(rows)
+        if (!cancelled) {
+          setHistory(mergeIncomingTelemetrySamples([], samplesForDevice(rows, selectedDeviceId), HISTORY_CAP))
+        }
       })
       .catch(() => {
-        if (!cancelled) setHistory([])
+        if (!cancelled) setHistoryError("No se pudo cargar el historial. Los reportes históricos no están disponibles.")
       })
       .finally(() => {
         if (!cancelled) setLoadingHistory(false)
@@ -187,11 +206,14 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
         )}
       </section>
 
+      {selectedDevice && <TelemetryDashboard device={selectedDevice} history={history} />}
+
       <DeviceHistory
         deviceId={selectedDeviceId}
         deviceName={selectedDevice?.nombre ?? null}
         history={history}
         loading={loadingHistory}
+        error={historyError}
       />
     </div>
   )

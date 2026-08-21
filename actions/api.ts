@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { DeviceResponse, type CreateDispositivoRequest, type UpdateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
-import { getDeviceHistoryPage } from "@/lib/devices-data";
 import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
 import {
     PARAMETROS_PRODUCTOS_MOCK,
@@ -15,25 +14,33 @@ import {
 } from "@/lib/parametros-producto"
 import { ApiError } from "@/lib/api-client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
 const SESSION_COOKIE = "session_token"
 
-export async function getAllProductionRuns(): Promise<ProductionRun[]> {
+function getApiUrl(): string {
     if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
+        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host")
     }
+    return API_URL
+}
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
+/** Forward the incoming browser session to the Go API from server actions. */
+async function getSessionHeaders(): Promise<HeadersInit> {
+    const token = (await cookies()).get(SESSION_COOKIE)?.value
+    return {
+        "Content-Type": "application/json",
+        ...(token ? { Cookie: `${SESSION_COOKIE}=${token}` } : {}),
+    }
+}
+
+export async function getAllProductionRuns(): Promise<ProductionRun[]> {
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/lotes-productivos?page=1&pageSize=100`, {
-            headers: {
-                "Content-Type": "application/json",
-                Cookie: `${SESSION_COOKIE}=${token || ""}`,
-            },
+        const response = await fetch(`${apiUrl}/api/v1/lotes-productivos?page=1&pageSize=100`, {
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
@@ -65,17 +72,20 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
 }
 
 export async function getDevices() {
-    if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
-    }
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+        const response = await fetch(`${apiUrl}/api/v1/dispositivos`, {
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -90,7 +100,7 @@ export async function getDevices() {
         return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
+            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los nodos no están disponibles.");
         }
         throw e;
     } finally {
@@ -99,20 +109,23 @@ export async function getDevices() {
 }
 
 export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize = 20): Promise<SpecificDevice[]> {
-    if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
-    }
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(
-            `${API_URL}/api/v1/dispositivos/metricas?dispositivoId=${dispositivoId}&page=${page}&pageSize=${pageSize}`,
+            `${apiUrl}/api/v1/dispositivos/metricas?dispositivoId=${encodeURIComponent(dispositivoId)}&page=${page}&pageSize=${pageSize}`,
             {
+                headers: await getSessionHeaders(),
                 cache: "no-store",
                 signal: controller.signal,
             },
         );
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -127,11 +140,11 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
         return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
-            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
+            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Historial no disponible.");
         } else {
-            console.warn("No se pudo obtener el historial. Se usan datos de muestra.");
+            console.warn("No se pudo obtener el historial. Historial no disponible.");
         }
-        return getDeviceHistoryPage(dispositivoId, page, pageSize).data;
+        throw e;
     } finally {
         clearTimeout(timeout);
     }
@@ -146,13 +159,8 @@ export async function getProductosConParametros(): Promise<ParametroProducto[]> 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const cookieStore = await cookies();
-        const token = cookieStore.get(SESSION_COOKIE)?.value;
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
-            headers: {
-                "Content-Type": "application/json",
-                Cookie: `${SESSION_COOKIE}=${token || ""}`,
-            },
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
@@ -195,8 +203,9 @@ export async function getLotesPorProducto(
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(
-            `${API_URL}/api/v1/lotes-productivos?productoId=${productoId}&page=${page}&pageSize=${pageSize}`,
+            `${API_URL}/api/v1/lotes-productivos?productoId=${encodeURIComponent(productoId)}&page=${page}&pageSize=${pageSize}`,
             {
+                headers: await getSessionHeaders(),
                 cache: "no-store",
                 signal: controller.signal,
             },
@@ -242,13 +251,11 @@ export async function updateParametrosProducto(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const cookieStore = await cookies();
-        const token = cookieStore.get(SESSION_COOKIE)?.value;
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                Cookie: `${SESSION_COOKIE}=${token || ""}`,
+                ...(await getSessionHeaders()),
             },
             body: JSON.stringify(payload),
             cache: "no-store",
@@ -283,10 +290,13 @@ export async function updateParametrosProducto(
 
 // Coerces the backend EstadoDispositivo payload of a freshly created node into
 // the safe Device shape used by the UI.
-function normalizeCreatedDispositivo(raw: unknown): Device {
+function normalizeCreatedDispositivo(raw: unknown): Device | null {
   const r = (raw ?? {}) as Record<string, unknown>
+  const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
+  if (!dispositivoId) return null
+
   return {
-    dispositivoId: typeof r.dispositivoId === "string" ? r.dispositivoId : "",
+    dispositivoId,
     nombre: typeof r.nombre === "string" ? r.nombre : "Nodo",
     ubicacion: typeof r.ubicacion === "string" ? r.ubicacion : "—",
     estado: r.estado === "online" ? "online" : "offline",
@@ -306,7 +316,7 @@ export async function createDispositivo(
     try {
         const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await getSessionHeaders(),
             body: JSON.stringify(payload),
             cache: "no-store",
             signal: controller.signal,
@@ -315,8 +325,12 @@ export async function createDispositivo(
         const result = await response.json().catch(() => null);
 
         if (response.ok && result?.success) {
+            const data = normalizeCreatedDispositivo(result.data)
+            if (!data) {
+                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
+            }
             revalidatePath("/nodos");
-            return { ok: true, data: normalizeCreatedDispositivo(result.data) };
+            return { ok: true, data };
         }
 
         const errors =
@@ -347,7 +361,7 @@ export async function updateDispositivo(
     try {
         const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: await getSessionHeaders(),
             body: JSON.stringify(payload),
             cache: "no-store",
             signal: controller.signal,
@@ -356,8 +370,12 @@ export async function updateDispositivo(
         const result = await response.json().catch(() => null);
 
         if (response.ok && result?.success) {
+            const data = normalizeCreatedDispositivo(result.data)
+            if (!data) {
+                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
+            }
             revalidatePath("/nodos");
-            return { ok: true, data: normalizeCreatedDispositivo(result.data) };
+            return { ok: true, data };
         }
 
         const errors =
@@ -386,8 +404,9 @@ export async function deleteDispositivo(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos?dispositivoId=${dispositivoId}`, {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos?dispositivoId=${encodeURIComponent(dispositivoId)}`, {
             method: "DELETE",
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });

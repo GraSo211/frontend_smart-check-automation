@@ -15,10 +15,11 @@ interface DeviceHistoryProps {
   deviceName: string | null
   history: SpecificDevice[]
   loading: boolean
+  error?: string | null
 }
 
 // Renders the selected device's telemetry history as a paginated table.
-export function DeviceHistory({ deviceId, deviceName, history, loading }: DeviceHistoryProps) {
+export function DeviceHistory({ deviceId, deviceName, history, loading, error }: DeviceHistoryProps) {
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -74,6 +75,11 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
             </p>
           </div>
         </div>
+      ) : error && history.length === 0 ? (
+        <div role="alert" className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">!</span>
+          <div><p className="text-sm font-semibold text-foreground">Historial no disponible</p><p className="mt-1 text-xs text-muted-foreground">{error}</p></div>
+        </div>
       ) : loading && history.length === 0 ? (
         <div className="space-y-2 px-5 py-6">
           <Skeleton className="h-10 w-full" />
@@ -107,9 +113,9 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
                 </tr>
               </thead>
               <tbody>
-                {data.map((row) => (
+                {data.map((row, index) => (
                   <tr
-                    key={row.id}
+                    key={row.id || `${row.dispositivoId}-${row.receivedAt}-${index}`}
                     className="border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40"
                   >
                     <td className="px-4 py-3.5">
