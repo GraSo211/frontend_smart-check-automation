@@ -25,6 +25,9 @@ export type Device = {
         dispositivoId: string;
         cpuPct: number;
         memRamDisponibleMb: number;
+        memRamTotalMb?: number;
+        almacenamientoDisponibleMb?: number;
+        almacenamientoTotalMb?: number;
         tempChip: number;
         aiProcessorPct: number;
         receivedAt: string;
@@ -47,6 +50,9 @@ export type SpecificDevice = {
     nombre: string;
     cpuPct: number;
     memRamDisponibleMb: number;
+    memRamTotalMb?: number;
+    almacenamientoDisponibleMb?: number;
+    almacenamientoTotalMb?: number;
     tempChip: number;
     aiProcessorPct: number;
     receivedAt: string;
