@@ -70,7 +70,7 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardCon
   const filteredRuns = useMemo(() => filterRuns(allRuns, filters), [allRuns, filters])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <KpiCards runs={filteredRuns} />
       <FiltersBar
         filters={filters}

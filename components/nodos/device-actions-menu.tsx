@@ -115,7 +115,7 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
               {...props}
               variant="ghost"
               size="icon"
-              className="size-8 rounded-lg hover:bg-secondary"
+              className="size-8 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground"
               aria-label={`Acciones de ${device.nombre}`}
               onClick={(e) => {
                 e.stopPropagation()
@@ -151,6 +151,9 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
           <DialogHeader>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
+              <Pencil className="size-5" aria-hidden="true" />
+            </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
             <DialogDescription>Actualizá el nombre y la ubicación del nodo.</DialogDescription>
           </DialogHeader>
@@ -205,6 +208,9 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
           <DialogHeader>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" aria-hidden="true" />
+            </span>
             <DialogTitle>¿Eliminar dispositivo?</DialogTitle>
             <DialogDescription>
               Se eliminará {device.nombre} y todo su historial de telemetría. Esta acción no se

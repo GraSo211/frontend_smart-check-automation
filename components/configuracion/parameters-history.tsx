@@ -41,24 +41,28 @@ export function ParametersHistory({ lotes, productoNombre }: ParametersHistoryPr
     >
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Historial de corridas</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-base font-semibold text-foreground">Historial de corridas</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Parámetros de horno y cinta utilizados en cada corrida de{" "}
             {productoNombre || "este producto"}.
           </p>
         </div>
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
           {formatNumber(total)} corridas
         </span>
       </div>
 
       {total === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
-          <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Sin corridas registradas</p>
-          <p className="text-xs text-muted-foreground">
-            Aún no hay corridas para {productoNombre || "este producto"}.
-          </p>
+        <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground">
+            <SearchX className="size-6" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Sin corridas registradas</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Aún no hay corridas para {productoNombre || "este producto"}.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="overflow-x-auto">
