@@ -2,7 +2,7 @@
 
 import { useId, useRef, type KeyboardEvent } from "react"
 import { useRouter } from "next/navigation"
-import { Croissant } from "lucide-react"
+import { Check, Croissant } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import type { ParametroProducto } from "@/lib/parametros-producto"
@@ -60,9 +60,15 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
 
   if (productos.length === 0) {
     return (
-      <p className="rounded-xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-        No hay productos configurados.
-      </p>
+      <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
+        <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
+          <Croissant className="size-5" aria-hidden="true" />
+        </span>
+        <p className="text-sm font-medium text-foreground">No hay productos configurados</p>
+        <p className="max-w-xs text-xs text-muted-foreground">
+          Cuando se registren productos, vas a poder seleccionarlos para editar sus parámetros.
+        </p>
+      </div>
     )
   }
 
@@ -89,15 +95,15 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
             tabIndex={selected ? 0 : -1}
             onClick={() => select(producto.productoId)}
             className={cn(
-              "flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors",
-              "hover:bg-secondary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-              selected && "border-primary bg-primary/5 ring-2 ring-primary/40",
+              "group relative flex flex-col items-start gap-2.5 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all duration-200",
+              "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+              selected && "border-primary bg-primary/5 shadow-md ring-2 ring-primary/30",
             )}
           >
             <span
               aria-hidden="true"
               className={cn(
-                "flex size-9 items-center justify-center rounded-lg bg-secondary/70 text-muted-foreground",
+                "flex size-9 items-center justify-center rounded-lg bg-secondary/70 text-muted-foreground transition-colors duration-200",
                 selected && "bg-primary/15 text-primary",
               )}
             >
@@ -111,11 +117,25 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
               <br />
               Cinta {fmtNum(producto.velocidadCintaMin)}–{fmtNum(producto.velocidadCintaMax)} m/s
             </span>
-            {!producto.activo && (
+            {!producto.activo ? (
               <Badge variant="destructive" className="mt-1">
                 Inactivo
               </Badge>
+            ) : (
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                Activo
+              </span>
             )}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 transition-all duration-200",
+                selected && "opacity-100",
+              )}
+            >
+              <Check className="size-3.5" strokeWidth={3} />
+            </span>
           </button>
         )
       })}

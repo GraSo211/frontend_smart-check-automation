@@ -146,7 +146,13 @@ export async function getProductosConParametros(): Promise<ParametroProducto[]> 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
+        const cookieStore = await cookies();
+        const token = cookieStore.get(SESSION_COOKIE)?.value;
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
+            headers: {
+                "Content-Type": "application/json",
+                Cookie: `${SESSION_COOKIE}=${token || ""}`,
+            },
             cache: "no-store",
             signal: controller.signal,
         });
@@ -236,9 +242,14 @@ export async function updateParametrosProducto(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
+        const cookieStore = await cookies();
+        const token = cookieStore.get(SESSION_COOKIE)?.value;
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                Cookie: `${SESSION_COOKIE}=${token || ""}`,
+            },
             body: JSON.stringify(payload),
             cache: "no-store",
             signal: controller.signal,
