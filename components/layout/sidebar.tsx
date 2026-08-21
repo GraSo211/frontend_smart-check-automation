@@ -12,6 +12,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -130,22 +131,25 @@ function UserFooter({
                 </span>
               </div>
             )}
-
-            {/* Botón de logout */}
-            {!collapsed && (
-              <form action={logoutAction} onClick={(e) => e.stopPropagation()}>
-                <button
-                  id="btn-logout"
-                  type="submit"
-                  title="Cerrar sesión"
-                  className="flex size-8 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/20 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Cerrar sesión"
-                >
-                  <LogOut className="size-4" aria-hidden="true" />
-                </button>
-              </form>
-            )}
           </SidebarMenuButton>
+
+          {/* Botón de logout (hermano del menu-button, no anidado) */}
+          {!collapsed && (
+            <SidebarMenuAction
+              render={
+                <form action={logoutAction} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    id="btn-logout"
+                    type="submit"
+                    title="Cerrar sesión"
+                    aria-label="Cerrar sesión"
+                  >
+                    <LogOut className="size-4" aria-hidden="true" />
+                  </button>
+                </form>
+              }
+            />
+          )}
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarFooter>
