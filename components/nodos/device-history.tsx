@@ -45,10 +45,10 @@ export function DeviceHistory({ deviceId, deviceName, history, loading, error }:
   return (
     <section
       aria-label="Historial de telemetría del dispositivo"
-      className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">Historial del dispositivo</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {deviceId
@@ -101,8 +101,8 @@ export function DeviceHistory({ deviceId, deviceName, history, loading, error }:
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-275 border-collapse text-sm">
+          <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
+            <table className="w-full min-w-[40rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-secondary/50 text-left">
                   <Th>Fecha y hora</Th>
@@ -140,13 +140,13 @@ export function DeviceHistory({ deviceId, deviceName, history, loading, error }:
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
               Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
               <span className="font-medium text-foreground">{rangeEnd}</span> de{" "}
               <span className="font-medium text-foreground">{formatNumber(total)}</span> elementos
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <PageButton
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}

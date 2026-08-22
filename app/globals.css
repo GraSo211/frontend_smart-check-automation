@@ -202,7 +202,7 @@
 }
 
 @layer components {
-  .chart-svg { width: 100%; height: auto; min-height: 150px; overflow: visible; color: var(--muted-foreground); }
+  .chart-svg { display: block; width: 100%; max-width: 100%; height: auto; min-height: 150px; overflow: hidden; color: var(--muted-foreground); }
   .offline-badge { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid color-mix(in oklab, var(--muted-foreground) 30%, transparent); border-radius: 999px; background: color-mix(in oklab, var(--muted) 75%, transparent); padding: .42rem .7rem; color: var(--muted-foreground); font-size: .72rem; font-weight: 600; }
   .telemetry-offline { filter: grayscale(.72); opacity: .68; }
   .telemetry-offline .offline-badge { filter: grayscale(0); opacity: 1; }

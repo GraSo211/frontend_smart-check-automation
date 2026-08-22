@@ -58,7 +58,7 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
         }
       }}
       className={cn(
-        "cursor-pointer rounded-xl border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "min-w-0 cursor-pointer rounded-xl border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/30" : "border-border",
       )}
     >
@@ -85,7 +85,7 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
       </div>
 
       <div className="mt-3">
-        <h3 className="text-sm font-semibold text-foreground">{device.nombre}</h3>
+        <h3 className="break-words text-sm font-semibold text-foreground">{device.nombre}</h3>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
           {device.ubicacion}
@@ -124,11 +124,11 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
+        <span className="flex min-w-0 flex-1 items-center gap-1">
           <Clock className="size-3.5 shrink-0" aria-hidden="true" />
           {metrica ? formatLastSeen(metrica.receivedAt) : "Sin actividad"}
         </span>
-        <span className="truncate font-mono text-[11px] tracking-tight" title={device.dispositivoId}>
+        <span className="max-w-[45%] truncate font-mono text-[11px] tracking-tight" title={device.dispositivoId}>
           {shortId}
         </span>
       </div>

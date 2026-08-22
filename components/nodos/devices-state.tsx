@@ -165,10 +165,10 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
   const offlineCount = allDevices.length - onlineCount
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <section aria-labelledby="nodos-heading">
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
             <h2 id="nodos-heading" className="text-base font-semibold text-foreground">
               Nodos de la flota
             </h2>

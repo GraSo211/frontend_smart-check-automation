@@ -20,9 +20,9 @@ export default async function ModulosLayout({
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
-      <div className="flex min-h-svh flex-1 flex-col">
+      <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         <Header />
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
         <Footer />
       </div>
     </SidebarProvider>

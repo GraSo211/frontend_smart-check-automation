@@ -21,10 +21,10 @@ export function TelemetryDashboard({ device, history }: Props) {
   const storageAvailable = current?.almacenamientoDisponibleMb
 
   return (
-    <section className={cn("space-y-4 transition-opacity", offline && "telemetry-offline")} aria-label={`Panel de gráficos de ${device.nombre}`}>
+    <section className={cn("min-w-0 space-y-4 transition-opacity", offline && "telemetry-offline")} aria-label={`Panel de gráficos de ${device.nombre}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Lectura en vivo</p><h2 className="mt-1 text-xl font-semibold">Pulso de {device.nombre}</h2></div>
-        {offline && <span className="offline-badge" role="status">Offline — Último reporte: {new Date(metric?.receivedAt || device.lastSeen).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>}
+        <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Lectura en vivo</p><h2 className="mt-1 break-words text-xl font-semibold">Pulso de {device.nombre}</h2></div>
+        {offline && <span className="offline-badge max-w-full whitespace-normal break-words" role="status">Offline — Último reporte: {new Date(metric?.receivedAt || device.lastSeen).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={Activity} label="CPU" value={current?.cpuPct} previous={samples.at(-2)?.cpuPct} level={levelFor(current?.cpuPct ?? 0, 70, 85)} />
@@ -32,11 +32,11 @@ export function TelemetryDashboard({ device, history }: Props) {
         <Kpi icon={MemoryStick} label="RAM libre" value={current?.memRamDisponibleMb} previous={samples.at(-2)?.memRamDisponibleMb} suffix=" MB" level={totalRam && percent((totalRam - (current?.memRamDisponibleMb ?? 0)), totalRam) ? levelFor(percent((totalRam - (current?.memRamDisponibleMb ?? 0)), totalRam)!, 70, 85) : "normal"} />
         <Kpi icon={Thermometer} label="Temperatura SoC" value={current?.tempChip} previous={samples.at(-2)?.tempChip} suffix=" °C" level={levelFor(current?.tempChip ?? 0, 70, 80)} criticalPulse />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[1.35fr_1fr] [&>*]:min-w-0">
         <ChartCard title="Carga del sistema" subtitle="CPU vs procesador IA · últimos reportes"><LineChart rows={samples} /></ChartCard>
         <ChartCard title="Temperatura SoC" subtitle="Umbrales térmicos de operación"><TemperatureChart rows={samples} /></ChartCard>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <ChartCard title="Memoria RAM" subtitle={totalRam ? `${totalRam.toLocaleString("es-AR")} MB totales · libre y usada` : "Capacidad total no disponible"}><RamChart rows={samples} total={totalRam} used={usedRam} /></ChartCard>
         {Number.isFinite(storageTotal) && Number.isFinite(storageAvailable) && storageTotal! > 0 && storageAvailable! >= 0 ? <DiskCard available={storageAvailable!} total={storageTotal!} /> : <div className="flex min-h-32 items-center gap-3 rounded-2xl border border-dashed border-border bg-card/50 px-5 text-sm text-muted-foreground"><HardDrive className="size-5" /> Almacenamiento no disponible en este reporte.</div>}
       </div>
@@ -49,7 +49,7 @@ function Kpi({ icon: Icon, label, value, previous, suffix = "%", level, critical
   return <article className={cn("rounded-2xl border border-border bg-card p-4 shadow-sm", level === "critical" && criticalPulse && "critical-pulse")}><div className="flex items-center justify-between"><span className="flex size-8 items-center justify-center rounded-lg" style={{ color: COLORS[level], backgroundColor: `${COLORS[level]}18` }}><Icon className="size-4" /></span><span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: COLORS[level] }}>{level === "normal" ? "Normal" : level === "warning" ? "Atención" : "Crítico"}</span></div><p className="mt-4 text-xs text-muted-foreground">{label}</p><p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums">{formatSnapshot(value, suffix)}</p><p className="mt-1 text-[11px] text-muted-foreground">{delta === undefined ? "Sin muestra previa" : `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toLocaleString("es-AR", { maximumFractionDigits: 1 })}${suffix} vs. anterior`}</p></article>
 }
 
-function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <article className="overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="mb-4"><h3 className="font-semibold">{title}</h3><p className="mt-1 text-xs text-muted-foreground">{subtitle}</p></div>{children}</article> }
+function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <article className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="mb-4 min-w-0"><h3 className="font-semibold">{title}</h3><p className="mt-1 break-words text-xs text-muted-foreground">{subtitle}</p></div>{children}</article> }
 function svgPoints(values: number[], width: number, height: number, max = 100) { return values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * width},${height - (Math.max(0, v) / max) * height}`).join(" ") }
 
 function LineChart({ rows }: { rows: SpecificDevice[] }) { const [hover, setHover] = useState<number | null>(null); const w=640,h=190; const index=hover ?? rows.length-1; return <div className="relative"><div className="mb-2 flex gap-4 text-[11px] text-muted-foreground"><Legend color="#38bdf8" text="CPU" /><Legend color="#e57c20" text="IA" /></div><svg viewBox={`0 0 ${w} ${h}`} className="chart-svg" role="img" aria-label="Gráfico de CPU y procesador IA de cero a cien por ciento" onMouseLeave={()=>setHover(null)} onMouseMove={e=>setHover(Math.min(rows.length-1, Math.max(0, Math.round((e.nativeEvent.offsetX / e.currentTarget.clientWidth) * (rows.length-1)))))}><Grid /><polyline fill="none" stroke="#38bdf8" strokeWidth="3" points={svgPoints(rows.map(r=>r.cpuPct),w,h)} /><polyline fill="none" stroke="#e57c20" strokeWidth="3" points={svgPoints(rows.map(r=>r.aiProcessorPct),w,h)} />{hover !== null && <line x1={(index/Math.max(1,rows.length-1))*w} x2={(index/Math.max(1,rows.length-1))*w} y1="0" y2={h} stroke="currentColor" strokeDasharray="3 4" opacity=".35" />}</svg>{rows[index] && <Tooltip row={rows[index]} fields={[["CPU", rows[index].cpuPct, "#38bdf8"],["IA",rows[index].aiProcessorPct,"#e57c20"]]} />}</div> }
