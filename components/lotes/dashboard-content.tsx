@@ -41,7 +41,7 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardCon
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos/events`)
+    const eventSource = new EventSource('/api/lotes/events')
 
 
     eventSource.addEventListener("lote.created", (event) => {
