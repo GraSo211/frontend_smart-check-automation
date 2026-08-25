@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight, History, SearchX } from "lucide-react"
+import { ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDate, formatNumber, formatRam, formatTemp, formatTime } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageButton } from "@/components/shared/page-button"
 import type { SpecificDevice } from "@/lib/devices-data"
 
 const PAGE_SIZE = 10
@@ -14,10 +15,11 @@ interface DeviceHistoryProps {
   deviceName: string | null
   history: SpecificDevice[]
   loading: boolean
+  error?: string | null
 }
 
 // Renders the selected device's telemetry history as a paginated table.
-export function DeviceHistory({ deviceId, deviceName, history, loading }: DeviceHistoryProps) {
+export function DeviceHistory({ deviceId, deviceName, history, loading, error }: DeviceHistoryProps) {
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -43,32 +45,40 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
   return (
     <section
       aria-label="Historial de telemetría del dispositivo"
-      className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <History className="size-4 text-muted-foreground" aria-hidden="true" />
-            Historial del dispositivo
-          </h2>
-          <p className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-foreground">Historial del dispositivo</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {deviceId
               ? `Telemetría de ${deviceName ?? deviceId}`
               : "Seleccioná un nodo para ver su historial"}
           </p>
         </div>
         {deviceId && (
-          <span className="font-mono text-[11px] tracking-tight text-muted-foreground">{deviceId}</span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
+            {formatNumber(total)} registros
+          </span>
         )}
       </div>
 
       {!deviceId ? (
-        <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
-          <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Sin selección</p>
-          <p className="text-xs text-muted-foreground">
-            Seleccioná un nodo arriba para ver su historial de telemetría.
-          </p>
+        <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground">
+            <SearchX className="size-6" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Sin selección</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Seleccioná un nodo arriba para ver su historial de telemetría.
+            </p>
+          </div>
+        </div>
+      ) : error && history.length === 0 ? (
+        <div role="alert" className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">!</span>
+          <div><p className="text-sm font-semibold text-foreground">Historial no disponible</p><p className="mt-1 text-xs text-muted-foreground">{error}</p></div>
         </div>
       ) : loading && history.length === 0 ? (
         <div className="space-y-2 px-5 py-6">
@@ -78,29 +88,34 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
           <Skeleton className="h-10 w-full" />
         </div>
       ) : history.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
-          <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Sin datos de historial</p>
-          <p className="text-xs text-muted-foreground">
-            No se encontraron registros de telemetría para este nodo.
-          </p>
+        <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground">
+            <SearchX className="size-6" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Sin datos de historial</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              No se encontraron registros de telemetría para este nodo.
+            </p>
+          </div>
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-275 border-collapse text-sm">
+          <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
+            <table className="w-full min-w-[40rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-secondary/50 text-left">
                   <Th>Fecha y hora</Th>
                   <Th className="text-right">CPU</Th>
                   <Th className="text-right">RAM libre</Th>
                   <Th className="text-right">Chip</Th>
+                  <Th className="text-right">IA</Th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((row) => (
+                {data.map((row, index) => (
                   <tr
-                    key={row.id}
+                    key={row.id || `${row.dispositivoId}-${row.receivedAt}-${index}`}
                     className="border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40"
                   >
                     <td className="px-4 py-3.5">
@@ -116,19 +131,22 @@ export function DeviceHistory({ deviceId, deviceName, history, loading }: Device
                     <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
                       {formatTemp(row.tempChip)}
                     </td>
+                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
+                      {row.aiProcessorPct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
               Mostrando <span className="font-medium text-foreground">{rangeStart}</span>–
               <span className="font-medium text-foreground">{rangeEnd}</span> de{" "}
               <span className="font-medium text-foreground">{formatNumber(total)}</span> elementos
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <PageButton
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
@@ -165,27 +183,5 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
     >
       {children}
     </th>
-  )
-}
-
-// Pagination button with disabled styling.
-function PageButton({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-card"
-    >
-      {children}
-    </button>
   )
 }

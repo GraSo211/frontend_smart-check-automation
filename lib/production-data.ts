@@ -25,7 +25,7 @@ export interface ProductionRun {
 export interface ProductionResponse {
   success: boolean
   message: string
-  data: {items: ProductionRun[]}
+  data: ProductionRun[]
   total: number
   page: number
   pageSize: number
@@ -115,7 +115,7 @@ export function getProductionPage(page: number, pageSize: number): ProductionRes
   return {
     success: true,
     message: "Datos de producción simulados",
-    data: { items: PRODUCTION_RUNS.slice(start, start + pageSize) },
+    data: PRODUCTION_RUNS.slice(start, start + pageSize),
     total: PRODUCTION_RUNS.length,
     page,
     pageSize,

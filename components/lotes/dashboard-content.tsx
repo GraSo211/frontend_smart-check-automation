@@ -41,7 +41,7 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardCon
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos/events`)
+    const eventSource = new EventSource('/api/lotes/events')
 
 
     eventSource.addEventListener("lote.created", (event) => {
@@ -70,7 +70,7 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt }: DashboardCon
   const filteredRuns = useMemo(() => filterRuns(allRuns, filters), [allRuns, filters])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <KpiCards runs={filteredRuns} />
       <FiltersBar
         filters={filters}

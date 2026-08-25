@@ -49,12 +49,12 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
       {/*TITULO TABLA*/}
       <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Lotes de Producción</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-base font-semibold text-foreground">Lotes de Producción</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Supervisión en tiempo real por turno
           </p>
         </div>
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
           {formatNumber(total)} registros totales
         </span>
       </div>
@@ -62,12 +62,16 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
       {/*TABLA*/}
       {total === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
-          <SearchX className="size-10 text-muted-foreground/60" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Sin resultados</p>
-          <p className="text-xs text-muted-foreground">
-            No se encontraron lotes con los filtros seleccionados.
-          </p>
+        <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground">
+            <SearchX className="size-6" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Sin resultados</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              No se encontraron lotes con los filtros seleccionados.
+            </p>
+          </div>
         </div>
 
 
@@ -104,8 +108,8 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                   <tr
                     key={run.id}
                     className={cn(
-                      "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40 ",
-                      isWarning && "bg-red-500/50",
+                      "border-b border-border/70 transition-colors last:border-0 hover:bg-secondary/40",
+                      isWarning && "bg-destructive/5 hover:bg-destructive/10",
                     )}
                   >
 
@@ -136,7 +140,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
                     {/* //? CORRECTOS */}
                     <td className="px-4 py-3.5 text-center">
-                      <div className="font-mono tabular-nums text-emerald-700">
+                      <div className="font-mono tabular-nums text-emerald-700 dark:text-emerald-400">
                         {formatNumber(run.correctos)}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -153,7 +157,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 font-mono tabular-nums",
-                          isWarning ? "font-semibold text-red-600" : "text-muted-foreground",
+                          isWarning ? "font-semibold text-destructive" : "text-muted-foreground",
                         )}
                       >
                         {isWarning && (
@@ -169,7 +173,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
                     {/* //? CRUDAS */}
                     <td className="px-4 py-3.5    text-center">
-                      <span className="inline-flex items-center gap-1 font-mono  tabular-nums text-amber-700">
+                      <span className="inline-flex items-center gap-1 font-mono  tabular-nums text-amber-700 dark:text-amber-400">
                         {hasCrudas ? formatNumber(run.crudas!) : "—"}
                       </span>
                       <div className="text-xs text-muted-foreground">

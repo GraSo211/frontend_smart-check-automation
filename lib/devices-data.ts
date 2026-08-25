@@ -4,6 +4,17 @@ export type DeviceResponse = {
     data: Device[];
 };
 
+export type CreateDispositivoRequest = {
+    nombre: string;
+    ubicacion: string;
+};
+
+export type UpdateDispositivoRequest = {
+    dispositivoId: string;
+    nombre: string;
+    ubicacion: string;
+};
+
 export type Device = {
     dispositivoId: string;
     nombre: string;
@@ -14,7 +25,11 @@ export type Device = {
         dispositivoId: string;
         cpuPct: number;
         memRamDisponibleMb: number;
+        memRamTotalMb?: number;
+        almacenamientoDisponibleMb?: number;
+        almacenamientoTotalMb?: number;
         tempChip: number;
+        aiProcessorPct: number;
         receivedAt: string;
     };
     lastSeen: string;
@@ -35,7 +50,11 @@ export type SpecificDevice = {
     nombre: string;
     cpuPct: number;
     memRamDisponibleMb: number;
+    memRamTotalMb?: number;
+    almacenamientoDisponibleMb?: number;
+    almacenamientoTotalMb?: number;
     tempChip: number;
+    aiProcessorPct: number;
     receivedAt: string;
 };
 
@@ -81,6 +100,7 @@ function buildDevices(): Device[] {
         const cpuPct = round1(10 + rand() * 75)
         const memRamDisponibleMb = Math.round(900 + rand() * 2900)
         const tempChip = round1(38 + rand() * 22)
+        const aiProcessorPct = round1(5 + rand() * 90)
         const receivedAt = new Date(
             now - (offline ? 45 + Math.floor(rand() * 300) : Math.floor(rand() * 50)) * 60000,
         ).toISOString()
@@ -96,6 +116,7 @@ function buildDevices(): Device[] {
                 cpuPct,
                 memRamDisponibleMb,
                 tempChip,
+                aiProcessorPct,
                 receivedAt,
             },
             lastSeen: receivedAt,
@@ -120,6 +141,7 @@ function buildDeviceHistory(dispositivoId: string, nombre: string, count: number
             cpuPct: round1(10 + rand() * 75),
             memRamDisponibleMb: Math.round(900 + rand() * 2900),
             tempChip: round1(38 + rand() * 22),
+            aiProcessorPct: round1(5 + rand() * 90),
             receivedAt: new Date(now - i * 5 * 60000).toISOString(),
         })
     }

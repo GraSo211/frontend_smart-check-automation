@@ -10,17 +10,17 @@ const TURNO_CONFIG: Record<
   mañana: {
     label: "Mañana",
     icon: Sun,
-    className: "bg-amber-50 text-amber-700 ring-amber-200",
+    className: "bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-400",
   },
   tarde: {
     label: "Tarde",
     icon: Sunset,
-    className: "bg-orange-50 text-orange-700 ring-orange-200",
+    className: "bg-orange-500/10 text-orange-700 ring-orange-500/25 dark:text-orange-400",
   },
   noche: {
     label: "Noche",
     icon: Moon,
-    className: "bg-slate-800 text-slate-100 ring-slate-700",
+    className: "bg-slate-800 text-slate-100 ring-slate-700 dark:bg-slate-700 dark:text-slate-100 dark:ring-slate-600",
   },
 }
 

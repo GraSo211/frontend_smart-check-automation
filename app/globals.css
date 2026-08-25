@@ -200,3 +200,13 @@
     @apply font-heading;
   }
 }
+
+@layer components {
+  .chart-svg { display: block; width: 100%; max-width: 100%; height: auto; min-height: 150px; overflow: hidden; color: var(--muted-foreground); }
+  .offline-badge { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid color-mix(in oklab, var(--muted-foreground) 30%, transparent); border-radius: 999px; background: color-mix(in oklab, var(--muted) 75%, transparent); padding: .42rem .7rem; color: var(--muted-foreground); font-size: .72rem; font-weight: 600; }
+  .telemetry-offline { filter: grayscale(.72); opacity: .68; }
+  .telemetry-offline .offline-badge { filter: grayscale(0); opacity: 1; }
+  .critical-pulse { animation: critical-pulse 1.8s ease-in-out infinite; }
+  @keyframes critical-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--destructive) 0%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--destructive) 18%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .critical-pulse { animation: none; } }
+}

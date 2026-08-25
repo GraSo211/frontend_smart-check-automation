@@ -16,9 +16,7 @@ export default async function Page() {
       runs = response
     } else if (response && Array.isArray((response as any).data)) {
       runs = (response as any).data
-    } else {
-      runs = PRODUCTION_RUNS
-    }
+    } 
 
     lastSyncAt = new Date().toISOString()
   } catch (e) {
@@ -28,18 +26,25 @@ export default async function Page() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h2 className="text-balance text-xl font-bold tracking-tight text-foreground">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+            <span className="inline-block size-1.5 rounded-full bg-accent" aria-hidden="true" />
+            Lotes y Datos Históricos
+          </div>
+          <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Supervisión de Producción
-          </h2>
-          <p className="text-sm text-muted-foreground">
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Información de telemetría y calidad en todas las líneas de producción.
           </p>
-        </div>
+        </header>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="mb-8 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
             {error}
           </div>
         )}

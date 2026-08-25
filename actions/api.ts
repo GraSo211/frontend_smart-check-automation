@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { DeviceResponse, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
-import { getDeviceHistoryPage } from "@/lib/devices-data";
+import { cookies } from "next/headers"
+import { DeviceResponse, type CreateDispositivoRequest, type UpdateDispositivoRequest, type Device, type SpecificDevice, type DeviceHistoryResponse } from "@/lib/devices-data";
 import type { ProductionRun, ProductionResponse } from "@/lib/production-data";
 import {
     PARAMETROS_PRODUCTOS_MOCK,
@@ -11,34 +11,56 @@ import {
     type LoteProductivo,
     type ParametroProducto,
     type ParametroProductoRequest,
-} from "@/lib/parametros-producto";
+} from "@/lib/parametros-producto"
+import { ApiError } from "@/lib/api-client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
+const SESSION_COOKIE = "session_token"
+
+function getApiUrl(): string {
+    if (!API_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host")
+    }
+    return API_URL
+}
+
+/** Forward the incoming browser session to the Go API from server actions. */
+async function getSessionHeaders(): Promise<HeadersInit> {
+    const token = (await cookies()).get(SESSION_COOKIE)?.value
+    return {
+        "Content-Type": "application/json",
+        ...(token ? { Cookie: `${SESSION_COOKIE}=${token}` } : {}),
+    }
+}
 
 export async function getAllProductionRuns(): Promise<ProductionRun[]> {
-    if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
-    }
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/lotes-productivos?page=1&pageSize=100`, {
+        const response = await fetch(`${apiUrl}/api/v1/lotes-productivos?page=1&pageSize=100`, {
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
         }
 
         const result: ProductionResponse = await response.json();
-
+        console.log("result:", result)
         if (!result.success) {
             throw new Error(result.message ?? "Error desconocido del servidor");
         }
-        console.log("Resultado de la API:", result.data.items);
-        return result.data.items;
+        console.log("Resultado de la API:", result.data
+        );
+        return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
@@ -50,17 +72,20 @@ export async function getAllProductionRuns(): Promise<ProductionRun[]> {
 }
 
 export async function getDevices() {
-    if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
-    }
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+        const response = await fetch(`${apiUrl}/api/v1/dispositivos`, {
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -75,7 +100,7 @@ export async function getDevices() {
         return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
+            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los nodos no están disponibles.");
         }
         throw e;
     } finally {
@@ -84,20 +109,23 @@ export async function getDevices() {
 }
 
 export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize = 20): Promise<SpecificDevice[]> {
-    if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host");
-    }
+    const apiUrl = getApiUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(
-            `${API_URL}/api/v1/dispositivos/metricas?dispositivoId=${dispositivoId}&page=${page}&pageSize=${pageSize}`,
+            `${apiUrl}/api/v1/dispositivos/metricas?dispositivoId=${encodeURIComponent(dispositivoId)}&page=${page}&pageSize=${pageSize}`,
             {
+                headers: await getSessionHeaders(),
                 cache: "no-store",
                 signal: controller.signal,
             },
         );
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
 
         if (!response.ok) {
             throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -112,11 +140,11 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
         return result.data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
-            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Se usan datos de muestra.");
+            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Historial no disponible.");
         } else {
-            console.warn("No se pudo obtener el historial. Se usan datos de muestra.");
+            console.warn("No se pudo obtener el historial. Historial no disponible.");
         }
-        return getDeviceHistoryPage(dispositivoId, page, pageSize).data;
+        throw e;
     } finally {
         clearTimeout(timeout);
     }
@@ -132,6 +160,7 @@ export async function getProductosConParametros(): Promise<ParametroProducto[]> 
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
+            headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
         });
@@ -174,8 +203,9 @@ export async function getLotesPorProducto(
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
         const response = await fetch(
-            `${API_URL}/api/v1/lotes-productivos?productoId=${productoId}&page=${page}&pageSize=${pageSize}`,
+            `${API_URL}/api/v1/lotes-productivos?productoId=${encodeURIComponent(productoId)}&page=${page}&pageSize=${pageSize}`,
             {
+                headers: await getSessionHeaders(),
                 cache: "no-store",
                 signal: controller.signal,
             },
@@ -223,7 +253,10 @@ export async function updateParametrosProducto(
     try {
         const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                ...(await getSessionHeaders()),
+            },
             body: JSON.stringify(payload),
             cache: "no-store",
             signal: controller.signal,
@@ -234,6 +267,155 @@ export async function updateParametrosProducto(
         if (response.ok && result?.success) {
             revalidatePath("/configuracion");
             return { ok: true, data: result.data as ParametroProducto };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Registers a new Raspberry Pi node in the catalog (POST /api/v1/dispositivos).
+// The backend generates the device UUID, which the Pi must later send as
+// dispositivoId in its pings — the UI surfaces it after creation.
+
+// Coerces the backend EstadoDispositivo payload of a freshly created node into
+// the safe Device shape used by the UI.
+function normalizeCreatedDispositivo(raw: unknown): Device | null {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
+  if (!dispositivoId) return null
+
+  return {
+    dispositivoId,
+    nombre: typeof r.nombre === "string" ? r.nombre : "Nodo",
+    ubicacion: typeof r.ubicacion === "string" ? r.ubicacion : "—",
+    estado: r.estado === "online" ? "online" : "offline",
+    lastSeen: typeof r.lastSeen === "string" ? r.lastSeen : "",
+  }
+}
+
+export async function createDispositivo(
+    payload: CreateDispositivoRequest,
+): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+            method: "POST",
+            headers: await getSessionHeaders(),
+            body: JSON.stringify(payload),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            const data = normalizeCreatedDispositivo(result.data)
+            if (!data) {
+                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
+            }
+            revalidatePath("/nodos");
+            return { ok: true, data };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Updates the name and location of an existing node (PUT /api/v1/dispositivos).
+export async function updateDispositivo(
+    payload: UpdateDispositivoRequest,
+): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
+            method: "PUT",
+            headers: await getSessionHeaders(),
+            body: JSON.stringify(payload),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            const data = normalizeCreatedDispositivo(result.data)
+            if (!data) {
+                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
+            }
+            revalidatePath("/nodos");
+            return { ok: true, data };
+        }
+
+        const errors =
+            Array.isArray(result?.errors) && result.errors.length > 0
+                ? result.errors.map(String)
+                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
+        return { ok: false, errors };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
+        }
+        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Removes a node from the catalog (DELETE /api/v1/dispositivos?dispositivoId=...).
+export async function deleteDispositivo(
+    dispositivoId: string,
+): Promise<{ ok: true } | { ok: false; errors: string[] }> {
+    if (!API_URL) {
+        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${API_URL}/api/v1/dispositivos?dispositivoId=${encodeURIComponent(dispositivoId)}`, {
+            method: "DELETE",
+            headers: await getSessionHeaders(),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result?.success) {
+            revalidatePath("/nodos");
+            return { ok: true };
         }
 
         const errors =

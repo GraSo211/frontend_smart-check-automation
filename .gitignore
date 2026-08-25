@@ -13,3 +13,10 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+tsconfig.tsbuildinfo
+
+# AI tool files — generados por/para agentes de IA, no para el equipo
+.claude/
+.agents/
+skills-lock.json
+frontend_integration_guide.md
