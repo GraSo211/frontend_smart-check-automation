@@ -22,7 +22,7 @@ function LocalLoginForm() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault()
     setGeneralError(null)
 
@@ -276,7 +276,7 @@ export function LoginForm() {
 
           {/* Nota de seguridad */}
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+            <ShieldCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
             <span>Acceso seguro mediante JWT y cookies corporativas.</span>
           </div>
         </div>

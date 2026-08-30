@@ -140,7 +140,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
                     {/* //? CORRECTOS */}
                     <td className="px-4 py-3.5 text-center">
-                      <div className="font-mono tabular-nums text-emerald-700 dark:text-emerald-400">
+                      <div className="font-mono tabular-nums text-success">
                         {formatNumber(run.correctos)}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -173,7 +173,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
                     {/* //? CRUDAS */}
                     <td className="px-4 py-3.5    text-center">
-                      <span className="inline-flex items-center gap-1 font-mono  tabular-nums text-amber-700 dark:text-amber-400">
+                      <span className="inline-flex items-center gap-1 font-mono  tabular-nums text-warning">
                         {hasCrudas ? formatNumber(run.crudas!) : "—"}
                       </span>
                       <div className="text-xs text-muted-foreground">

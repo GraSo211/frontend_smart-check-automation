@@ -10,10 +10,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
-// Coerces an arbitrary backend payload into the safe Device shape. The API can
-// return nodes without telemetry yet (e.g. freshly registered or offline ones),
-// so missing ultimaMetrica is preserved as undefined instead of crashing
-// downstream components like DeviceCard.
+
 function normalizeDevice(raw: unknown): Device | null {
   const r = (raw ?? {}) as Record<string, unknown>
   const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""

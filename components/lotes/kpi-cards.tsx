@@ -50,7 +50,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
       value: `${m.qualityRate.toFixed(1)}%`,
       hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
-      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      accent: "bg-success/10 text-success",
     },
     {
       label: "Tasa de merma",
@@ -64,7 +64,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
       value: `${Math.round(m.avgTemp)}°C`,
       hint: `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min`,
       icon: Gauge,
-      accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      accent: "bg-warning/10 text-warning",
     },
   ]
 

@@ -122,8 +122,8 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
                 Inactivo
               </Badge>
             ) : (
-              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-success">
+                <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
                 Activo
               </span>
             )}

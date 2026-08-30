@@ -34,10 +34,10 @@ export function Header() {
 
         <div className="flex items-center gap-2.5">
           {/* Estado del sistema */}
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+          <span className="inline-flex items-center gap-2 rounded-full bg-success/15 px-3 py-1.5 text-xs font-semibold text-success ring-1 ring-inset ring-success/40">
             <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-success" />
             </span>
             Todos los Sistemas Funcionando
           </span>
@@ -52,4 +52,3 @@ export function Header() {
     </header>
   )
 }
-

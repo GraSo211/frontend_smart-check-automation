@@ -159,7 +159,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-success/15 text-success">
               <CheckCircle2 className="size-6" />
             </div>
             <div>
@@ -169,7 +169,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-violet-500/15 text-violet-500">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-info/15 text-info">
               <Shield className="size-6" />
             </div>
             <div>
@@ -219,7 +219,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
 
         {/* Modal de Creación */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
             <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="font-heading text-lg font-bold text-foreground">
@@ -400,12 +400,12 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                       {/* Estado */}
                       <td className="px-6 py-4">
                         {user.activo ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/40 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-semibold text-success ring-1 ring-inset ring-success/40">
                             <CheckCircle2 className="size-3.5" />
                             Activo
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-950/40 px-2.5 py-1 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-zinc-700">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
                             <XCircle className="size-3.5" />
                             Inactivo
                           </span>
@@ -453,11 +453,11 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
 
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-950/40 px-2 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-1 text-[11px] font-semibold text-success ring-1 ring-inset ring-success/40">
       <CheckCircle2 className="size-3" aria-hidden="true" /> Activo
     </span>
   ) : (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950/40 px-2 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-inset ring-zinc-700">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground ring-1 ring-inset ring-border">
       <XCircle className="size-3" aria-hidden="true" /> Inactivo
     </span>
   )
