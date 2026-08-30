@@ -235,14 +235,14 @@ export function LoginForm() {
         {/* Card principal */}
         <div className="rounded-2xl border border-border bg-card p-8 shadow-xl sm:p-10">
           {/* Logo y branding */}
-          <div className="mb-8 flex flex-col items-center gap-3 text-center">
-            <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/15 p-2 shadow-sm ring-1 ring-primary/20">
+          <div className="mb-6 flex flex-col items-center gap-3 text-center">
+            <div className="flex size-20 items-center justify-center rounded-2xl bg-muted/60 p-3 shadow-sm ring-1 ring-border/80 transition-colors">
               <Image
-                src="/Isotipo ⁄ Icono.webp"
+                src="/sca/logo.svg"
                 alt="Smart-Check Automation"
-                width={36}
-                height={48}
-                className="h-full w-auto object-contain"
+                width={64}
+                height={64}
+                className="size-full object-contain dark:brightness-0 dark:invert transition-all"
                 priority
               />
             </div>
