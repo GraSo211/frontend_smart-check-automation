@@ -2,7 +2,6 @@ import { DashboardContent } from "@/components/dashboard-content"
 import { getAllProductionRuns } from "@/actions/api"
 import { getSession } from "@/lib/auth"
 import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
-import { AlertCircle } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -24,10 +23,8 @@ export default async function Page() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-          Dashboard
-      </main>
-    </div>
+    <main className="flex-1 bg-background">
+      <DashboardContent runs={runs} lastSyncAt={lastSyncAt} userRole={userRole} error={error} />
+    </main>
   )
 }
