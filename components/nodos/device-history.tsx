@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDate, formatNumber, formatRam, formatTemp, formatTime } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PageButton } from "@/components/shared/page-button"
+import { pageCount, reconcilePage } from "@/components/shared/pagination-state"
 import type { SpecificDevice } from "@/lib/devices-data"
 
 const PAGE_SIZE = 10
@@ -21,13 +22,24 @@ interface DeviceHistoryProps {
 // Renders the selected device's telemetry history as a paginated table.
 export function DeviceHistory({ deviceId, deviceName, history, loading, error }: DeviceHistoryProps) {
   const [page, setPage] = useState(1)
-
-  useEffect(() => {
-    setPage(1)
-  }, [deviceId])
+  const [previousDeviceId, setPreviousDeviceId] = useState(deviceId)
+  const identityChanged = previousDeviceId !== deviceId
+  if (identityChanged) {
+    setPreviousDeviceId(deviceId)
+  }
 
   const total = history.length
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const totalPages = pageCount(total, PAGE_SIZE)
+  const [previousTotal, setPreviousTotal] = useState(total)
+  const totalChanged = previousTotal !== total
+  if (totalChanged) {
+    setPreviousTotal(total)
+  }
+  if (identityChanged || totalChanged) {
+    const nextPage = reconcilePage(page, identityChanged, totalChanged, totalPages)
+    if (nextPage !== page) setPage(nextPage)
+  }
+
   const rangeStart = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0
   const rangeEnd = Math.min(page * PAGE_SIZE, total)
 
@@ -35,12 +47,6 @@ export function DeviceHistory({ deviceId, deviceName, history, loading, error }:
     () => history.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [history, page],
   )
-
-  useEffect(() => {
-    if (page > totalPages && totalPages > 0) {
-      setPage(totalPages)
-    }
-  }, [totalPages, page])
 
   return (
     <section

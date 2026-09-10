@@ -13,11 +13,12 @@ const fmtNum = (value: number) =>
 interface ProductGridProps {
   productos?: ParametroProducto[]
   selectedId: string | null
+  error?: string | null
 }
 
 // Selectable product grid (radio-group semantics with roving tabIndex).
 // Selection is deep-linked via ?productoId= so it survives refresh.
-export default function ProductGrid({ productos = [], selectedId }: ProductGridProps) {
+export default function ProductGrid({ productos = [], selectedId, error }: ProductGridProps) {
   const baseId = useId()
   const router = useRouter()
   const buttonsRef = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -60,13 +61,13 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
 
   if (productos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
+      <div role={error ? "alert" : undefined} className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
         <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
           <Croissant className="size-5" aria-hidden="true" />
         </span>
-        <p className="text-sm font-medium text-foreground">No hay productos configurados</p>
+        <p className="text-sm font-medium text-foreground">{error ? "No se pudieron cargar los productos" : "No hay productos configurados"}</p>
         <p className="max-w-xs text-xs text-muted-foreground">
-          Cuando se registren productos, vas a poder seleccionarlos para editar sus parámetros.
+          {error ?? "Cuando se registren productos, vas a poder seleccionarlos para editar sus parámetros."}
         </p>
       </div>
     )

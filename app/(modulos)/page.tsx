@@ -1,7 +1,7 @@
 import { DashboardContent } from "@/components/dashboard-content"
 import { getAllProductionRuns } from "@/actions/api"
 import { getSession } from "@/lib/auth"
-import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
+import type { ProductionRun } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
@@ -15,11 +15,11 @@ export default async function Page() {
 
   try {
     const apiRuns = await getAllProductionRuns()
-    runs = apiRuns.length > 0 ? apiRuns : PRODUCTION_RUNS
+    runs = apiRuns
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    runs = PRODUCTION_RUNS
+    runs = []
   }
 
   return (

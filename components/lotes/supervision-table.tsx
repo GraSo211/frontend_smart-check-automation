@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TurnoBadge } from "@/components/lotes/turno-badge"
 import { OvenTemp } from "@/components/shared/oven-temp"
 import { PageButton } from "@/components/shared/page-button"
+import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
 import type { ProductionRun } from "@/lib/production-data"
 
@@ -24,7 +25,14 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
   const [page, setPage] = useState(1)
 
   const total = runs.length
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const totalPages = pageCount(total, PAGE_SIZE)
+  const [previousTotal, setPreviousTotal] = useState(total)
+  if (previousTotal !== total) {
+    setPreviousTotal(total)
+    const nextPage = clampPage(page, totalPages)
+    if (nextPage !== page) setPage(nextPage)
+  }
+
   const rangeStart = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0
   const rangeEnd = Math.min(page * PAGE_SIZE, total)
 
@@ -32,12 +40,6 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
     () => runs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [runs, page],
   )
-
-  useEffect(() => {
-    if (page > totalPages && totalPages > 0) {
-      setPage(totalPages)
-    }
-  }, [totalPages, page])
 
   return (
     <section
@@ -67,9 +69,9 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
             <SearchX className="size-6" aria-hidden="true" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-foreground">Sin resultados</p>
+            <p className="text-sm font-semibold text-foreground">Sin lotes para mostrar</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              No se encontraron lotes con los filtros seleccionados.
+              No hay lotes registrados o no coinciden con los filtros seleccionados.
             </p>
           </div>
         </div>

@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDate, formatNumber, formatTime } from "@/lib/format"
 import { TurnoBadge } from "@/components/lotes/turno-badge"
 import { OvenTemp } from "@/components/shared/oven-temp"
 import { PageButton } from "@/components/shared/page-button"
+import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import type { LoteProductivo } from "@/lib/parametros-producto"
 
 const PAGE_SIZE = 10
@@ -14,14 +15,22 @@ const PAGE_SIZE = 10
 interface ParametersHistoryProps {
   lotes: LoteProductivo[]
   productoNombre: string
+  error?: string | null
 }
 
 // Per-product batch-run history showing only horno and cinta parameters.
-export function ParametersHistory({ lotes, productoNombre }: ParametersHistoryProps) {
+export function ParametersHistory({ lotes, productoNombre, error }: ParametersHistoryProps) {
   const [page, setPage] = useState(1)
 
   const total = lotes.length
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = pageCount(total, PAGE_SIZE)
+  const [previousTotal, setPreviousTotal] = useState(total)
+  if (previousTotal !== total) {
+    setPreviousTotal(total)
+    const nextPage = clampPage(page, totalPages)
+    if (nextPage !== page) setPage(nextPage)
+  }
+
   const rangeStart = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0
   const rangeEnd = Math.min(page * PAGE_SIZE, total)
 
@@ -29,10 +38,6 @@ export function ParametersHistory({ lotes, productoNombre }: ParametersHistoryPr
     () => lotes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [lotes, page],
   )
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [totalPages, page])
 
   return (
     <section
@@ -48,11 +53,16 @@ export function ParametersHistory({ lotes, productoNombre }: ParametersHistoryPr
           </p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
-          {formatNumber(total)} corridas
+          {error ? "— No disponible" : `${formatNumber(total)} corridas`}
         </span>
       </div>
 
-      {total === 0 ? (
+      {error ? (
+        <div role="alert" className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+          <span className="text-sm font-semibold text-destructive">No se pudo cargar el historial</span>
+          <p className="max-w-md text-xs text-muted-foreground">{error}</p>
+        </div>
+      ) : total === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
           <span className="flex size-12 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground">
             <SearchX className="size-6" aria-hidden="true" />

@@ -9,7 +9,7 @@ const PUBLIC_PATHS = ['/login', '/unauthorized']
 /** Mínimo rol requerido por prefijo de ruta */
 const PROTECTED_ROUTES: Array<{ prefix: string; minRole: UserRole }> = [
   { prefix: '/usuarios', minRole: 'Administrador' },
-  { prefix: '/supervisor', minRole: 'Supervisor' },
+  { prefix: '/supervision', minRole: 'Supervisor' },
 ]
 
 const SESSION_COOKIE = 'session_token'
@@ -56,7 +56,7 @@ export default function proxy(request: NextRequest) {
       const userLevel = ROLE_LEVEL[session.rol]
       const requiredLevel = ROLE_LEVEL[route.minRole]
 
-      if (userLevel < requiredLevel) {
+      if (typeof userLevel !== 'number' || userLevel < requiredLevel) {
         const url = request.nextUrl.clone()
         url.pathname = '/unauthorized'
         return NextResponse.redirect(url)
@@ -78,8 +78,9 @@ export default function proxy(request: NextRequest) {
 function redirectToLogin(request: NextRequest): NextResponse {
   const url = request.nextUrl.clone()
   url.pathname = '/login'
+  url.search = ''
   // Guardar la URL original para redirigir de vuelta post-login (opcional)
-  url.searchParams.set('callbackUrl', request.nextUrl.pathname)
+  url.searchParams.set('callbackUrl', request.nextUrl.pathname + request.nextUrl.search)
   return NextResponse.redirect(url)
 }
 

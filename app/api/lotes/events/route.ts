@@ -1,18 +1,7 @@
-import { cookies } from "next/headers"
+import { proxyMonitoringEvents } from "@/lib/monitoring-server"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
-  if (!apiUrl) {
-    return Response.json({ message: "NEXT_PUBLIC_API_URL no está definida." }, { status: 500 })
-  }
-
-  const token = (await cookies()).get("session_token")?.value
-  const response = await fetch(`${apiUrl}/api/v1/lotes-productivos/events`, {
-    headers: { Cookie: `session_token=${token ?? ""}`, Accept: "text/event-stream" }, cache: "no-store",
-  })
-  return new Response(response.body, { status: response.status, headers: {
-    "content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive",
-  } })
+export async function GET(request: Request) {
+  return proxyMonitoringEvents(request, "/api/v1/lotes-productivos/events")
 }

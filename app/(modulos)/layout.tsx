@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
 import AppSidebar from '@/components/layout/sidebar'
 import { getSession } from '@/lib/auth'
+import { MonitoringProvider } from '@/components/monitoring-provider'
 
 export default async function ModulosLayout({
   children,
@@ -18,13 +19,15 @@ export default async function ModulosLayout({
     : undefined
 
   return (
-    <SidebarProvider>
-      <AppSidebar user={user} />
-      <div className="flex min-h-svh min-w-0 flex-1 flex-col">
-        <Header />
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-        <Footer />
-      </div>
-    </SidebarProvider>
+    <MonitoringProvider sessionKey={session ? `${session.email}:${session.iat ?? ''}` : 'anonymous'}>
+      <SidebarProvider>
+        <AppSidebar user={user} />
+        <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+          <Header />
+          <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+          <Footer />
+        </div>
+      </SidebarProvider>
+    </MonitoringProvider>
   )
 }

@@ -18,7 +18,7 @@ es un servicio externo en Go; no forma parte de este proyecto.
 - [Páginas frontend](#páginas-frontend)
 - [API consumida](#api-consumida)
 - [Autenticación y autorización](#autenticación-y-autorización)
-- [Datos de respaldo y tiempo real](#datos-de-respaldo-y-tiempo-real)
+- [Disponibilidad y tiempo real](#disponibilidad-y-tiempo-real)
 - [Problemas frecuentes](#problemas-frecuentes)
 - [Despliegue](#despliegue)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -191,8 +191,10 @@ iniciando.
 
 La navegación lateral agrupa estas páginas en **Operación** y **Sistema**.
 
-El proxy puede generar `/login?callbackUrl=<ruta-original>`. Actualmente el
-formulario no utiliza ese parámetro: después del login redirige a `/`.
+El proxy puede generar `/login?callbackUrl=<ruta-original>` conservando el
+path y la query originales. El formulario valida ese destino para aceptar solo
+rutas internas y lo utiliza después de un login local o de Google; ante un
+destino ausente o inseguro redirige a `/`.
 
 ## API consumida
 
@@ -263,47 +265,48 @@ directamente desde el browser:
   debe rechazar tokens falsos en cada request.
 - La regla configurada para `/usuarios` exige como mínimo el rol
   `Administrador`.
-- Existe una regla configurada para el prefijo `/supervisor`, pero la página
-  real se llama `/supervision`; por eso esa regla no coincide con
-  `/supervision` en el estado actual. Esta es una limitación documentada, no
-  una corrección de la configuración.
+- La ruta `/supervision` exige como mínimo el rol `Supervisor`; también puede
+  acceder `Administrador`.
 - En `/configuracion`, la interfaz deja editar parámetros a `Supervisor` y
   `Administrador`; los demás roles los ven en modo lectura. Las operaciones
   sobre usuarios se realizan mediante las actions administrativas y el
   backend.
 
-## Datos de respaldo y tiempo real
+## Disponibilidad y tiempo real
 
-Los respaldos no son globales para toda la aplicación; dependen de la función:
+Las consultas de datos dependen de la disponibilidad de la API Go. Las server
+actions propagan los errores de configuración, autenticación, red, timeout y
+respuestas inválidas para que cada página los presente junto con el estado sin
+datos cuando corresponda:
 
 | Función | Comportamiento ante falta de API, timeout o error |
 |---|---|
-| `/` y `/lotes` | `getAllProductionRuns()` usa `PRODUCTION_RUNS`, un dataset determinista de 50 corridas, y la página muestra un aviso de datos de respaldo. |
-| `/configuracion` listado de productos | `getProductosConParametros()` usa `PARAMETROS_PRODUCTOS_MOCK`. |
-| `/configuracion` historial por producto | `getLotesPorProducto()` usa un historial mock para el producto seleccionado. |
-| `/nodos` | No usa un mock de dispositivos en la página: muestra el error y una lista vacía si no puede cargar el backend. |
-| Historial de telemetría | No tiene fallback de datos; informa que el historial no está disponible. |
-| Usuarios y autenticación | No usan mock. Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
-| Video | No usa mock. Sin WHEP configurado queda en estado de configuración pendiente; ante una falla intenta reconectar. |
+| `/` y `/lotes` | `getAllProductionRuns()` propaga el error; la página informa que la consulta no está disponible. |
+| `/configuracion` listado de productos | `getProductosConParametros()` propaga el error; una respuesta `data: []` se conserva como resultado vacío válido. |
+| `/configuracion` historial por producto | `getLotesPorProducto()` propaga el error y conserva los metadatos de paginación; una lista vacía es válida. |
+| `/nodos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
+| Historial de telemetría | `getDeviceHistory()` propaga el error e informa que el historial no está disponible. |
+| Usuarios y autenticación | Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
+| Video | Sin WHEP configurado queda en estado de configuración pendiente; ante una falla intenta reconectar. |
 
 Los streams SSE de lotes y nodos se conectan desde el cliente y el navegador
 puede reintentarlos. Los nodos además hacen un snapshot inicial y una
 reconciliación periódica. Un cold start del backend en Render puede demorar la
-primera respuesta o dejar el stream reconectando; el timeout de 8 segundos y
-los respaldos anteriores cubren solo las funciones que los implementan.
+primera respuesta o dejar el stream reconectando; las consultas tienen un
+timeout de 8 segundos y exponen el error si se agota.
 
 ## Problemas frecuentes
 
 | Síntoma | Qué revisar |
 |---|---|
 | `NEXT_PUBLIC_API_URL no está definida` | Crear `.env.local` con `NEXT_PUBLIC_API_URL=http://localhost:8080` y reiniciar el servidor de desarrollo. |
-| Dashboard con datos de muestra | Verificar que la API esté disponible, que la URL sea correcta y que la sesión tenga acceso. En Render también puede tratarse de un cold start. |
-| Nodos vacíos o sin historial | Revisar la API Go, la cookie de sesión y los endpoints de dispositivos/metricas; esta parte no tiene mock general. |
+| Dashboard sin datos o con error | Verificar que la API esté disponible, que la URL sea correcta y que la sesión tenga acceso. En Render también puede tratarse de un cold start. |
+| Nodos vacíos o sin historial | Revisar la API Go, la cookie de sesión y los endpoints de dispositivos/metricas. |
 | La vista de video dice “Configuración pendiente” | Definir `NEXT_PUBLIC_MEDIAMTX_WHEP_URL` y reconstruir el frontend. Además, comprobar alcance desde el navegador, HTTPS, CORS y ICE. |
 | WHEP responde pero no hay video | Revisar la URL final de WHEP, la conectividad ICE y que el endpoint devuelva SDP y, si corresponde, `Location`. La configuración de red y autenticación de MediaMTX está pendiente. |
 | Login Google no aparece o falla | Definir el `NEXT_PUBLIC_GOOGLE_CLIENT_ID` público correspondiente y reconstruir. El login local no depende de esa variable. |
 | Se cambió una variable en Vercel pero el cliente conserva el valor anterior | Las variables `NEXT_PUBLIC_*` del cliente se inlinéan en build: hacer un nuevo deploy/build, no solo reiniciar. |
-| Redirección inesperada a login o unauthorized | Revisar `session_token`, su expiración y el rol contenido en el payload. Tener presente la limitación documentada entre `/supervisor` y `/supervision`. |
+| Redirección inesperada a login o unauthorized | Revisar `session_token`, su expiración y el rol contenido en el payload. `/supervision` requiere `Supervisor` o `Administrador`. |
 
 ## Despliegue
 
@@ -324,8 +327,8 @@ El proyecto usa `output: "standalone"` y `images.unoptimized: true` en
 El frontend espera que la API Go de producción esté publicada en Render y se
 referencia mediante `NEXT_PUBLIC_API_URL`. La configuración del servicio Go,
 su base de datos y sus variables propias están fuera de este repositorio. El
-backend puede entrar en cold start: el frontend tolera ese caso de forma
-parcial mediante timeouts, respaldos específicos y reconexión SSE.
+backend puede entrar en cold start: las consultas tienen timeout y los streams
+SSE intentan reconectarse.
 
 ## Estructura del proyecto
 
@@ -341,7 +344,7 @@ actions/
 ├── auth.ts                  Server actions de login y logout
 └── users.ts                 Server actions administrativas de usuarios
 components/                  UI por módulo y primitivas shadcn/ui
-lib/                         Tipos, formateadores, auth, mocks y utilidades
+lib/                         Tipos, formateadores, auth y utilidades
 proxy.ts                     Protección de rutas y headers de sesión
 public/                      Recursos estáticos
 next.config.mjs              Configuración standalone e imágenes sin optimizar

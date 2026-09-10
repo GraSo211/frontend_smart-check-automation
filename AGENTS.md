@@ -13,7 +13,7 @@
 
 ## Commands
 
-Only four scripts exist in `package.json` — there is no test, typecheck, or format script:
+The repository scripts are:
 
 | Task | Command |
 | --- | --- |
@@ -21,6 +21,7 @@ Only four scripts exist in `package.json` — there is no test, typecheck, or fo
 | Production build | `pnpm build` |
 | Start built app | `pnpm start` |
 | Lint | `pnpm lint` |
+| Tests | `pnpm test` |
 
 There is no `tsc` script; run `pnpm exec tsc --noEmit` if you need a one-off type check. `next build` will not fail on type errors (see gotchas).
 
@@ -39,15 +40,17 @@ components/               Feature components (dashboard-content, kpi-cards, supe
 lib/
   utils.ts                `cn()` helper (clsx + tailwind-merge)
   format.ts               es-AR Intl formatters used across the dashboard
-  production-data.ts      In-memory mock dataset (50 runs) + `getProductionPage()` pager + ProductionRun/ProductionResponse types
+  production-data.ts      ProductionRun/ProductionResponse API response types
+  devices-data.ts         Device and telemetry API response types
+  parametros-producto.ts  Product parameter and batch history types + validation
   sync-store.ts           Client store for the "última sincronización" timestamp
-  __tests__/              Unit tests (no run script in package.json — run ad-hoc with `pnpm exec vitest run` or the runner present in node_modules)
+  __tests__/              Unit tests
 public/                   Static icons + create-next-app placeholder assets (do not delete the placeholders — they're treated as content for now)
 ```
 
-Data flow: `app/page.tsx` is an async server component (`export const dynamic = "force-dynamic"` — never statically prerendered) that calls `getAllProductionRuns()` from `actions/api.ts`, which GETs `GET ${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos?page=1&pageSize=100` with an 8s `AbortController` timeout and `cache: "no-store"`. On any error/timeout it falls back to the in-memory `PRODUCTION_RUNS` mock from `lib/production-data.ts` and renders an error banner. The page hands `runs` + `lastSyncAt` to `DashboardContent` (`components/dashboard-content.tsx`, `"use client"`), which holds filter state and an `EventSource` SSE subscription to `${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos/events` for live `lote.created` pushes, and composes `KpiCards` + `FiltersBar` + `SupervisionTable`.
+Data flow: `app/page.tsx` is an async server component (`export const dynamic = "force-dynamic"` — never statically prerendered) that calls `getAllProductionRuns()` from `actions/api.ts`, which GETs `GET ${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos?page=1&pageSize=100` with an 8s `AbortController` timeout and `cache: "no-store"`. Configuration and device actions use the same error propagation policy; successful empty arrays remain empty and malformed responses are errors. The page hands `runs` + `lastSyncAt` to `DashboardContent` (`components/dashboard-content.tsx`, `"use client"`), which holds filter state and an `EventSource` SSE subscription to `${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos/events` for live `lote.created` pushes, and composes `KpiCards` + `FiltersBar` + `SupervisionTable`.
 
-Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout + mock fallback exist specifically to tolerate that cold-start at runtime and at build time.
+Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout prevents a cold-start from blocking a request indefinitely; the resulting error is propagated to the page.
 
 ## Conventions specific to this repo
 
@@ -66,7 +69,7 @@ Backend: there IS now an external backend — a Go service on Render (free-tier)
 - `package.json` `name` is still the default `my-project` and `README.md` is unmodified `create-next-app` boilerplate — neither is the source of truth for the project name (use `app/layout.tsx` metadata / footer string `Smart-Check Automation`).
 - Build-time static generation of `/` used to time out (>60 s) on Vercel because the server component fetched the Render backend during prerender (Render free-tier cold-start). Fixed with `export const dynamic = "force-dynamic"` in `app/page.tsx` + the 8s `AbortController` timeout in `actions/api.ts`. Do NOT remove either, or the Vercel build will break again when Render is cold.
 - The SSE `EventSource` in `components/dashboard-content.tsx` also hits Render; a cold backend there will keep the client retrying silently. Tolerated for now — see the backend note under "Data flow".
-- `package.json` has no test script, but `lib/__tests__/*.test.ts` exist. Run them ad-hoc with `pnpm exec vitest run` (or the runner present in `node_modules`) — don't assume Jest by default.
+- `package.json` runs Vitest through `pnpm test`; don't assume Jest by default.
 
 ## Skills
 

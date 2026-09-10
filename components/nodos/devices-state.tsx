@@ -6,9 +6,10 @@ import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
 import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
 import { getDeviceHistory } from "@/actions/api"
-import { setLastSync } from "@/lib/sync-store"
-import { mergeDeviceUpdate, mergeIncomingTelemetrySamples, reconcileDeviceSnapshot, samplesForDevice } from "@/lib/telemetry"
+import { mergeIncomingTelemetrySamples, samplesForDevice } from "@/lib/telemetry"
 import type { Device, SpecificDevice } from "@/lib/devices-data"
+import { parseDeviceEventPayload } from "@/lib/monitoring-runtime"
+import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 
 const HISTORY_CAP = 100
 
@@ -20,49 +21,29 @@ interface DevicesStateProps {
 // Client container for the node fleet: selection state, live SSE telemetry
 // and the history section of the currently selected device.
 export default function DevicesState({ devices: initialDevices, lastSyncAt }: DevicesStateProps) {
-  const [allDevices, setAllDevices] = useState<Device[]>(initialDevices)
+  const monitoredDevices = useMonitoringNodes()
+  const actions = useMonitoringActions()
+  const allDevices = monitoredDevices ?? initialDevices
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [history, setHistory] = useState<SpecificDevice[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
 
   const selectedDeviceIdRef = useRef<string | null>(null)
-
   useEffect(() => {
     selectedDeviceIdRef.current = selectedDeviceId
   }, [selectedDeviceId])
 
   useEffect(() => {
-    if (lastSyncAt) setLastSync(lastSyncAt)
-  }, [lastSyncAt])
-
-  useEffect(() => {
-    setAllDevices(initialDevices)
-  }, [initialDevices])
+    actions.seedNodes(initialDevices, lastSyncAt)
+  }, [actions, initialDevices, lastSyncAt])
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const reconcile = async () => {
-      try {
-        const response = await fetch("/api/nodos/snapshot", { cache: "no-store" })
-        if (!response.ok) return
-        const payload = await response.json()
-        const snapshot = Array.isArray(payload) ? payload : payload.data
-        if (Array.isArray(snapshot)) {
-          setAllDevices((current) => reconcileDeviceSnapshot(current, snapshot))
-        }
-      } catch { /* SSE remains the source of live updates while a snapshot retries. */ }
-    }
     const eventSource = new EventSource("/api/nodos/events")
 
-    const applyDeviceUpdate = (update: Device, addToHistory: boolean) => {
-      setAllDevices((prev) =>
-        prev.map((d) => {
-          if (d.dispositivoId !== update.dispositivoId) return d
-          return mergeDeviceUpdate(d, update)
-        }),
-      )
-
+    const applyDeviceUpdate = (update: Device, payload: unknown, addToHistory: boolean) => {
+      if (!actions.acceptNodeEvent(payload)) return
       if (addToHistory && update.ultimaMetrica && selectedDeviceIdRef.current === update.dispositivoId) {
         const m = update.ultimaMetrica
         const row: SpecificDevice = {
@@ -83,55 +64,51 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
         })
       }
 
-      setLastSync(new Date().toISOString())
     }
 
     eventSource.addEventListener("dispositivo.metric", (event) => {
-      const response = JSON.parse((event as MessageEvent).data)
-      const update: Device = response.data
-      console.log("Métrica de dispositivo recibida:", update)
-      applyDeviceUpdate(update, true)
+      try {
+        const payload: unknown = JSON.parse((event as MessageEvent).data)
+        const update = parseDeviceEventPayload(payload)
+        if (update) applyDeviceUpdate(update, payload, true)
+      } catch { /* A malformed event is not a synchronization confirmation. */ }
     })
 
-    eventSource.onopen = reconcile
-    void reconcile()
-    const reconciliationTimer = window.setInterval(reconcile, 60_000)
+    eventSource.onopen = () => {
+      actions.streamState("nodos", "open")
+      void actions.refreshNodes()
+    }
 
     eventSource.addEventListener("dispositivo.state", (event) => {
-      const response = JSON.parse((event as MessageEvent).data)
-      const update: Device = response.data
-      console.log("Estado de dispositivo recibido:", update)
-      applyDeviceUpdate(update, false)
+      try {
+        const payload: unknown = JSON.parse((event as MessageEvent).data)
+        const update = parseDeviceEventPayload(payload)
+        if (update) applyDeviceUpdate(update, payload, false)
+      } catch { /* A malformed event is not a synchronization confirmation. */ }
     })
 
     eventSource.onerror = () => {
-      console.error("Error al conectarse con el servidor:", eventSource.readyState)
-      if (eventSource.readyState === EventSource.CLOSED) {
-        console.log("Conexión cerrada definitivamente por el navegador.")
-        eventSource.close()
-      }
+      actions.streamState("nodos", "error", "El stream de nodos no está disponible.")
     }
 
     return () => {
       eventSource.close()
-      window.clearInterval(reconciliationTimer)
+      actions.streamState("nodos", "closed")
     }
-  }, [])
+  }, [actions])
 
   useEffect(() => {
-    let cancelled = false
-    setHistory([])
-    setHistoryError(null)
-    if (!selectedDeviceId) {
-      setLoadingHistory(false)
-      return
-    }
+    if (!selectedDeviceId) return
 
-    setLoadingHistory(true)
+    let cancelled = false
     getDeviceHistory(selectedDeviceId)
       .then((rows) => {
         if (!cancelled) {
-          setHistory(mergeIncomingTelemetrySamples([], samplesForDevice(rows, selectedDeviceId), HISTORY_CAP))
+          setHistory((current) => mergeIncomingTelemetrySamples(
+            current,
+            samplesForDevice(rows, selectedDeviceId),
+            HISTORY_CAP,
+          ))
         }
       })
       .catch(() => {
@@ -147,13 +124,23 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
   }, [selectedDeviceId])
 
   const handleSelect = (dispositivoId: string) => {
-    setSelectedDeviceId((current) => (current === dispositivoId ? null : dispositivoId))
+    const nextSelectedDeviceId = selectedDeviceId === dispositivoId ? null : dispositivoId
+    selectedDeviceIdRef.current = nextSelectedDeviceId
+    setSelectedDeviceId(nextSelectedDeviceId)
+    setHistory([])
+    setHistoryError(null)
+    setLoadingHistory(Boolean(nextSelectedDeviceId))
   }
 
   // If the selected device is removed, clear the selection so the history
   // panel doesn't keep pointing at a node that no longer exists.
   const handleDeviceDeleted = (dispositivoId: string) => {
-    setSelectedDeviceId((current) => (current === dispositivoId ? null : current))
+    if (selectedDeviceId !== dispositivoId) return
+    selectedDeviceIdRef.current = null
+    setSelectedDeviceId(null)
+    setHistory([])
+    setHistoryError(null)
+    setLoadingHistory(false)
   }
 
   const selectedDevice = useMemo(

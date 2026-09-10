@@ -1,5 +1,6 @@
 import { getUsersAction } from '@/actions/users'
 import { UserManagement } from '@/components/user-management'
+import type { UserDTO } from '@/actions/users'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -8,8 +9,15 @@ export const metadata: Metadata = {
 }
 
 export default async function Page() {
-  const result = await getUsersAction()
-  const users = result.users || []
+  let users: UserDTO[] = []
+  let loadError: string | null = null
+  try {
+    const result = await getUsersAction()
+    if (result.ok) users = result.users ?? []
+    else loadError = result.message || 'No se pudieron consultar los usuarios.'
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : 'No se pudieron consultar los usuarios.'
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -24,11 +32,11 @@ export default async function Page() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Administración centralizada de cuentas corporativas, asignación de roles y control de
-            acceso (RBAC).
+            acceso.
           </p>
         </header>
 
-        <UserManagement initialUsers={users} />
+        <UserManagement initialUsers={users} initialError={loadError} />
       </main>
     </div>
   )

@@ -3,14 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangle, Camera, LoaderCircle, Maximize, Radio, RefreshCw, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useMonitoringActions } from "@/components/monitoring-provider"
+import { getCameraHealth, getReconnectDelay, isCurrentCameraGeneration, startCameraSessionDelete } from "@/lib/camera-health"
+import { createCameraObserver } from "@/lib/camera-observer"
 
-export type CameraStatus = "connecting" | "online" | "offline" | "reconnecting" | "error"
-
-const RECONNECT_DELAYS = [1000, 2000, 5000, 10000]
-
-export function getReconnectDelay(attempt: number) {
-  return RECONNECT_DELAYS[Math.min(Math.max(attempt, 0), RECONNECT_DELAYS.length - 1)]
-}
+export type CameraStatus = "connecting" | "online" | "offline" | "reconnecting" | "error" | "unknown"
+export { getReconnectDelay } from "@/lib/camera-health"
 
 function waitForIceComplete(pc: RTCPeerConnection) {
   if (pc.iceGatheringState === "complete") return Promise.resolve()
@@ -33,6 +31,7 @@ function waitForIceComplete(pc: RTCPeerConnection) {
 type LiveCameraProps = { whepUrl?: string }
 
 export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_WHEP_URL }: LiveCameraProps) {
+  const { reportCamera } = useMonitoringActions()
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
@@ -44,19 +43,43 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
   const connectRef = useRef<(() => Promise<void>) | null>(null)
   const attemptRef = useRef(0)
   const mountedRef = useRef(false)
-  const [status, setStatus] = useState<CameraStatus>(whepUrl ? "connecting" : "offline")
+  const hiddenRef = useRef(false)
+  const peerConnectedRef = useRef(false)
+  const trackEndedRef = useRef(false)
+  const failureHandlerRef = useRef<((force?: boolean) => void) | null>(null)
+  const trackEndedHandlerRef = useRef<(() => void) | null>(null)
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+  const [lastEvidenceAt, setLastEvidenceAt] = useState<number | null>(null)
+  const [status, setStatus] = useState<CameraStatus>(whepUrl ? "connecting" : "unknown")
 
-  const releaseSession = useCallback(async (pc: RTCPeerConnection | null, controller: AbortController | null, location: string | null) => {
+  const [observer] = useState(() => createCameraObserver({
+      onEvidence: (evidenceAt) => {
+        setLastEvidenceAt(evidenceAt)
+        setStatus("online")
+      },
+      onReset: () => setLastEvidenceAt(null),
+      onStalled: () => setStatus("reconnecting"),
+    }))
+
+  const releaseSession = useCallback((pc: RTCPeerConnection | null, controller: AbortController | null, location: string | null) => {
+    observer.stop(false)
     controller?.abort()
-    if (location) {
-      try { await fetch(location, { method: "DELETE", keepalive: true }) } catch { /* La sesión ya puede haber expirado. */ }
-    }
     if (pc && pc.connectionState !== "closed") pc.close()
-    if (videoRef.current) videoRef.current.srcObject = null
-  }, [])
+    if (trackRef.current && trackEndedHandlerRef.current) trackRef.current.removeEventListener("ended", trackEndedHandlerRef.current)
+    trackRef.current = null
+    trackEndedHandlerRef.current = null
+    if (videoRef.current) {
+      videoRef.current.onplaying = null
+      videoRef.current.srcObject = null
+    }
+    if (location) {
+      startCameraSessionDelete(location)
+    }
+    return Promise.resolve()
+  }, [observer])
 
   const scheduleReconnect = useCallback(() => {
-    if (!mountedRef.current || !whepUrl || retryTimerRef.current !== null) return
+    if (!mountedRef.current || hiddenRef.current || !whepUrl || retryTimerRef.current !== null) return
     const attempt = attemptRef.current
     setStatus(attempt === 0 ? "offline" : "reconnecting")
     retryTimerRef.current = window.setTimeout(() => {
@@ -64,28 +87,56 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
       attemptRef.current += 1
       void connectRef.current?.()
     }, getReconnectDelay(attempt))
-  }, [whepUrl])
+  }, [setStatus, whepUrl])
 
   const connect = useCallback(async () => {
-    if (!mountedRef.current || !whepUrl || pcRef.current) return
+    if (!mountedRef.current || hiddenRef.current || !whepUrl || pcRef.current) return
     const generation = ++generationRef.current
     const controller = new AbortController()
     const pc = new RTCPeerConnection()
     pcRef.current = pc
     controllerRef.current = controller
     setStatus(attemptRef.current ? "reconnecting" : "connecting")
+    peerConnectedRef.current = false
+    trackEndedRef.current = false
+    observer.start(generation, videoRef.current, pc)
     pc.addTransceiver("video", { direction: "recvonly" })
     pc.ontrack = (event) => {
-      if (generation === generationRef.current && videoRef.current && event.streams[0]) {
-        videoRef.current.srcObject = event.streams[0]
+      if (!isCurrentCameraGeneration(generation, generationRef.current) || !videoRef.current || !event.streams[0]) return
+      videoRef.current.srcObject = event.streams[0]
+      if (trackRef.current && trackEndedHandlerRef.current) trackRef.current.removeEventListener("ended", trackEndedHandlerRef.current)
+      trackRef.current = event.track
+      observer.setTrack(event.track)
+      trackEndedRef.current = event.track.readyState === "ended"
+      const onTrackEnded = () => {
+        if (!isCurrentCameraGeneration(generation, generationRef.current)) return
+        trackEndedRef.current = true
+        setStatus("offline")
+        failureHandlerRef.current?.()
+      }
+      trackEndedHandlerRef.current = onTrackEnded
+      event.track.addEventListener("ended", onTrackEnded)
+      if (trackEndedRef.current) {
+        setStatus("offline")
+        failureHandlerRef.current?.()
       }
     }
 
-    const failed = () => {
+    const failed = (force = false) => {
       if (generation !== generationRef.current) return
       const isDisconnected = pc.connectionState === "disconnected" || pc.iceConnectionState === "disconnected"
-      const isFailed = pc.connectionState === "failed" || pc.connectionState === "closed" || pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed"
+      const actualFailure = trackEndedRef.current || pc.connectionState === "failed" || pc.connectionState === "closed" || pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed"
+      const isFailed = force || actualFailure
       if (!isDisconnected && !isFailed) return
+      peerConnectedRef.current = false
+      observer.setDisconnected()
+      trackEndedRef.current = actualFailure
+      setLastEvidenceAt(null)
+      setStatus(force ? "reconnecting" : "offline")
+      if (isFailed && disconnectTimerRef.current !== null) {
+        window.clearTimeout(disconnectTimerRef.current)
+        disconnectTimerRef.current = null
+      }
       if (isDisconnected && !isFailed) {
         if (disconnectTimerRef.current === null) {
           disconnectTimerRef.current = window.setTimeout(() => {
@@ -113,17 +164,32 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
         controllerRef.current = null
         locationRef.current = null
         disconnectTimerRef.current = null
-        setStatus(pc.connectionState === "failed" || pc.connectionState === "closed" ? "error" : "offline")
+        setStatus("offline")
         scheduleReconnect()
       })
     }
-    pc.onconnectionstatechange = failed
-    pc.oniceconnectionstatechange = failed
+    observer.setOnStalled(() => failed(true))
+    failureHandlerRef.current = failed
+    pc.onconnectionstatechange = () => {
+      if (generation !== generationRef.current) return
+      if (pc.connectionState === "connected") {
+        peerConnectedRef.current = true
+        if (disconnectTimerRef.current !== null) {
+          window.clearTimeout(disconnectTimerRef.current)
+          disconnectTimerRef.current = null
+        }
+        observer.setConnected()
+      }
+      failed()
+    }
+    pc.oniceconnectionstatechange = () => failed()
 
+    let whepTimeout: number | null = null
     try {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       await waitForIceComplete(pc)
+      whepTimeout = window.setTimeout(() => controller.abort(), 8000)
       const response = await fetch(whepUrl, {
         method: "POST", headers: { "Content-Type": "application/sdp", Accept: "application/sdp" },
         body: pc.localDescription?.sdp, signal: controller.signal,
@@ -132,9 +198,9 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
       const location = response.headers.get("Location")
       locationRef.current = location ? new URL(location, whepUrl).toString() : null
       await pc.setRemoteDescription({ type: "answer", sdp: await response.text() })
-      if (generation === generationRef.current) { attemptRef.current = 0; setStatus("online") }
+      if (generation === generationRef.current) attemptRef.current = 0
     } catch {
-      if (controller.signal.aborted || generation !== generationRef.current) return
+      if (generation !== generationRef.current) return
       if (cleanupGenerationRef.current === generation) return
       cleanupGenerationRef.current = generation
       void releaseSession(pc, controller, locationRef.current).finally(() => {
@@ -142,8 +208,10 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
         pcRef.current = null; controllerRef.current = null; locationRef.current = null
         setStatus("error"); scheduleReconnect()
       })
+    } finally {
+      if (whepTimeout !== null) window.clearTimeout(whepTimeout)
     }
-  }, [releaseSession, scheduleReconnect, whepUrl])
+  }, [observer, releaseSession, scheduleReconnect, setLastEvidenceAt, setStatus, whepUrl])
 
   useEffect(() => {
     connectRef.current = connect
@@ -154,20 +222,60 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
 
   useEffect(() => {
     mountedRef.current = true
+    hiddenRef.current = typeof document !== "undefined" && document.visibilityState === "hidden"
     if (whepUrl) void connect()
+    const onVisibilityChange = () => {
+      hiddenRef.current = document.visibilityState === "hidden"
+      if (hiddenRef.current) {
+        if (retryTimerRef.current !== null) {
+          window.clearTimeout(retryTimerRef.current)
+          retryTimerRef.current = null
+        }
+        observer.setVisibility(true)
+        setStatus("unknown")
+        return
+      }
+      // Evidence from before a background interval is not enough to recover.
+      observer.setVisibility(false)
+      setStatus(whepUrl ? "connecting" : "unknown")
+      if (!pcRef.current) void connectRef.current?.()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
       mountedRef.current = false
       generationRef.current += 1
+      hiddenRef.current = true
+      observer.dispose()
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current)
       if (disconnectTimerRef.current !== null) window.clearTimeout(disconnectTimerRef.current)
+      failureHandlerRef.current = null
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      reportCamera({ availability: "unknown", checkedAt: null, detail: "Sin reproducción activa" })
       void releaseSession(pcRef.current, controllerRef.current, locationRef.current)
       pcRef.current = null; controllerRef.current = null; locationRef.current = null
     }
-  }, [connect, releaseSession, whepUrl])
+  }, [connect, observer, releaseSession, reportCamera, whepUrl])
+
+  useEffect(() => {
+    const report = getCameraHealth({
+      mounted: mountedRef.current && !hiddenRef.current,
+      configured: Boolean(whepUrl),
+      peerConnected: peerConnectedRef.current,
+      trackLive: trackRef.current?.readyState === "live",
+      trackEnded: trackEndedRef.current,
+      connectionFailed: status === "offline" || status === "error",
+      lastEvidenceAt,
+    })
+    if (status === "reconnecting" && report.availability !== "disconnected") {
+      reportCamera({ ...report, availability: "degraded", detail: "Sin progreso de video" })
+      return
+    }
+    reportCamera(report)
+  }, [lastEvidenceAt, reportCamera, status, whepUrl])
 
   const isActive = status === "online"
   const configurationMissing = !whepUrl
-  const statusLabel = { connecting: "Conectando", online: "En vivo", offline: "Fuera de línea", reconnecting: "Reconectando", error: "Error de conexión" }[status]
+  const statusLabel = { connecting: "Conectando", online: "En vivo", offline: "Fuera de línea", reconnecting: "Reconectando", error: "Error de conexión", unknown: "Estado desconocido" }[status]
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_color-mix(in_oklab,var(--primary)_45%,transparent)]" aria-label="Cámara de producción">

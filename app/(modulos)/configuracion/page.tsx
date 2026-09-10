@@ -23,14 +23,25 @@ export default async function Page({ searchParams }: PageProps) {
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
 
-  const productos = await getProductosConParametros()
+  let productos: Awaited<ReturnType<typeof getProductosConParametros>> = []
+  let productosError: string | null = null
+  try {
+    productos = await getProductosConParametros()
+  } catch (error) {
+    productosError = error instanceof Error ? error.message : "No se pudieron consultar los productos."
+  }
   const selectedProducto = productoId
     ? productos.find((p) => p.productoId === productoId) ?? null
     : null
 
   let lotes: LotesPorProducto | null = null
+  let historialError: string | null = null
   if (selectedProducto) {
-    lotes = await getLotesPorProducto(selectedProducto.productoId, 1, 100)
+    try {
+      lotes = await getLotesPorProducto(selectedProducto.productoId, 1, 100)
+    } catch (error) {
+      historialError = error instanceof Error ? error.message : "No se pudo consultar el historial."
+    }
   }
 
   return (
@@ -62,10 +73,10 @@ export default async function Page({ searchParams }: PageProps) {
                 </p>
               </div>
               <span className="hidden shrink-0 text-xs font-medium text-muted-foreground sm:inline">
-                {productos.length} {productos.length === 1 ? "producto" : "productos"}
+                {productosError ? "—" : productos.length} {productosError ? "No disponible" : productos.length === 1 ? "producto" : "productos"}
               </span>
             </div>
-            <ProductGrid productos={productos} selectedId={selectedProducto?.productoId ?? null} />
+            <ProductGrid productos={productos} selectedId={selectedProducto?.productoId ?? null} error={productosError} />
           </section>
 
           <section aria-label="Parámetros del producto">
@@ -76,6 +87,7 @@ export default async function Page({ searchParams }: PageProps) {
             <ParametersHistory
               lotes={lotes?.items ?? []}
               productoNombre={selectedProducto?.productoNombre ?? ""}
+              error={historialError}
             />
           </section>
         </div>
@@ -83,4 +95,3 @@ export default async function Page({ searchParams }: PageProps) {
     </div>
   )
 }
-

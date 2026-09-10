@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import Link from "next/link"
 import {
   ArrowUpRight,
@@ -15,10 +15,11 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react"
-import { setLastSync } from "@/lib/sync-store"
 import { formatKg, formatNumber, qualityRate } from "@/lib/format"
 import type { UserRole } from "@/lib/auth"
 import type { ProductionRun } from "@/lib/production-data"
+import { useMonitoring, useProductionData } from "@/components/monitoring-provider"
+import { availabilityLabel } from "@/components/layout/monitoring-status"
 
 interface DashboardContentProps {
   runs: ProductionRun[]
@@ -35,8 +36,8 @@ const sections: Array<{
   tone: string
   metric: string
 }> = [
-  { href: "/supervision", label: "Supervisión en vivo", description: "Cámaras y señales de la línea en tiempo real.", icon: Eye, tone: "bg-info/10 text-info", metric: "Monitoreo activo" },
-  { href: "/lotes", label: "Lotes y datos", description: "Consultá resultados y rendimiento cuando necesites profundizar.", icon: Database, tone: "bg-primary/10 text-primary", metric: "Datos disponibles" },
+  { href: "/supervision", label: "Supervisión en vivo", description: "Cámaras y señales de la línea en tiempo real.", icon: Eye, tone: "bg-info/10 text-info", metric: "" },
+  { href: "/lotes", label: "Lotes y datos", description: "Consultá resultados y rendimiento cuando necesites profundizar.", icon: Database, tone: "bg-primary/10 text-primary", metric: "" },
   { href: "/nodos", label: "Estado de los nodos", description: "Salud de los dispositivos conectados a la planta.", icon: Cpu, tone: "bg-success/10 text-success", metric: "Telemetría IoT" },
   { href: "/configuracion", label: "Configuración", description: "Parámetros de producto y reglas operativas.", icon: Settings2, tone: "bg-warning/10 text-warning", metric: "Parámetros de línea" },
   { href: "/alertas", label: "Manejo de alertas", description: "Priorizá desvíos y mantené el equipo al tanto.", icon: BellRing, tone: "bg-destructive/10 text-destructive", metric: "Centro de atención" },
@@ -54,19 +55,33 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value)
 }
 
+function freshnessLabel(freshness: "fresh" | "stale" | "never") {
+  return freshness === "fresh" ? "Actualizada" : freshness === "stale" ? "Desactualizada" : "Sin confirmar"
+}
+
 export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", error }: DashboardContentProps) {
-  useEffect(() => { if (lastSyncAt) setLastSync(lastSyncAt) }, [lastSyncAt])
+  const monitoring = useMonitoring()
+  const production = useProductionData(runs, lastSyncAt, error)
+  const currentRuns = production.runs
+  const currentError = production.error
 
   const metrics = useMemo(() => {
-    const units = runs.reduce((sum, run) => sum + run.totalUnidades, 0)
-    const correctos = runs.reduce((sum, run) => sum + run.correctos, 0)
-    const kg = runs.reduce((sum, run) => sum + run.correctosKg + run.quemadosKg + (run.crudosKg ?? 0), 0)
-    const temperature = runs.length ? runs.reduce((sum, run) => sum + (run.tempHorno1 + run.tempHorno2) / 2, 0) / runs.length : 0
-    const alerts = runs.filter((run) => run.quemados / run.totalUnidades >= 0.05).length
-    const wasteUnits = runs.reduce((sum, run) => sum + run.quemados + (run.crudas ?? 0), 0)
+    const units = currentRuns.reduce((sum, run) => sum + run.totalUnidades, 0)
+    const correctos = currentRuns.reduce((sum, run) => sum + run.correctos, 0)
+    const kg = currentRuns.reduce((sum, run) => sum + run.correctosKg + run.quemadosKg + (run.crudosKg ?? 0), 0)
+    const temperature = currentRuns.length ? currentRuns.reduce((sum, run) => sum + (run.tempHorno1 + run.tempHorno2) / 2, 0) / currentRuns.length : null
+    const alerts = currentRuns.filter((run) => run.quemados / run.totalUnidades >= 0.05).length
+    const wasteUnits = currentRuns.reduce((sum, run) => sum + run.quemados + (run.crudas ?? 0), 0)
     const opportunityUnits = Math.round(wasteUnits * ESTIMATION.avoidableWasteRate)
-    return { units, kg, temperature, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: qualityRate(correctos, units) }
-  }, [runs])
+    const hasData = currentRuns.length > 0
+    return { units, kg, temperature: hasData ? temperature : null, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: hasData && units ? qualityRate(correctos, units) : null, hasData }
+  }, [currentRuns])
+
+  const sectionMetrics = {
+    "/supervision": availabilityLabel(monitoring.camera.availability),
+    "/lotes": freshnessLabel(monitoring.sync.lotes.freshness),
+    "/nodos": availabilityLabel(monitoring.nodes.availability),
+  }
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -76,32 +91,34 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
           <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Buen día, equipo</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Todo lo importante de Smart-Check Automation, en un solo lugar.</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-success" /> Planta conectada · {userRole}</div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground/60" /> Monitoreo: {availabilityLabel(monitoring.overall.availability)} · {monitoring.overall.detail} · {userRole}</div>
       </header>
 
-      {error && <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm shadow-sm" role="status"><CircleAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" /><p><span className="font-medium">Datos de producción de respaldo.</span> El resto del panel continúa disponible.</p></div>}
+      {currentError && <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm shadow-sm" role="status"><CircleAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" /><p><span className="font-medium">{metrics.hasData ? "No se pudo actualizar la producción." : "Consulta no disponible."}</span> {metrics.hasData ? "Se conservan los datos confirmados anteriores." : currentError}</p></div>}
+      {production.loading && !metrics.hasData && <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">Consultando datos de producción…</div>}
+      {!currentError && !production.loading && !metrics.hasData && <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">No hay datos de producción registrados para mostrar.</div>}
 
       <section className="grid gap-5 lg:grid-cols-[1.45fr_0.75fr]">
         <div className="relative overflow-hidden rounded-xl bg-primary px-5 py-6 text-primary-foreground shadow-sm sm:p-8">
           <div className="absolute -right-20 -top-24 size-72 rounded-full border border-primary-foreground/10" />
-          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">{formatKg(metrics.kg)}</p><p className="mt-2 text-sm text-primary-foreground/70">producción registrada</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{runs.length}</strong> lotes monitoreados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
+          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">{metrics.hasData ? formatKg(metrics.kg) : "—"}</p><p className="mt-2 text-sm text-primary-foreground/70">{currentError ? (metrics.hasData ? "datos confirmados anteriores" : "consulta no disponible") : metrics.hasData ? "producción registrada" : production.loading ? "consultando" : "sin datos registrados"}</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(currentRuns.length)}</strong> lotes consultados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
         </div>
-        <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm"><div><div className="flex items-center justify-between"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Calidad de línea</p><CheckCircle2 className="size-5 text-success" /></div><p className="mt-8 font-mono text-4xl font-semibold tracking-tight text-foreground">{metrics.quality.toFixed(1)}%</p><p className="mt-2 text-sm text-muted-foreground">unidades correctas</p></div><div className="mt-8 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success" style={{ width: `${metrics.quality}%` }} /></div></div>
+        <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm"><div><div className="flex items-center justify-between"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Calidad de línea</p><CheckCircle2 className="size-5 text-muted-foreground" /></div><p className="mt-8 font-mono text-4xl font-semibold tracking-tight text-foreground">{metrics.quality === null ? "—" : `${metrics.quality.toFixed(1)}%`}</p><p className="mt-2 text-sm text-muted-foreground">{metrics.hasData ? "unidades correctas" : "sin medición"}</p></div><div className="mt-8 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success" style={{ width: `${metrics.quality ?? 0}%` }} /></div></div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores operativos">
-        <Metric label="Temperatura promedio" value={`${Math.round(metrics.temperature)}°C`} hint="Hornos 1 y 2" />
-        <Metric label="Alertas para revisar" value={String(metrics.alerts)} hint={metrics.alerts ? "Requieren atención" : "Sin desvíos críticos"} emphasis={metrics.alerts > 0} />
-        <Metric label="Conectividad" value="Activa" hint="Servicios operativos" />
-        <Metric label="Sincronización" value={lastSyncAt ? "Al día" : "Pendiente"} hint="Última actualización" />
+        <Metric label="Temperatura promedio" value={metrics.temperature === null ? "—" : `${Math.round(metrics.temperature)}°C`} hint={metrics.hasData ? "Hornos 1 y 2" : "Sin medición"} />
+        <Metric label="Alertas para revisar" value={!metrics.hasData ? "—" : String(metrics.alerts)} hint={!metrics.hasData ? "Sin datos para evaluar" : currentError ? "Sobre datos confirmados anteriores" : metrics.alerts ? "Requieren atención" : "Sin desvíos críticos"} emphasis={metrics.alerts > 0} />
+        <Metric label="Conectividad" value={availabilityLabel(monitoring.backend.availability)} hint={monitoring.backend.detail} />
+        <Metric label="Sincronización de lotes" value={freshnessLabel(monitoring.sync.lotes.freshness)} hint="Consulta o evento válido recibido" />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="Indicadores de impacto estimado">
-        <ImpactCard eyebrow="Proyección interna" title="Ahorro potencial estimado" value={formatCurrency(metrics.projectedSavings)} detail={`${formatNumber(metrics.opportunityUnits)} unidades recuperables`} note={`Calculado sobre el ${ESTIMATION.avoidableWasteRate * 100}% de la merma observada, a ${formatCurrency(ESTIMATION.replacementCostPerUnit)} por unidad.`} tone="text-success" />
-        <ImpactCard eyebrow="Oportunidad de mejora" title="Impacto estimado en merma" value={`${ESTIMATION.avoidableWasteRate * 100}% menos`} detail={`${formatNumber(metrics.opportunityUnits)} de ${formatNumber(metrics.wasteUnits)} unidades de merma`} note="Proyección orientativa sobre quemados y crudas registrados; no representa un resultado garantizado." tone="text-info" />
+        <ImpactCard eyebrow="Proyección interna" title="Ahorro potencial estimado" value={metrics.hasData ? formatCurrency(metrics.projectedSavings) : "—"} detail={metrics.hasData ? `${formatNumber(metrics.opportunityUnits)} unidades recuperables` : "Sin datos para estimar"} note={`Calculado sobre el ${ESTIMATION.avoidableWasteRate * 100}% de la merma observada, a ${formatCurrency(ESTIMATION.replacementCostPerUnit)} por unidad.`} tone="text-success" />
+        <ImpactCard eyebrow="Oportunidad de mejora" title="Impacto estimado en merma" value={metrics.hasData ? `${ESTIMATION.avoidableWasteRate * 100}% menos` : "—"} detail={metrics.hasData ? `${formatNumber(metrics.opportunityUnits)} de ${formatNumber(metrics.wasteUnits)} unidades de merma` : "Sin datos para estimar"} note="Proyección orientativa sobre quemados y crudas registrados; no representa un resultado garantizado." tone="text-info" />
       </section>
 
-      <section aria-labelledby="modules-heading"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tu espacio de trabajo</p><h2 id="modules-heading" className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Accesos y estado</h2></div><span className="hidden text-xs text-muted-foreground sm:block">6 módulos disponibles</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{sections.map((section) => <SectionCard key={section.href} {...section} />)}</div></section>
+      <section aria-labelledby="modules-heading"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tu espacio de trabajo</p><h2 id="modules-heading" className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Accesos y estado</h2></div><span className="hidden text-xs text-muted-foreground sm:block">6 módulos disponibles</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{sections.map((section) => <SectionCard key={section.href} {...section} metric={sectionMetrics[section.href as keyof typeof sectionMetrics] ?? section.metric} />)}</div></section>
     </div>
   )
 }

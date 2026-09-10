@@ -10,57 +10,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
-
-function normalizeDevice(raw: unknown): Device | null {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
-  if (!dispositivoId) return null
-
-  const nombre = typeof r.nombre === "string" ? r.nombre : (dispositivoId || "Nodo")
-  const ubicacion = typeof r.ubicacion === "string" ? r.ubicacion : "—"
-  const estado = r.estado === "online" ? "online" : "offline"
-  const lastSeen = typeof r.lastSeen === "string" ? r.lastSeen : ""
-
-  const metrica = r.ultimaMetrica as Record<string, unknown> | null | undefined
-  const ultimaMetrica =
-    metrica && typeof metrica === "object"
-      ? {
-          id: typeof metrica.id === "string" ? metrica.id : `metric-${dispositivoId}`,
-          dispositivoId: typeof metrica.dispositivoId === "string" ? metrica.dispositivoId : dispositivoId,
-          cpuPct: typeof metrica.cpuPct === "number" ? metrica.cpuPct : 0,
-          memRamDisponibleMb: typeof metrica.memRamDisponibleMb === "number" ? metrica.memRamDisponibleMb : 0,
-          memRamTotalMb: typeof metrica.memRamTotalMb === "number" ? metrica.memRamTotalMb : undefined,
-          almacenamientoDisponibleMb: typeof metrica.almacenamientoDisponibleMb === "number" ? metrica.almacenamientoDisponibleMb : undefined,
-          almacenamientoTotalMb: typeof metrica.almacenamientoTotalMb === "number" ? metrica.almacenamientoTotalMb : undefined,
-          tempChip: typeof metrica.tempChip === "number" ? metrica.tempChip : 0,
-          aiProcessorPct: typeof metrica.aiProcessorPct === "number" ? metrica.aiProcessorPct : 0,
-          receivedAt: typeof metrica.receivedAt === "string" ? metrica.receivedAt : "",
-        }
-      : undefined
-
-  return { dispositivoId, nombre, ubicacion, estado, ultimaMetrica, lastSeen }
-}
-
 export default async function Page() {
   let devices: Device[] = []
   let error: string | null = null
   let lastSyncAt: string | null = null
 
   try {
-    const response = await getDevices()
-    const responseData = Array.isArray(response)
-      ? response
-      : Array.isArray((response as unknown as Record<string, unknown>).data)
-        ? ((response as unknown as Record<string, unknown>).data as unknown[])
-        : null
-
-    if (!responseData) {
-      throw new Error("La API de dispositivos devolvió una respuesta inválida.")
-    }
-
-    devices = responseData
-      .map(normalizeDevice)
-      .filter((device): device is Device => device !== null)
+    devices = await getDevices()
 
     lastSyncAt = new Date().toISOString()
   } catch (e) {
