@@ -13,24 +13,53 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 interface PageProps {
-  searchParams: Promise<{ productoId?: string | string[] }>
+  searchParams: Promise<{ productoId?: string | string[]; page?: string | string[]; pageSize?: string | string[] }>
+}
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function safePage(value: string | string[] | undefined) {
+  const parsed = Number(firstParam(value))
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1
 }
 
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
-  const productoId = typeof params.productoId === "string" ? params.productoId : null
+  const productoId = firstParam(params.productoId) ?? null
+  const page = safePage(params.page)
+  const requestedPageSize = Number(firstParam(params.pageSize))
+  const pageSize = requestedPageSize === 20 ? 20 : 10
 
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
 
-  const productos = await getProductosConParametros()
+  let productos: Awaited<ReturnType<typeof getProductosConParametros>> = []
+  let productosError: string | null = null
+  try {
+    productos = await getProductosConParametros()
+  } catch (error) {
+    productosError = error instanceof Error ? error.message : "No se pudieron consultar los productos."
+  }
   const selectedProducto = productoId
     ? productos.find((p) => p.productoId === productoId) ?? null
     : null
 
   let lotes: LotesPorProducto | null = null
+  let historialError: string | null = null
   if (selectedProducto) {
-    lotes = await getLotesPorProducto(selectedProducto.productoId, 1, 100)
+    try {
+      lotes = await getLotesPorProducto(selectedProducto.productoId, page, pageSize)
+      const lastPage = Math.max(1, Math.ceil(lotes.total / pageSize))
+      if (page > lastPage) {
+        // A deletion can invalidate the URL between navigations. Re-query the
+        // clamped page instead of showing rows returned for the old offset.
+        lotes = await getLotesPorProducto(selectedProducto.productoId, lastPage, pageSize)
+      }
+    } catch (error) {
+      historialError = error instanceof Error ? error.message : "No se pudo consultar el historial."
+    }
   }
 
   return (
@@ -62,10 +91,10 @@ export default async function Page({ searchParams }: PageProps) {
                 </p>
               </div>
               <span className="hidden shrink-0 text-xs font-medium text-muted-foreground sm:inline">
-                {productos.length} {productos.length === 1 ? "producto" : "productos"}
+                {productosError ? "—" : productos.length} {productosError ? "No disponible" : productos.length === 1 ? "producto" : "productos"}
               </span>
             </div>
-            <ProductGrid productos={productos} selectedId={selectedProducto?.productoId ?? null} />
+            <ProductGrid productos={productos} selectedId={selectedProducto?.productoId ?? null} error={productosError} />
           </section>
 
           <section aria-label="Parámetros del producto">
@@ -76,6 +105,11 @@ export default async function Page({ searchParams }: PageProps) {
             <ParametersHistory
               lotes={lotes?.items ?? []}
               productoNombre={selectedProducto?.productoNombre ?? ""}
+              productoId={selectedProducto?.productoId ?? null}
+              total={lotes?.total ?? 0}
+              page={lotes?.page ?? page}
+              pageSize={lotes?.pageSize ?? pageSize}
+              error={historialError}
             />
           </section>
         </div>
@@ -83,4 +117,3 @@ export default async function Page({ searchParams }: PageProps) {
     </div>
   )
 }
-

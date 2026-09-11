@@ -18,7 +18,7 @@ export function OvenTemp({
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono tabular-nums ring-1 ring-inset",
         hot
-          ? "bg-amber-50 text-amber-700 ring-amber-200"
+          ? "bg-warning/10 text-warning ring-warning/25"
           : "bg-secondary text-muted-foreground ring-border",
       )}
     >

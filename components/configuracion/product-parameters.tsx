@@ -139,7 +139,7 @@ function ParametersForm({ producto, userRole }: { producto: ParametroProducto; u
             </CardDescription>
           </div>
           {!canEdit && (
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-warning ring-1 ring-warning/20">
               <Lock className="size-3.5" aria-hidden="true" />
               Solo Lectura (Bloqueado)
             </span>
@@ -169,9 +169,9 @@ function ParametersForm({ producto, userRole }: { producto: ParametroProducto; u
         ) : (
           <div
             role="status"
-            className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-300"
+            className="flex items-center gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-success"
           >
-            <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <ShieldCheck className="size-5 shrink-0 text-success" aria-hidden="true" />
             <p className="text-sm font-medium">
               Permisos Activos (<span className="font-bold">{userRole}</span>): Tenés autorización completa para modificar y ajustar las variables operativas del horno.
             </p>

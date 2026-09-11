@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { UserDTO, createUserAction, updateUserAction } from '@/actions/users'
+import { useRef, useState } from 'react'
+import { UserDTO, createUserAction, getUsersAction, updateUserAction } from '@/actions/users'
 import {
   Users,
   UserPlus,
@@ -12,13 +12,16 @@ import {
   SearchX,
   Loader2,
   AlertCircle,
-  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { applyUserPatch, createUserOperationTracker, filterUsersBySearch } from '@/lib/user-management-state'
 
 interface UserManagementProps {
   initialUsers: UserDTO[]
+  initialError?: string | null
 }
 
 type UserRole = 'Administrador' | 'Supervisor' | 'Operario'
@@ -29,12 +32,15 @@ const roleBadgeStyles: Record<UserDTO['rol'], string> = {
   Operario: 'border-border bg-secondary/70 text-muted-foreground',
 }
 
-export function UserManagement({ initialUsers }: UserManagementProps) {
+export function UserManagement({ initialUsers, initialError = null }: UserManagementProps) {
   const [users, setUsers] = useState<UserDTO[]>(initialUsers)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [loadingId, setLoadingId] = useState<string | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const pendingIds = useRef(createUserOperationTracker())
+  const [pendingUsers, setPendingUsers] = useState<Set<string>>(new Set())
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialError)
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Estado del formulario de creación
   const [newEmail, setNewEmail] = useState('')
@@ -42,13 +48,16 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
   const [newRol, setNewRol] = useState<UserRole>('Operario')
   const [newPassword, setNewPassword] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const creatingRef = useRef(false)
+  const [creationError, setCreationError] = useState<string | null>(null)
+
+  const setUserPending = (id: string, pending: boolean) => {
+    if (!pending) pendingIds.current.end(id)
+    setPendingUsers(pendingIds.current.snapshot())
+  }
 
   // Filtrado
-  const filteredUsers = users.filter(
-    (u) =>
-      u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredUsers = filterUsersBySearch(users, searchTerm)
 
   // Totales
   const totalUsers = users.length
@@ -58,62 +67,81 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
   // Handler: Crear Usuario
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrorMsg(null)
+    if (creatingRef.current) return
+    creatingRef.current = true
+    setCreationError(null)
     setIsCreating(true)
-
-    const res = await createUserAction({
-      email: newEmail,
-      nombre: newNombre,
-      rol: newRol,
-      password: newPassword || undefined,
-    })
-
-    setIsCreating(false)
-
-    if (res.ok && res.user) {
-      setUsers([res.user, ...users])
-      setIsModalOpen(false)
-      setNewEmail('')
-      setNewNombre('')
-      setNewRol('Operario')
-      setNewPassword('')
-    } else {
-      setErrorMsg(res.message || 'Error al crear usuario.')
+    try {
+      const res = await createUserAction({ email: newEmail, nombre: newNombre, rol: newRol, password: newPassword || undefined })
+      if (res.ok && res.user) {
+        setUsers((prev) => [res.user!, ...prev])
+        setIsModalOpen(false)
+        setNewEmail('')
+        setNewNombre('')
+        setNewRol('Operario')
+        setNewPassword('')
+      } else {
+        setCreationError(res.message || 'Error al crear usuario.')
+      }
+    } catch (error) {
+      setCreationError(error instanceof Error ? error.message : 'Error al crear usuario.')
+    } finally {
+      creatingRef.current = false
+      setIsCreating(false)
     }
   }
 
   // Handler: Toggle Estado Activo/Inactivo
   const handleToggleStatus = async (user: UserDTO) => {
-    setLoadingId(user.id)
-    setErrorMsg(null)
-
+    if (!pendingIds.current.begin(user.id)) return
+    setUserPending(user.id, true)
+    setRowErrors((prev) => ({ ...prev, [user.id]: '' }))
     const nextState = !user.activo
-    const res = await updateUserAction(user.id, { activo: nextState })
-
-    setLoadingId(null)
-
-    if (res.ok) {
-      setUsers(users.map((u) => (u.id === user.id ? { ...u, activo: nextState } : u)))
-    } else {
-      setErrorMsg(res.message || 'Error al actualizar el estado del usuario.')
+    try {
+      const res = await updateUserAction(user.id, { activo: nextState })
+      if (res.ok) setUsers((prev) => applyUserPatch(prev, user.id, { activo: nextState }))
+      else setRowErrors((prev) => ({ ...prev, [user.id]: res.message || 'Error al actualizar el estado del usuario.' }))
+    } catch (error) {
+      setRowErrors((prev) => ({ ...prev, [user.id]: error instanceof Error ? error.message : 'Error al actualizar el estado del usuario.' }))
+    } finally {
+      setUserPending(user.id, false)
     }
   }
 
   // Handler: Cambiar Rol
   const handleChangeRole = async (user: UserDTO, newRol: 'Administrador' | 'Supervisor' | 'Operario') => {
-    setLoadingId(user.id)
-    setErrorMsg(null)
-
-    const res = await updateUserAction(user.id, { rol: newRol })
-
-    setLoadingId(null)
-
-    if (res.ok) {
-      setUsers(users.map((u) => (u.id === user.id ? { ...u, rol: newRol } : u)))
-    } else {
-      setErrorMsg(res.message || 'Error al actualizar el rol.')
+    if (!pendingIds.current.begin(user.id)) return
+    setUserPending(user.id, true)
+    setRowErrors((prev) => ({ ...prev, [user.id]: '' }))
+    try {
+      const res = await updateUserAction(user.id, { rol: newRol })
+      if (res.ok) setUsers((prev) => applyUserPatch(prev, user.id, { rol: newRol }))
+      else setRowErrors((prev) => ({ ...prev, [user.id]: res.message || 'Error al actualizar el rol.' }))
+    } catch (error) {
+      setRowErrors((prev) => ({ ...prev, [user.id]: error instanceof Error ? error.message : 'Error al actualizar el rol.' }))
+    } finally {
+      setUserPending(user.id, false)
     }
   }
+
+  const handleRetry = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      const result = await getUsersAction()
+      if (result.ok) {
+        setUsers(result.users ?? [])
+        setErrorMsg(null)
+      } else setErrorMsg(result.message || 'No se pudieron consultar los usuarios.')
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'No se pudieron consultar los usuarios.')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const isLoadError = Boolean(errorMsg)
+  const rowErrorMessages = Object.entries(rowErrors).filter(([, message]) => Boolean(message))
 
   return (
     <div className="space-y-8">
@@ -126,9 +154,14 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/15 ring-1 ring-destructive/30">
             <AlertCircle className="size-4" aria-hidden="true" />
           </span>
-          <span className="pt-1">{errorMsg}</span>
+          <div className="flex flex-1 items-center justify-between gap-3"><span className="pt-1">{errorMsg}</span><Button type="button" variant="outline" size="sm" onClick={handleRetry} disabled={isRefreshing}>{isRefreshing ? 'Reintentando…' : 'Reintentar'}</Button></div>
         </div>
       )}
+      {rowErrorMessages.map(([id, message]) => (
+        <div key={id} role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          {message}
+        </div>
+      ))}
 
       {/* Resumen */}
       <section aria-labelledby="resumen-heading" className="space-y-4">
@@ -142,7 +175,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
             </p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
-            {totalUsers} {totalUsers === 1 ? 'usuario' : 'usuarios'}
+            {isLoadError ? '— No disponible' : `${totalUsers} ${totalUsers === 1 ? 'usuario' : 'usuarios'}`}
           </span>
         </div>
 
@@ -154,27 +187,27 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Total Usuarios</p>
-              <p className="text-2xl font-bold tracking-tight text-foreground">{totalUsers}</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{isLoadError ? '—' : totalUsers}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-success/15 text-success">
               <CheckCircle2 className="size-6" />
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Usuarios Activos</p>
-              <p className="text-2xl font-bold tracking-tight text-foreground">{activeUsers}</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{isLoadError ? '—' : activeUsers}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-violet-500/15 text-violet-500">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-info/15 text-info">
               <Shield className="size-6" />
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Administradores</p>
-              <p className="text-2xl font-bold tracking-tight text-foreground">{adminUsers}</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{isLoadError ? '—' : adminUsers}</p>
             </div>
           </div>
         </div>
@@ -192,7 +225,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
             </p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
-            {searchTerm
+            {isLoadError ? '— No disponible' : searchTerm
               ? `${filteredUsers.length} de ${totalUsers}`
               : `${totalUsers} ${totalUsers === 1 ? 'usuario' : 'usuarios'}`}
           </span>
@@ -211,36 +244,29 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
             />
           </div>
 
-          <Button onClick={() => setIsModalOpen(true)} className="gap-2 rounded-xl shadow-md transition-shadow hover:shadow-lg">
-            <UserPlus className="size-4" />
-            <span>Nuevo Usuario Corporativo</span>
-          </Button>
-        </div>
-
+          <Dialog open={isModalOpen} onOpenChange={(open) => { if (!creatingRef.current) setIsModalOpen(open) }}>
+            <DialogTrigger render={<Button onClick={() => setCreationError(null)} className="gap-2 rounded-xl shadow-md transition-shadow hover:shadow-lg" />}>
+              <UserPlus className="size-4" />
+              <span>Nuevo Usuario Corporativo</span>
+            </DialogTrigger>
         {/* Modal de Creación */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="font-heading text-lg font-bold text-foreground">
+          <DialogContent className="max-w-md">
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-lg font-bold text-foreground">
                   Alta de Usuario Corporativo
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  aria-label="Cerrar"
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
+                </DialogTitle>
+                <DialogDescription>Completá los datos para registrar una cuenta corporativa.</DialogDescription>
+              </DialogHeader>
+              {creationError && <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{creationError}</div>}
 
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <Label htmlFor="usuario-nombre">
                     Nombre Completo
-                  </label>
+                  </Label>
                   <input
+                    id="usuario-nombre"
                     type="text"
                     required
                     placeholder="ej: Juan Pérez"
@@ -251,10 +277,11 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <Label htmlFor="usuario-email">
                     Correo Electrónico Corporativo
-                  </label>
+                  </Label>
                   <input
+                    id="usuario-email"
                     type="email"
                     required
                     placeholder="ej: juan.perez@fermar.com.ar"
@@ -265,12 +292,13 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <Label htmlFor="usuario-rol">
                     Rol Asignado
-                  </label>
+                  </Label>
                   <select
+                    id="usuario-rol"
                     value={newRol}
-                    onChange={(e) => setNewRol(e.target.value as any)}
+                    onChange={(e) => setNewRol(e.target.value as UserRole)}
                     className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="Operario">Operario (Nivel 1)</option>
@@ -280,10 +308,11 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <Label htmlFor="usuario-password">
                     Contraseña Local (Opcional)
-                  </label>
+                  </Label>
                   <input
+                    id="usuario-password"
                     type="password"
                     placeholder="Dejar en blanco si ingresará vía Google OAuth"
                     value={newPassword}
@@ -296,27 +325,21 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                   </p>
                 </div>
 
-                <div className="flex justify-end gap-2 border-t border-border pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsModalOpen(false)}
-                    disabled={isCreating}
-                  >
-                    Cancelar
-                  </Button>
+                <DialogFooter>
+                  <DialogClose render={<Button type="button" variant="outline" disabled={isCreating} />}>Cancelar</DialogClose>
                   <Button type="submit" disabled={isCreating}>
                     {isCreating ? <Loader2 className="size-4 animate-spin" /> : 'Crear Usuario'}
                   </Button>
-                </div>
+                </DialogFooter>
               </form>
             </div>
-          </div>
-        )}
+          </DialogContent>
+          </Dialog>
+        </div>
 
         {/* Vista móvil: cada cuenta mantiene sus datos y acciones sin forzar scroll horizontal. */}
         <div className="space-y-3 2xl:hidden" aria-label="Usuarios en formato compacto">
-          {filteredUsers.length === 0 ? <EmptyUsers /> : filteredUsers.map((user) => (
+          {isLoadError ? <UnavailableUsers /> : filteredUsers.length === 0 ? <EmptyUsers hasSearch={Boolean(searchTerm)} /> : filteredUsers.map((user) => (
             <article key={user.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary ring-1 ring-primary/30" aria-hidden="true">{user.nombre.charAt(0).toUpperCase()}</div>
@@ -324,11 +347,11 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                 <StatusBadge active={user.activo} />
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
-                <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rol</dt><dd className="mt-1"><select aria-label={`Rol de ${user.nombre}`} value={user.rol} disabled={loadingId === user.id} onChange={(e) => handleChangeRole(user, e.target.value as UserRole)} className={cn('max-w-full cursor-pointer rounded-full border bg-clip-padding px-2.5 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60', roleBadgeStyles[user.rol])}><option value="Operario">Operario</option><option value="Supervisor">Supervisor</option><option value="Administrador">Administrador</option></select></dd></div>
+                <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rol</dt><dd className="mt-1"><select aria-label={`Rol de ${user.nombre}`} value={user.rol} disabled={pendingUsers.has(user.id)} onChange={(e) => handleChangeRole(user, e.target.value as UserRole)} className={cn('max-w-full cursor-pointer rounded-full border bg-clip-padding px-2.5 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60', roleBadgeStyles[user.rol])}><option value="Operario">Operario</option><option value="Supervisor">Supervisor</option><option value="Administrador">Administrador</option></select></dd></div>
                 <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Alta</dt><dd className="mt-1 text-xs text-foreground">{new Date(user.createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</dd></div>
               </dl>
-              <Button size="sm" variant={user.activo ? 'destructive' : 'outline'} disabled={loadingId === user.id} onClick={() => handleToggleStatus(user)} className="mt-4 h-9 w-full gap-1.5 rounded-lg text-xs">
-                {loadingId === user.id ? <Loader2 className="size-3.5 animate-spin" /> : user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+              <Button size="sm" variant={user.activo ? 'destructive' : 'outline'} disabled={pendingUsers.has(user.id)} onClick={() => handleToggleStatus(user)} className="mt-4 h-9 w-full gap-1.5 rounded-lg text-xs">
+                {pendingUsers.has(user.id) ? <Loader2 className="size-3.5 animate-spin" /> : user.activo ? 'Desactivar usuario' : 'Activar usuario'}
               </Button>
             </article>
           ))}
@@ -348,16 +371,16 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredUsers.length === 0 ? (
+                {isLoadError || filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12">
                       <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-10 text-center">
                         <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
                           <SearchX className="size-5" aria-hidden="true" />
                         </span>
-                        <p className="text-sm font-medium text-foreground">Sin resultados</p>
+                        <p className="text-sm font-medium text-foreground">{isLoadError ? 'Usuarios no disponibles' : searchTerm ? 'Sin coincidencias' : 'Sin usuarios'}</p>
                         <p className="max-w-xs text-xs text-muted-foreground">
-                          No se encontraron usuarios que coincidan con la búsqueda.
+                          {isLoadError ? 'No se puede mostrar el listado mientras la consulta falla.' : searchTerm ? 'No se encontraron usuarios que coincidan con la búsqueda.' : 'No hay usuarios para mostrar.'}
                         </p>
                       </div>
                     </td>
@@ -382,7 +405,7 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                       <td className="px-6 py-4">
                         <select
                           value={user.rol}
-                          disabled={loadingId === user.id}
+                          disabled={pendingUsers.has(user.id)}
                           onChange={(e) =>
                             handleChangeRole(user, e.target.value as UserRole)
                           }
@@ -400,12 +423,12 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                       {/* Estado */}
                       <td className="px-6 py-4">
                         {user.activo ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/40 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-semibold text-success ring-1 ring-inset ring-success/40">
                             <CheckCircle2 className="size-3.5" />
                             Activo
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-950/40 px-2.5 py-1 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-zinc-700">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
                             <XCircle className="size-3.5" />
                             Inactivo
                           </span>
@@ -426,11 +449,11 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
                         <Button
                           size="sm"
                           variant={user.activo ? 'destructive' : 'outline'}
-                          disabled={loadingId === user.id}
+                          disabled={pendingUsers.has(user.id)}
                           onClick={() => handleToggleStatus(user)}
                           className="h-8 gap-1.5 rounded-lg text-xs"
                         >
-                          {loadingId === user.id ? (
+                          {pendingUsers.has(user.id) ? (
                             <Loader2 className="size-3.5 animate-spin" />
                           ) : user.activo ? (
                             'Desactivar'
@@ -453,16 +476,20 @@ export function UserManagement({ initialUsers }: UserManagementProps) {
 
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-950/40 px-2 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-1 text-[11px] font-semibold text-success ring-1 ring-inset ring-success/40">
       <CheckCircle2 className="size-3" aria-hidden="true" /> Activo
     </span>
   ) : (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950/40 px-2 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-inset ring-zinc-700">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground ring-1 ring-inset ring-border">
       <XCircle className="size-3" aria-hidden="true" /> Inactivo
     </span>
   )
 }
 
-function EmptyUsers() {
-  return <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground"><SearchX className="size-5" aria-hidden="true" /></span><p className="text-sm font-medium text-foreground">Sin resultados</p><p className="max-w-xs text-xs text-muted-foreground">No se encontraron usuarios que coincidan con la búsqueda.</p></div>
+function EmptyUsers({ hasSearch }: { hasSearch: boolean }) {
+  return <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground"><SearchX className="size-5" aria-hidden="true" /></span><p className="text-sm font-medium text-foreground">{hasSearch ? 'Sin coincidencias' : 'Sin usuarios'}</p><p className="max-w-xs text-xs text-muted-foreground">{hasSearch ? 'No se encontraron usuarios que coincidan con la búsqueda.' : 'No hay usuarios para mostrar.'}</p></div>
+}
+
+function UnavailableUsers() {
+  return <div role="status" className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground"><AlertCircle className="size-5" aria-hidden="true" /></span><p className="text-sm font-medium text-foreground">Usuarios no disponibles</p><p className="max-w-xs text-xs text-muted-foreground">No se puede mostrar el listado mientras la consulta falla.</p></div>
 }

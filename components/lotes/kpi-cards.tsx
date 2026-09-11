@@ -1,7 +1,7 @@
 import { Boxes, ShieldCheck, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatKg, formatNumber } from "@/lib/format"
-import type { ProductionRun } from "@/lib/production-data"
+import { formatKg } from "@/lib/format"
+import { CONVEYOR_SPEED_UNIT, type ProductionRun } from "@/lib/production-data"
 
 interface KpiCardsProps {
   runs: ProductionRun[]
@@ -37,34 +37,35 @@ function computeMetrics(runs: ProductionRun[]) {
 export function KpiCards({ runs }: KpiCardsProps) {
   const m = computeMetrics(runs)
 
+  const hasData = runs.length > 0
   const cards = [
     {
       label: "Unidades procesadas totales en Kg",
-      value: formatKg(m.totalKg),
+      value: hasData ? formatKg(m.totalKg) : "—",
       hint: `${runs.length} lotes de producción`,
       icon: Boxes,
       accent: "bg-primary/10 text-primary",
     },
     {
       label: "Tasa de calidad general",
-      value: `${m.qualityRate.toFixed(1)}%`,
+      value: hasData ? `${m.qualityRate.toFixed(1)}%` : "—",
       hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
-      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      accent: "bg-success/10 text-success",
     },
     {
       label: "Tasa de merma",
-      value: `${m.defectRate.toFixed(1)}%`,
+      value: hasData ? `${m.defectRate.toFixed(1)}%` : "—",
       hint: "Unidades quemadas / total",
       icon: Flame,
       accent: "bg-destructive/10 text-destructive",
     },
     {
       label: "Promedio de hornos",
-      value: `${Math.round(m.avgTemp)}°C`,
-      hint: `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min`,
+      value: hasData ? `${Math.round(m.avgTemp)}°C` : "—",
+      hint: hasData ? `Velocidad cinta ${m.avgSpeed.toFixed(1)} ${CONVEYOR_SPEED_UNIT}` : "Sin medición",
       icon: Gauge,
-      accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      accent: "bg-warning/10 text-warning",
     },
   ]
 

@@ -1,7 +1,7 @@
 
 import { DashboardContent } from "@/components/lotes/dashboard-content"
 import { getAllProductionRuns } from "@/actions/api"
-import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
+import type { ProductionRun } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
@@ -12,16 +12,12 @@ export default async function Page() {
 
   try {
     const response = await getAllProductionRuns()
-    if (Array.isArray(response)) {
-      runs = response
-    } else if (response && Array.isArray((response as any).data)) {
-      runs = (response as any).data
-    } 
+    runs = response
 
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    runs = PRODUCTION_RUNS
+    runs = []
   }
 
   return (
@@ -40,16 +36,7 @@ export default async function Page() {
           </p>
         </header>
 
-        {error && (
-          <div
-            role="alert"
-            className="mb-8 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
-
-        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} />
+        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} initialError={error} />
       </main>
     </div>
   )

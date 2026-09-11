@@ -13,17 +13,18 @@ const fmtNum = (value: number) =>
 interface ProductGridProps {
   productos?: ParametroProducto[]
   selectedId: string | null
+  error?: string | null
 }
 
 // Selectable product grid (radio-group semantics with roving tabIndex).
 // Selection is deep-linked via ?productoId= so it survives refresh.
-export default function ProductGrid({ productos = [], selectedId }: ProductGridProps) {
+export default function ProductGrid({ productos = [], selectedId, error }: ProductGridProps) {
   const baseId = useId()
   const router = useRouter()
   const buttonsRef = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const select = (productoId: string) => {
-    router.push(`/configuracion?productoId=${productoId}`)
+    router.push(`/configuracion?productoId=${encodeURIComponent(productoId)}&page=1&pageSize=10`)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -60,13 +61,13 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
 
   if (productos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
+      <div role={error ? "alert" : undefined} className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
         <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
           <Croissant className="size-5" aria-hidden="true" />
         </span>
-        <p className="text-sm font-medium text-foreground">No hay productos configurados</p>
+        <p className="text-sm font-medium text-foreground">{error ? "No se pudieron cargar los productos" : "No hay productos configurados"}</p>
         <p className="max-w-xs text-xs text-muted-foreground">
-          Cuando se registren productos, vas a poder seleccionarlos para editar sus parámetros.
+          {error ?? "Cuando se registren productos, vas a poder seleccionarlos para editar sus parámetros."}
         </p>
       </div>
     )
@@ -80,8 +81,11 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
       onKeyDown={handleKeyDown}
       className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
     >
-      {productos.map((producto) => {
+      {productos.map((producto, index) => {
         const selected = producto.productoId === selectedId
+        // Roving tabIndex: when nothing is selected, the first item stays
+        // tabbable so Tab can enter the radiogroup.
+        const isTabbable = selected || (selectedId === null && index === 0)
         return (
           <button
             key={producto.productoId}
@@ -92,7 +96,7 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
             role="radio"
             aria-checked={selected}
             aria-labelledby={`${baseId}-${producto.productoId}-label`}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={isTabbable ? 0 : -1}
             onClick={() => select(producto.productoId)}
             className={cn(
               "group relative flex flex-col items-start gap-2.5 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all duration-200",
@@ -122,8 +126,8 @@ export default function ProductGrid({ productos = [], selectedId }: ProductGridP
                 Inactivo
               </Badge>
             ) : (
-              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-success">
+                <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
                 Activo
               </span>
             )}

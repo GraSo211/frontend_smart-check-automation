@@ -1,12 +1,17 @@
+"use client"
+
 import Image from "next/image"
-import { Activity } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTriggerButton } from "@/components/layout/sidebar-trigger"
+import { MonitoringStatus, availabilityLabel } from "@/components/layout/monitoring-status"
+import { useMonitoring } from "@/components/monitoring-provider"
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-// Top application header with branding, enterprise badge, and live system status.
+// Encabezado principal con marca y estado de conexión no verificado.
 export function Header() {
+  const monitoring = useMonitoring()
+  const overallLabel = availabilityLabel(monitoring.overall.availability)
   return (
     <header className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
@@ -32,19 +37,13 @@ export function Header() {
 
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Estado del sistema */}
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-700">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-            </span>
-            Todos los Sistemas Funcionando
-          </span>
-          <span className="hidden items-center gap-1.5 rounded-full bg-sidebar-accent/15 px-3 py-1.5 text-xs font-medium text-sidebar-foreground/80 ring-1 ring-inset ring-sidebar-border sm:inline-flex">
-            <Activity className="size-3.5 text-sidebar-primary" aria-hidden="true" />
-            IoT Edge En Vivo
-          </span>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5" role="status" aria-live="polite" aria-label={`Estado de monitoreo: ${overallLabel}`}>
+          <MonitoringStatus label="Monitoreo" status={monitoring.overall} />
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[11px] text-sidebar-foreground/75" aria-label={`${monitoring.backend.detail}; ${monitoring.nodes.detail}; ${monitoring.camera.detail}`}>
+            <MonitoringStatus label="API" status={monitoring.backend} />
+            <MonitoringStatus label="Nodos" status={monitoring.nodes} />
+            <MonitoringStatus label="Cámara" status={monitoring.camera} />
+          </div>
 
           <ModeToggle />
         </div>
@@ -52,4 +51,3 @@ export function Header() {
     </header>
   )
 }
-

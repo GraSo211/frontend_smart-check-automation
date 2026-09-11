@@ -41,6 +41,7 @@ function device(dispositivoId: string, receivedAt: string, cpuPct: number): Devi
 
 describe("telemetry thresholds and fallbacks", () => {
   it("classifies values at warning and critical boundaries", () => {
+    expect(levelFor(0, 70, 80)).toBe("normal")
     expect(levelFor(69.9, 70, 80)).toBe("normal")
     expect(levelFor(70, 70, 80)).toBe("warning")
     expect(levelFor(80, 70, 80)).toBe("critical")
@@ -51,6 +52,11 @@ describe("telemetry thresholds and fallbacks", () => {
     expect(ramUsedMb(undefined, 1024)).toBeUndefined()
     expect(percent(3072, 4096)).toBe(75)
     expect(percent(10, undefined)).toBeUndefined()
+    expect(levelFor(undefined, 70, 80)).toBe("unknown")
+    expect(levelFor(Number.NaN, 70, 80)).toBe("unknown")
+    expect(ramUsedMb(Number.NaN, 1024)).toBeUndefined()
+    expect(percent(Number.NaN, 4096)).toBeUndefined()
+    expect(percent(10, Number.NaN)).toBeUndefined()
   })
 
   it("deduplicates by device and report time while retaining live samples", () => {
@@ -77,6 +83,14 @@ describe("telemetry thresholds and fallbacks", () => {
     const corrected = sample("n1", "2026-01-01T00:01:00.000Z", 30)
 
     expect(mergeIncomingTelemetrySamples([existing], [corrected])).toEqual([corrected])
+  })
+
+  it("deduplicates by id while retaining distinct ids at the same timestamp", () => {
+    const first = { ...sample("n1", "2026-01-01T00:01:00.000Z", 20), id: "metric-1" }
+    const corrected = { ...first, cpuPct: 30 }
+    const distinct = { ...first, id: "metric-2", cpuPct: 40 }
+
+    expect(mergeTelemetrySamples([first], [corrected, distinct])).toEqual([corrected, distinct])
   })
 
   it("does not let a stale snapshot replace the current metric", () => {

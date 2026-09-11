@@ -14,8 +14,8 @@ const STATUS_CONFIG: Record<
   online: {
     label: "Online",
     icon: Wifi,
-    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    badge: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-400",
+    chip: "bg-success/10 text-success",
+    badge: "bg-success/10 text-success ring-success/30",
   },
   offline: {
     label: "Offline",

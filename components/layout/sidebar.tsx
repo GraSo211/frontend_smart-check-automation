@@ -79,12 +79,14 @@ function NavItem({
   isActive: boolean
 }) {
   const Icon = item.icon
+  const { setOpenMobile } = useSidebar()
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         render={<Link href={item.href} />}
         isActive={isActive}
         tooltip={item.label}
+        onClick={() => setOpenMobile(false)}
       >
         <Icon aria-hidden="true" />
         <span>{item.label}</span>

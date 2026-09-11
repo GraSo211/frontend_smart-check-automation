@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'
 import { loginWithGoogleAction, loginWithLocalAction } from '@/actions/auth'
 import { validateEmail, validatePassword } from '@/lib/auth-validation'
+import { getSafeInternalRedirect } from '@/lib/auth-redirect'
 import { AlertCircle, Loader2, ShieldCheck, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -13,7 +14,7 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ''
 
 // ─── Formulario de Login Local (Email / Password) ─────────────────────────────
 
-function LocalLoginForm() {
+function LocalLoginForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +23,7 @@ function LocalLoginForm() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault()
     setGeneralError(null)
 
@@ -45,7 +46,7 @@ function LocalLoginForm() {
       const result = await loginWithLocalAction(email, password)
 
       if (result.ok) {
-        router.replace('/')
+        router.replace(redirectTo)
       } else if (result.errors) {
         setFieldErrors(result.errors)
       } else {
@@ -161,7 +162,7 @@ function LocalLoginForm() {
 
 // ─── Componente Google Login ──────────────────────────────────────────────────
 
-function GoogleLoginContainer() {
+function GoogleLoginContainer({ redirectTo }: { redirectTo: string }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -174,7 +175,7 @@ function GoogleLoginContainer() {
       const result = await loginWithGoogleAction(googleToken)
 
       if (result.ok) {
-        router.replace('/')
+        router.replace(redirectTo)
       } else {
         setError(result.message ?? 'Error al iniciar sesión. Intentá nuevamente.')
       }
@@ -228,7 +229,9 @@ function GoogleLoginContainer() {
 
 // ─── Componente Principal LoginForm ──────────────────────────────────────────
 
-export function LoginForm() {
+export function LoginForm({ redirectTo = '/' }: { redirectTo?: string }) {
+  const safeRedirectTo = getSafeInternalRedirect(redirectTo)
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <div className="w-full max-w-md">
@@ -261,7 +264,7 @@ export function LoginForm() {
           </div>
 
           {/* Formulario Local */}
-          <LocalLoginForm />
+          <LocalLoginForm redirectTo={safeRedirectTo} />
 
           {/* Separador */}
           <div className="relative my-6 flex items-center justify-center">
@@ -272,11 +275,11 @@ export function LoginForm() {
           </div>
 
           {/* Login de Google */}
-          <GoogleLoginContainer />
+          <GoogleLoginContainer redirectTo={safeRedirectTo} />
 
           {/* Nota de seguridad */}
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+            <ShieldCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
             <span>Acceso seguro mediante JWT y cookies corporativas.</span>
           </div>
         </div>
