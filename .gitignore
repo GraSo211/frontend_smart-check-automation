@@ -26,9 +26,12 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Variables de entorno locales (Contienen credenciales secretas)
-.env*.local
 .env
+.env*.local
 local.env
+
+# Permitir la plantilla de ejemplo (sin secretos)
+!.env.example
 
 # Configuración de Vercel
 .vercel

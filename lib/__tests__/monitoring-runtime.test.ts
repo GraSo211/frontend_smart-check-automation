@@ -41,6 +41,18 @@ describe('monitoring runtime validation', () => {
     expect(parseDeviceEventPayload({ success: true, data: liveDevice })?.ultimaMetrica?.id).toBe('')
   })
 
+  it('parsea un whepUrl opcional sin rechazar el dispositivo', () => {
+    expect(parseDeviceEventPayload({ ...device, whepUrl: '  https://cam.test/whep  ' })?.whepUrl).toBe('https://cam.test/whep')
+    expect(parseDeviceEventPayload({ ...device, whepUrl: '   ' })?.whepUrl).toBeUndefined()
+    expect(parseDeviceEventPayload({ ...device, whepUrl: 42 })?.whepUrl).toBeUndefined()
+    expect(parseDeviceEventPayload(device)?.whepUrl).toBeUndefined()
+  })
+
+  it('no invalida el dispositivo por un whepUrl malformado, pero lo conserva en snapshots válidos', () => {
+    expect(parseDeviceEventPayload({ ...device, whepUrl: 'no-es-una-url' })?.dispositivoId).toBe('n-1')
+    expect(parseDevicesPayload({ success: true, data: [{ ...liveDevice, whepUrl: 'https://cam.test/whep' }] })?.[0].whepUrl).toBe('https://cam.test/whep')
+  })
+
   it('rechaza atómicamente una métrica con un valor numérico inválido', () => {
     const malformed = { ...liveDevice, ultimaMetrica: { ...liveDevice.ultimaMetrica, tempChip: NaN } }
     expect(parseDevicesPayload({ success: true, data: [liveDevice, malformed] })).toBeNull()

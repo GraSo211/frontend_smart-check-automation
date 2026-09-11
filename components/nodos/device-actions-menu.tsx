@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { deleteDispositivo, updateDispositivo } from "@/actions/api"
 import type { Device } from "@/lib/devices-data"
+import { isWhepUrl } from "@/lib/camera-sources"
 
 interface DeviceActionsMenuProps {
   device: Device
@@ -49,14 +50,18 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [nombre, setNombre] = useState(device.nombre)
   const [ubicacion, setUbicacion] = useState(device.ubicacion)
+  const [whepUrl, setWhepUrl] = useState(device.whepUrl ?? "")
   const [nombreError, setNombreError] = useState<string | null>(null)
+  const [whepError, setWhepError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
   const openEditDialog = () => {
     setNombre(device.nombre)
     setUbicacion(device.ubicacion)
+    setWhepUrl(device.whepUrl ?? "")
     setNombreError(null)
+    setWhepError(null)
     setEditOpen(true)
   }
 
@@ -68,13 +73,20 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
       setNombreError("El nombre es obligatorio.")
       return
     }
+    const trimmedWhepUrl = whepUrl.trim()
+    if (!isWhepUrl(trimmedWhepUrl)) {
+      setWhepError("Ingresá una URL http(s):// que termine en /whep.")
+      return
+    }
     setNombreError(null)
+    setWhepError(null)
 
     startTransition(async () => {
       const result = await updateDispositivo({
         dispositivoId: device.dispositivoId,
         nombre: trimmedNombre,
         ubicacion: ubicacion.trim(),
+        whepUrl: trimmedWhepUrl || undefined,
       })
 
       if (result.ok) {
@@ -187,6 +199,32 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
                 placeholder="Línea A — Sector Horneado"
                 onChange={(e) => setUbicacion(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="editar-dispositivo-whep">URL WHEP (cámara)</Label>
+              <Input
+                id="editar-dispositivo-whep"
+                type="url"
+                inputMode="url"
+                value={whepUrl}
+                placeholder="https://mediamtx.local/entrada/whep"
+                aria-invalid={whepError ? true : undefined}
+                aria-describedby={whepError ? "editar-dispositivo-whep-error" : "editar-dispositivo-whep-hint"}
+                onChange={(e) => {
+                  setWhepUrl(e.target.value)
+                  if (whepError) setWhepError(null)
+                }}
+              />
+              {whepError ? (
+                <p id="editar-dispositivo-whep-error" className="mt-1 text-xs text-destructive">
+                  {whepError}
+                </p>
+              ) : (
+                <p id="editar-dispositivo-whep-hint" className="mt-1 text-xs text-muted-foreground">
+                  Opcional. URL http(s):// que termina en /whep.
+                </p>
+              )}
             </div>
 
             <DialogFooter>

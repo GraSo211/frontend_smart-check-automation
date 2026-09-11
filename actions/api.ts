@@ -367,6 +367,14 @@ export async function updateParametrosProducto(
 // The backend generates the device UUID, which the Pi must later send as
 // dispositivoId in its pings — the UI surfaces it after creation.
 
+// Normalizes the optional camera URL sent to the backend: trim, and drop an
+// empty value so the field is omitted from the JSON body.
+function normalizeWhepUrl(value: string | undefined): string | undefined {
+    if (typeof value !== "string") return undefined
+    const trimmed = value.trim()
+    return trimmed ? trimmed : undefined
+}
+
 // Coerces the backend EstadoDispositivo payload of a freshly created node into
 // the safe Device shape used by the UI.
 function normalizeCreatedDispositivo(raw: unknown): Device | null {
@@ -374,10 +382,12 @@ function normalizeCreatedDispositivo(raw: unknown): Device | null {
   const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
   if (!dispositivoId) return null
 
+  const whepUrl = normalizeWhepUrl(typeof r.whepUrl === "string" ? r.whepUrl : undefined)
   return {
     dispositivoId,
     nombre: typeof r.nombre === "string" ? r.nombre : "Nodo",
     ubicacion: typeof r.ubicacion === "string" ? r.ubicacion : "—",
+    ...(whepUrl ? { whepUrl } : {}),
     estado: r.estado === "online" ? "online" : "offline",
     lastSeen: typeof r.lastSeen === "string" ? r.lastSeen : "",
   }
@@ -396,7 +406,7 @@ export async function createDispositivo(
         const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
             method: "POST",
             headers: await getSessionHeaders(),
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) }),
             cache: "no-store",
             signal: controller.signal,
         });
@@ -441,7 +451,7 @@ export async function updateDispositivo(
         const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
             method: "PUT",
             headers: await getSessionHeaders(),
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) }),
             cache: "no-store",
             signal: controller.signal,
         });

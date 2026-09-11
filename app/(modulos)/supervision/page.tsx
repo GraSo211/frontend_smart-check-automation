@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
-import { Activity, Camera, CircleDot, ShieldCheck } from "lucide-react"
-import LiveCamera from "@/components/supervision/live-camera"
+import { Activity, ShieldCheck } from "lucide-react"
+import SupervisionView from "@/components/supervision/supervision-view"
 
 export const metadata: Metadata = {
   title: "Supervisión en Vivo | Smart-Check Automation",
@@ -31,30 +31,7 @@ export default function Page() {
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-          <LiveCamera />
-          <aside className="space-y-4">
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <CircleDot className="size-4 text-accent" aria-hidden="true" />
-                Fuente de video
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Cámara principal · Planta de producción
-              </p>
-              <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-                <Camera className="size-3.5" aria-hidden="true" />
-                Señal de baja latencia
-              </div>
-            </div>
-            <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-primary">Estado operativo</p>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                La conexión se recupera automáticamente si la cámara pierde señal.
-              </p>
-            </div>
-          </aside>
-        </div>
+        <SupervisionView />
       </div>
     </main>
   )

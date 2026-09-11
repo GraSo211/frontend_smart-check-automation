@@ -314,4 +314,44 @@ describe("server actions de datos del backend", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos")
   })
+
+  it("envía el whepUrl normalizado al crear y lo omite cuando está vacío", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { dispositivoId: "node-1" } }), { status: 200 }))
+
+    await api.createDispositivo({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "  https://cam.test/whep  " })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+      nombre: "Nodo",
+      ubicacion: "Línea A",
+      whepUrl: "https://cam.test/whep",
+    })
+
+    fetchMock.mockClear()
+    await api.createDispositivo({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "   " })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Nodo", ubicacion: "Línea A" })
+  })
+
+  it("envía el whepUrl al actualizar y lo copia de la respuesta", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { dispositivoId: "node-1", nombre: "Nodo", ubicacion: "Línea A", whepUrl: "https://cam.test/whep" },
+    }), { status: 200 }))
+
+    const result = await api.updateDispositivo({
+      dispositivoId: "node-1",
+      nombre: "Nodo",
+      ubicacion: "Línea A",
+      whepUrl: " https://cam.test/whep ",
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+      dispositivoId: "node-1",
+      nombre: "Nodo",
+      ubicacion: "Línea A",
+      whepUrl: "https://cam.test/whep",
+    })
+    expect(result).toEqual({
+      ok: true,
+      data: expect.objectContaining({ dispositivoId: "node-1", whepUrl: "https://cam.test/whep" }),
+    })
+  })
 })
