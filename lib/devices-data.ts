@@ -7,18 +7,22 @@ export type DeviceResponse = {
 export type CreateDispositivoRequest = {
     nombre: string;
     ubicacion: string;
+    whepUrl?: string;
 };
 
 export type UpdateDispositivoRequest = {
     dispositivoId: string;
     nombre: string;
     ubicacion: string;
+    whepUrl?: string;
 };
 
 export type Device = {
     dispositivoId: string;
     nombre: string;
     ubicacion: string;
+    /** URL WHEP de la cámara publicada por este nodo. Opcional. */
+    whepUrl?: string;
     estado: "online" | "offline";
     ultimaMetrica?: {
         id: string;

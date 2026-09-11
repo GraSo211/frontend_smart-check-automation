@@ -72,10 +72,14 @@ export function parseDevice(value: unknown): Device | null {
     (value.lastSeen === undefined || value.lastSeen === '')
   if (!hasLastSeen && !hasOfflineEmptyLastSeen) return null
   if (hasLastSeen && !isValidIso(value.lastSeen)) return null
+  // `whepUrl` is optional: an absent or malformed value must never invalidate
+  // the device. A usable camera URL is a non-empty, trimmed string.
+  const whepUrl = typeof value.whepUrl === 'string' ? value.whepUrl.trim() : ''
   return {
     dispositivoId: value.dispositivoId,
     nombre: typeof value.nombre === 'string' && value.nombre !== '' ? value.nombre : value.dispositivoId,
     ubicacion: typeof value.ubicacion === 'string' ? value.ubicacion : '—',
+    ...(whepUrl ? { whepUrl } : {}),
     estado: value.estado,
     ultimaMetrica: metric,
     // An offline node created without telemetry is valid and has no lastSeen yet.

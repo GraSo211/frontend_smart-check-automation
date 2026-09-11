@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createDispositivo } from "@/actions/api"
+import { isWhepUrl } from "@/lib/camera-sources"
 
 // Button + modal to register a new Raspberry Pi node from the frontend.
 // On success the backend returns the generated UUID, which must be flashed
@@ -27,7 +28,9 @@ export default function CreateDeviceDialog() {
   const [open, setOpen] = useState(false)
   const [nombre, setNombre] = useState("")
   const [ubicacion, setUbicacion] = useState("")
+  const [whepUrl, setWhepUrl] = useState("")
   const [nombreError, setNombreError] = useState<string | null>(null)
+  const [whepError, setWhepError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -39,12 +42,19 @@ export default function CreateDeviceDialog() {
       setNombreError("El nombre es obligatorio.")
       return
     }
+    const trimmedWhepUrl = whepUrl.trim()
+    if (!isWhepUrl(trimmedWhepUrl)) {
+      setWhepError("Ingresá una URL http(s):// que termine en /whep.")
+      return
+    }
     setNombreError(null)
+    setWhepError(null)
 
     startTransition(async () => {
       const result = await createDispositivo({
         nombre: trimmedNombre,
         ubicacion: ubicacion.trim(),
+        whepUrl: trimmedWhepUrl || undefined,
       })
 
       if (result.ok) {
@@ -54,6 +64,7 @@ export default function CreateDeviceDialog() {
         setOpen(false)
         setNombre("")
         setUbicacion("")
+        setWhepUrl("")
         router.refresh()
       } else {
         toast.error("No se pudo crear el dispositivo", {
@@ -113,6 +124,32 @@ export default function CreateDeviceDialog() {
               placeholder="Línea A — Sector Horneado"
               onChange={(e) => setUbicacion(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="dispositivo-whep">URL WHEP (cámara)</Label>
+            <Input
+              id="dispositivo-whep"
+              type="url"
+              inputMode="url"
+              value={whepUrl}
+              placeholder="https://mediamtx.local/entrada/whep"
+              aria-invalid={whepError ? true : undefined}
+              aria-describedby={whepError ? "dispositivo-whep-error" : "dispositivo-whep-hint"}
+              onChange={(e) => {
+                setWhepUrl(e.target.value)
+                if (whepError) setWhepError(null)
+              }}
+            />
+            {whepError ? (
+              <p id="dispositivo-whep-error" className="mt-1 text-xs text-destructive">
+                {whepError}
+              </p>
+            ) : (
+              <p id="dispositivo-whep-hint" className="mt-1 text-xs text-muted-foreground">
+                Opcional. URL http(s):// que termina en /whep.
+              </p>
+            )}
           </div>
 
           <DialogFooter>

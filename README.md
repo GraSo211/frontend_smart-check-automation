@@ -28,10 +28,10 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Área | Funcionalidad actual |
 |---|---|
 | Operación | Dashboard con indicadores de producción, calidad, temperatura, conectividad y sincronización. |
-| Supervisión | Vista de cámara principal mediante WebRTC/WHEP con reconexión automática. |
+| Supervisión | Lista y muestra la cámara de los dispositivos que tienen una URL WHEP configurada, con reconexión automática. Por capacidad de las Raspberry, cada nodo expone una sola cámara/stream. |
 | Lotes | Consulta de lotes, búsqueda por producto, filtro por turno y rango de temperatura, KPIs y tabla histórica. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
-| Nodos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial y alta/edición/baja de dispositivos. |
+| Nodos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, alta/edición/baja de dispositivos y la URL WHEP de su cámara. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
 | Alertas | Página de módulo reservada para la gestión de alertas y notificaciones; actualmente muestra una sección informativa. |
 
@@ -59,14 +59,17 @@ es un servicio externo en Go; no forma parte de este proyecto.
 |---|---|
 | Login, usuarios, lotes, parámetros y nodos | API Go accesible desde el servidor Next.js mediante `NEXT_PUBLIC_API_URL`: `http://localhost:8080` en desarrollo o la URL de Render en producción. |
 | Actualizaciones de lotes y nodos | La misma API Go debe exponer SSE; el navegador se conecta a los handlers internos de Next.js. |
-| Supervisión de video | Servidor MediaMTX con una fuente de video publicada en el path elegido; el navegador accede directamente a su endpoint WHEP. La fuente y la infraestructura están pendientes de definición. |
+| Supervisión de video | Servidor MediaMTX con una fuente de video por Raspberry. La URL WHEP de cada cámara es un dato del dispositivo (campo `whepUrl`) y el navegador accede directamente al endpoint del nodo seleccionado. La infraestructura está pendiente de definición. |
 | Login con Google (opcional) | Client ID de Google OAuth configurado para el origen del frontend y soporte del endpoint Google en la API Go. |
 
 ### MediaMTX y video
 
-La página `/supervision` requiere una URL WHEP de MediaMTX. MediaMTX todavía
-no tiene host, puerto, path ni esquema de autenticación definidos en este
-frontend. La variable acepta, por ejemplo, una URL con esta forma:
+La página `/supervision` requiere que al menos un dispositivo tenga configurada
+su URL WHEP de MediaMTX. Esa URL es un dato del dispositivo (campo opcional
+`whepUrl`) que se administra desde `/nodos`, no una variable de entorno del
+frontend. MediaMTX todavía no tiene host, puerto, path ni esquema de
+autenticación definidos en este frontend; la URL acepta, por ejemplo, esta
+forma:
 
 ```text
 https://<host-de-mediamtx>/<path-de-stream>/whep
@@ -75,6 +78,14 @@ https://<host-de-mediamtx>/<path-de-stream>/whep
 El segmento `<path-de-stream>` es solo ilustrativo; no es un path obligatorio
 para este proyecto. Quedan pendientes de definir el host, el puerto, la red,
 la autenticación y la URL final.
+
+El frontend muestra **una Raspberry a la vez**. Por capacidad de las Raspberry,
+cada nodo publica una sola cámara/stream: la entrada y la salida del horno son
+**dos dispositivos distintos**. Las fuentes se publican en MediaMTX en
+simultáneo, pero el navegador mantiene una sola sesión WHEP activa: al cambiar
+de nodo libera la sesión anterior y abre la nueva. `/supervision` lista
+únicamente los dispositivos con `whepUrl`; si hay más de uno, muestra un
+selector segmentado de nodo, y con uno solo lo muestra como contexto.
 
 El navegador establece una conexión WebRTC de recepción (`recvonly`) y hace
 directamente un `POST` WHEP con una oferta SDP. Para que funcione en cada
@@ -91,8 +102,13 @@ Las variables reconocidas por el código son:
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Configurarla siempre, incluso cuando algunas acciones de autenticación y usuarios tienen un default de producción. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID público de Google para mostrar y utilizar el login con Google. No es un client secret. | Solo para login con Google. |
-| `NEXT_PUBLIC_MEDIAMTX_WHEP_URL` | Endpoint WHEP que consume directamente el navegador en `/supervision`. | Solo para habilitar el video. |
 | `NODE_ENV` | Controla, entre otras cosas, la analítica de producción y el atributo `Secure` de la cookie. Next.js lo establece según el modo de ejecución. | No se configura manualmente para el uso normal. |
+
+La URL WHEP de la cámara **ya no se configura por variables de entorno**: es el
+campo opcional `whepUrl` de cada dispositivo, editable desde `/nodos`. Las
+variables `NEXT_PUBLIC_CAMERA_NODES`, `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`,
+`NEXT_PUBLIC_MEDIAMTX_WHEP_URL_ENTRADA` y `NEXT_PUBLIC_MEDIAMTX_WHEP_URL_SALIDA`
+quedaron deprecadas y no se leen en el código.
 
 Las variables `NEXT_PUBLIC_*` que usa el cliente se incorporan al bundle en el
 build. Si se cambia uno de esos valores en Vercel o en otro entorno, hay que
@@ -111,17 +127,32 @@ Crear `.env.local` en la raíz, sin subirlo al repositorio:
 ```dotenv
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
-# NEXT_PUBLIC_MEDIAMTX_WHEP_URL=
 ```
 
 El backend local confirmado para desarrollo es `http://localhost:8080`.
-Las variables opcionales comentadas dejan deshabilitado el login Google o el
-video, respectivamente, sin introducir valores ficticios ni secretos.
+La variable comentada deja deshabilitado el login Google, sin introducir
+valores ficticios ni secretos. Para habilitar el video no hace falta una
+variable de entorno: se configura la URL WHEP de cada cámara desde `/nodos`.
 
 Para producción, tomar como referencia `.env.example` y definir los valores en
 la configuración del proveedor. Actualmente el frontend se despliega en
 Vercel y la API Go de producción en Render. El archivo `.env.example` contiene
 la URL pública de Render y ejemplos no secretos para las demás variables.
+
+### Cámaras por dispositivo
+
+Cada dispositivo puede tener una URL WHEP opcional. El backend la expone como
+`whepUrl` en `GET /api/v1/dispositivos` y la acepta como `whepUrl` opcional en
+el alta y la edición. Con el dispositivo seleccionado en `/nodos` se puede
+cargar o editar desde el formulario ("URL WHEP (cámara)"); la validación es
+suave y sólo exige una URL `http(s)://` que termine en `/whep`.
+
+`/supervision` construye la lista de cámaras con los dispositivos que tienen
+`whepUrl` no vacío (el `dispositivoId` identifica la fuente y se preserva el
+orden de la flota). Si no hay ninguna cámara configurada, muestra un estado
+vacío con un acceso a `/nodos` para configurarla. Si se declaran más de una,
+aparece un selector segmentado de nodo; con una sola, se muestra su nombre y
+ubicación como contexto.
 
 ## Puesta en marcha local
 
@@ -164,7 +195,8 @@ Comandos disponibles en `package.json`:
    rutas internas de Next (`/api/...`). Esas rutas leen la cookie y mantienen
    la conexión SSE con el endpoint equivalente de la API Go.
 5. Para video, el navegador no pasa por una action de Next: negocia WHEP
-   directamente con MediaMTX usando `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`.
+   directamente con MediaMTX usando la URL `whepUrl` del dispositivo
+   seleccionado en `/supervision`.
 6. El proxy de Next aplica la comprobación de presencia, decodificación y
    expiración de la sesión antes de las páginas protegidas. Las APIs externas
    siguen siendo responsables de validar la sesión en cada request.
@@ -186,8 +218,8 @@ iniciando.
 | `/lotes` | Lotes y datos históricos con filtros locales, KPIs y tabla de supervisión. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
 | `/alertas` | Placeholder funcional del módulo de alertas. |
-| `/supervision` | Cámara principal en vivo por WHEP/WebRTC y estado de reconexión. |
-| `/nodos` | Estado de dispositivos, telemetría SSE, métricas históricas y operaciones CRUD de nodos. |
+| `/supervision` | Lista los dispositivos con cámara (`whepUrl`), permite cambiar de nodo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
+| `/nodos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de nodos y la URL WHEP de la cámara. |
 
 La navegación lateral agrupa estas páginas en **Operación** y **Sistema**.
 
@@ -211,10 +243,10 @@ especificación completa del backend.
 | `POST /api/v1/auth/logout` | Cierre de sesión. | Sin cuerpo relevante. |
 | `GET /api/v1/lotes-productivos` | Dashboard y `/lotes`. | `page=1&pageSize=100`. |
 | `GET /api/v1/lotes-productivos` | Historial de `/configuracion`. | `productoId`, `page`, `pageSize`; la página actual solicita `page=1&pageSize=100`. |
-| `GET /api/v1/dispositivos` | Carga inicial de `/nodos`. | Sin query para obtener todos los dispositivos. |
+| `GET /api/v1/dispositivos` | Carga inicial de `/nodos` y fuentes de `/supervision`. | Sin query. Cada dispositivo puede incluir `whepUrl` (opcional). |
 | `GET /api/v1/dispositivos/metricas` | Historial del nodo seleccionado. | `dispositivoId`, `page`, `pageSize`; el valor por defecto de la action es `page=1&pageSize=20`. |
-| `POST /api/v1/dispositivos` | Alta de un nodo Raspberry Pi. | JSON del dispositivo; el backend genera el identificador. |
-| `PUT /api/v1/dispositivos` | Actualización del nombre/ubicación de un nodo. | JSON del dispositivo a actualizar. |
+| `POST /api/v1/dispositivos` | Alta de un nodo Raspberry Pi. | JSON del dispositivo con `nombre`, `ubicacion` y `whepUrl` opcional; el backend genera el identificador. |
+| `PUT /api/v1/dispositivos` | Actualización del nombre/ubicación y de la cámara de un nodo. | JSON con `dispositivoId`, `nombre`, `ubicacion` y `whepUrl` opcional. |
 | `DELETE /api/v1/dispositivos` | Baja de un nodo. | `dispositivoId` como query. |
 | `GET /api/v1/parametros-producto` | Listado de productos y parámetros recomendados. | Sin query relevante. |
 | `PUT /api/v1/parametros-producto` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso y tolerancias. |
@@ -242,15 +274,16 @@ para conservar la cookie de sesión al abrir streams desde el navegador:
 ### Sesiones WHEP de MediaMTX
 
 `components/supervision/live-camera.tsx` realiza el siguiente intercambio
-directamente desde el browser:
+directamente desde el browser, usando la URL WHEP de la cámara del nodo
+seleccionado (campo `whepUrl` del dispositivo):
 
-1. `POST <NEXT_PUBLIC_MEDIAMTX_WHEP_URL>` con `Content-Type: application/sdp`
+1. `POST <whepUrl>` con `Content-Type: application/sdp`
    y una oferta SDP de video `recvonly`.
 2. Usa la respuesta SDP como answer y conserva el header `Location` de la
    sesión, cuando MediaMTX lo devuelve.
-3. Al desmontar, fallar o reconectar, hace `DELETE <Location>` para liberar la
-   sesión WHEP. La URL final de MediaMTX, red, CORS y autenticación todavía
-   están pendientes de definición.
+3. Al desmontar, fallar, reconectar o cambiar de nodo, hace `DELETE <Location>`
+   para liberar la sesión WHEP. La URL final de MediaMTX, red, CORS y
+   autenticación todavía están pendientes de definición.
 
 ## Autenticación y autorización
 
@@ -287,7 +320,7 @@ datos cuando corresponda:
 | `/nodos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
 | Historial de telemetría | `getDeviceHistory()` propaga el error e informa que el historial no está disponible. |
 | Usuarios y autenticación | Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
-| Video | Sin WHEP configurado queda en estado de configuración pendiente; ante una falla intenta reconectar. |
+| Video | Se listan los dispositivos con `whepUrl`; el nodo con la cámara seleccionada se conecta y, ante una falla, intenta reconectar. Sin ninguna cámara configurada se muestra un estado vacío con acceso a `/nodos`. |
 
 Los streams SSE de lotes y nodos se conectan desde el cliente y el navegador
 puede reintentarlos. Los nodos además hacen un snapshot inicial y una
@@ -302,7 +335,9 @@ timeout de 8 segundos y exponen el error si se agota.
 | `NEXT_PUBLIC_API_URL no está definida` | Crear `.env.local` con `NEXT_PUBLIC_API_URL=http://localhost:8080` y reiniciar el servidor de desarrollo. |
 | Dashboard sin datos o con error | Verificar que la API esté disponible, que la URL sea correcta y que la sesión tenga acceso. En Render también puede tratarse de un cold start. |
 | Nodos vacíos o sin historial | Revisar la API Go, la cookie de sesión y los endpoints de dispositivos/metricas. |
-| La vista de video dice “Configuración pendiente” | Definir `NEXT_PUBLIC_MEDIAMTX_WHEP_URL` y reconstruir el frontend. Además, comprobar alcance desde el navegador, HTTPS, CORS y ICE. |
+| La vista de video dice “Configuración pendiente” | Verificar que la URL WHEP del dispositivo esté cargada y sea correcta. Se edita desde `/nodos`; después, comprobar alcance desde el navegador, HTTPS, CORS e ICE. |
+| No aparece el selector de Raspberry | Revisar que haya más de un dispositivo con `whepUrl` cargado desde `/nodos`. Con un solo nodo se muestra como contexto, sin selector. |
+| La cámara de un nodo no aparece en `/supervision` | Confirmar que el dispositivo tenga el campo `whepUrl` no vacío (el formulario valida que sea `http(s)://` y termine en `/whep`). |
 | WHEP responde pero no hay video | Revisar la URL final de WHEP, la conectividad ICE y que el endpoint devuelva SDP y, si corresponde, `Location`. La configuración de red y autenticación de MediaMTX está pendiente. |
 | Login Google no aparece o falla | Definir el `NEXT_PUBLIC_GOOGLE_CLIENT_ID` público correspondiente y reconstruir. El login local no depende de esa variable. |
 | Se cambió una variable en Vercel pero el cliente conserva el valor anterior | Las variables `NEXT_PUBLIC_*` del cliente se inlinéan en build: hacer un nuevo deploy/build, no solo reiniciar. |
@@ -314,8 +349,8 @@ timeout de 8 segundos y exponen el error si se agota.
 
 1. Configurar el proyecto Next.js desde este repositorio.
 2. Definir en Vercel `NEXT_PUBLIC_API_URL` apuntando al backend Go de Render.
-3. Definir opcionalmente el Client ID de Google y la URL WHEP final cuando
-   estén disponibles.
+3. Definir opcionalmente el Client ID de Google. La URL WHEP de cada cámara se
+   carga por dispositivo desde `/nodos`, no como variable de entorno.
 4. Ejecutar un nuevo build/deploy cada vez que cambie una variable
    `NEXT_PUBLIC_*` que consuma el cliente.
 

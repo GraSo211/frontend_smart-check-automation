@@ -28,9 +28,21 @@ function waitForIceComplete(pc: RTCPeerConnection) {
   })
 }
 
-type LiveCameraProps = { whepUrl?: string }
+type LiveCameraProps = {
+  whepUrl?: string
+  title?: string
+  subtitle?: string
+  location?: string
+  videoAriaLabel?: string
+}
 
-export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_WHEP_URL }: LiveCameraProps) {
+export default function LiveCamera({
+  whepUrl,
+  title = "Cámara principal",
+  subtitle = "Línea de producción · Planta 01",
+  location,
+  videoAriaLabel = "Transmisión en vivo de la cámara principal",
+}: LiveCameraProps) {
   const { reportCamera } = useMonitoringActions()
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -287,12 +299,12 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_color-mix(in_oklab,var(--primary)_45%,transparent)]" aria-label="Cámara de producción">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Camera className="size-4" aria-hidden="true" /></span><div><h2 className="font-heading text-sm font-semibold">Cámara principal</h2><p className="text-xs text-muted-foreground">Línea de producción · Planta 01</p></div></div>
+        <div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Camera className="size-4" aria-hidden="true" /></span><div><h2 className="font-heading text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p>{location ? <p className="mt-0.5 text-[11px] text-muted-foreground">{location}</p> : null}</div></div>
         <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isActive ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`} role="status"><span className={`size-1.5 rounded-full ${isActive ? "animate-pulse bg-success" : "bg-current"}`} />{statusLabel}</span>
       </div>
       <div className="relative aspect-video min-h-[260px] bg-video-surface sm:min-h-[380px]">
-        <video ref={videoRef} autoPlay muted playsInline className={`size-full object-cover ${isActive ? "opacity-100" : "opacity-20"}`} aria-label="Transmisión en vivo de la cámara principal" />
-        {!isActive && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-video-foreground"><span className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-video-foreground/10 bg-video-foreground/10"><AlertTriangle className="size-6 text-warning" aria-hidden="true" /></span><p className="font-heading text-lg font-semibold">{configurationMissing ? "Configuración pendiente" : status === "reconnecting" || status === "connecting" ? "Buscando señal…" : "Cámara fuera de línea"}</p><p className="mt-1 max-w-sm text-sm text-video-foreground/75">{configurationMissing ? "Definí NEXT_PUBLIC_MEDIAMTX_WHEP_URL para habilitar esta transmisión." : status === "error" ? "Reintentaremos la conexión automáticamente." : "La transmisión aparecerá aquí cuando esté disponible."}</p>{status === "offline" && !configurationMissing && <Button onClick={() => { attemptRef.current = 0; void connect() }} variant="secondary" size="sm" className="mt-5"><RefreshCw className="size-3.5" /> Reintentar ahora</Button>}{(status === "connecting" || status === "reconnecting") && <LoaderCircle className="mt-5 size-5 animate-spin text-info" aria-label="Cargando" />}</div>}
+        <video ref={videoRef} autoPlay muted playsInline className={`size-full object-cover ${isActive ? "opacity-100" : "opacity-20"}`} aria-label={videoAriaLabel} />
+        {!isActive && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-video-foreground"><span className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-video-foreground/10 bg-video-foreground/10"><AlertTriangle className="size-6 text-warning" aria-hidden="true" /></span><p className="font-heading text-lg font-semibold">{configurationMissing ? "Configuración pendiente" : status === "reconnecting" || status === "connecting" ? "Buscando señal…" : "Cámara fuera de línea"}</p><p className="mt-1 max-w-sm text-sm text-video-foreground/75">{configurationMissing ? "Configurá la URL WHEP (cámara) del nodo para habilitar esta transmisión." : status === "error" ? "Reintentaremos la conexión automáticamente." : "La transmisión aparecerá aquí cuando esté disponible."}</p>{status === "offline" && !configurationMissing && <Button onClick={() => { attemptRef.current = 0; void connect() }} variant="secondary" size="sm" className="mt-5"><RefreshCw className="size-3.5" /> Reintentar ahora</Button>}{(status === "connecting" || status === "reconnecting") && <LoaderCircle className="mt-5 size-5 animate-spin text-info" aria-label="Cargando" />}</div>}
         <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-lg bg-video-overlay px-2.5 py-1.5 text-[11px] text-video-foreground backdrop-blur-sm"><Radio className="size-3 text-info" /> WHEP / baja latencia</div>
         {isActive && <div className="absolute bottom-3 right-3 flex gap-1.5"><span className="inline-flex items-center gap-1.5 rounded-lg bg-video-overlay px-2.5 py-2 text-xs text-video-foreground backdrop-blur-sm" aria-label="Sin audio"><VolumeX className="size-4" aria-hidden="true" /><span>Sin audio</span></span><button type="button" onClick={() => videoRef.current?.requestFullscreen()} className="rounded-lg bg-video-overlay p-2 text-video-foreground backdrop-blur-sm transition hover:bg-foreground/75" aria-label="Pantalla completa"><Maximize className="size-4" /></button></div>}
       </div>

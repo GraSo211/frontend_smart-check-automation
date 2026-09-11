@@ -1,6 +1,6 @@
 "use client"
 
-import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Clock, SearchX, type LucideIcon } from "lucide-react"
+import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import type { Device } from "@/lib/devices-data"
@@ -90,6 +90,12 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
           <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
           {device.ubicacion}
         </p>
+        {device.whepUrl && (
+          <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={device.whepUrl}>
+            <Camera className="size-3.5 shrink-0 text-info" aria-hidden="true" />
+            <span className="truncate">Cámara configurada</span>
+          </p>
+        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
