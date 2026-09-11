@@ -24,7 +24,7 @@ export default function ProductGrid({ productos = [], selectedId, error }: Produ
   const buttonsRef = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const select = (productoId: string) => {
-    router.push(`/configuracion?productoId=${productoId}`)
+    router.push(`/configuracion?productoId=${encodeURIComponent(productoId)}&page=1&pageSize=10`)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -81,8 +81,11 @@ export default function ProductGrid({ productos = [], selectedId, error }: Produ
       onKeyDown={handleKeyDown}
       className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
     >
-      {productos.map((producto) => {
+      {productos.map((producto, index) => {
         const selected = producto.productoId === selectedId
+        // Roving tabIndex: when nothing is selected, the first item stays
+        // tabbable so Tab can enter the radiogroup.
+        const isTabbable = selected || (selectedId === null && index === 0)
         return (
           <button
             key={producto.productoId}
@@ -93,7 +96,7 @@ export default function ProductGrid({ productos = [], selectedId, error }: Produ
             role="radio"
             aria-checked={selected}
             aria-labelledby={`${baseId}-${producto.productoId}-label`}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={isTabbable ? 0 : -1}
             onClick={() => select(producto.productoId)}
             className={cn(
               "group relative flex flex-col items-start gap-2.5 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all duration-200",

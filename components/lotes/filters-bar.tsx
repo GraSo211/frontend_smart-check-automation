@@ -22,9 +22,20 @@ interface FiltersBarProps {
   onChange: (filters: FiltersState) => void
   resultsCount: number
   totalCount: number
+  tempRangeInvalid?: boolean
 }
 
-export function FiltersBar({ filters, onChange, resultsCount, totalCount }: FiltersBarProps) {
+export function FiltersBar({
+  filters,
+  onChange,
+  resultsCount,
+  totalCount,
+  tempRangeInvalid = false,
+}: FiltersBarProps) {
+  const tempRangeError = tempRangeInvalid
+    ? "Debe ser mayor a la temperatura mínima."
+    : undefined
+
   const hasActiveFilters =
     filters.search !== "" ||
     filters.turno !== "todos" ||
@@ -110,9 +121,11 @@ export function FiltersBar({ filters, onChange, resultsCount, totalCount }: Filt
               min={0}
               max={300}
               value={filters.tempMin}
+              aria-invalid={tempRangeInvalid ? true : undefined}
+              aria-describedby={tempRangeError ? "temp-range-error" : undefined}
               onChange={(e) => onChange({ ...filters, tempMin: e.target.value })}
               placeholder="0"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 aria-invalid:border-destructive"
             />
           </div>
 
@@ -129,9 +142,11 @@ export function FiltersBar({ filters, onChange, resultsCount, totalCount }: Filt
               min={0}
               max={300}
               value={filters.tempMax}
+              aria-invalid={tempRangeInvalid ? true : undefined}
+              aria-describedby={tempRangeError ? "temp-range-error" : undefined}
               onChange={(e) => onChange({ ...filters, tempMax: e.target.value })}
               placeholder="300"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 aria-invalid:border-destructive"
             />
           </div>
 
@@ -145,6 +160,11 @@ export function FiltersBar({ filters, onChange, resultsCount, totalCount }: Filt
             Limpiar
           </button>
         </div>
+        {tempRangeError && (
+          <p id="temp-range-error" role="alert" className="mt-3 text-xs text-destructive">
+            {tempRangeError}
+          </p>
+        )}
       </div>
     </div>
   )

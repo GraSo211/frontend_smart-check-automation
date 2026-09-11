@@ -94,6 +94,7 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
     const generation = ++generationRef.current
     const controller = new AbortController()
     const pc = new RTCPeerConnection()
+    const isCurrentSession = () => isCurrentCameraGeneration(generation, generationRef.current) && pcRef.current === pc && controllerRef.current === controller
     pcRef.current = pc
     controllerRef.current = controller
     setStatus(attemptRef.current ? "reconnecting" : "connecting")
@@ -187,18 +188,24 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
     let whepTimeout: number | null = null
     try {
       const offer = await pc.createOffer()
+      if (!isCurrentSession()) return
       await pc.setLocalDescription(offer)
+      if (!isCurrentSession()) return
       await waitForIceComplete(pc)
+      if (!isCurrentSession()) return
       whepTimeout = window.setTimeout(() => controller.abort(), 8000)
       const response = await fetch(whepUrl, {
         method: "POST", headers: { "Content-Type": "application/sdp", Accept: "application/sdp" },
         body: pc.localDescription?.sdp, signal: controller.signal,
       })
+      if (!isCurrentSession()) return
       if (!response.ok) throw new Error(`WHEP respondió ${response.status}`)
       const location = response.headers.get("Location")
       locationRef.current = location ? new URL(location, whepUrl).toString() : null
-      await pc.setRemoteDescription({ type: "answer", sdp: await response.text() })
-      if (generation === generationRef.current) attemptRef.current = 0
+      const answer = await response.text()
+      if (!isCurrentSession()) return
+      await pc.setRemoteDescription({ type: "answer", sdp: answer })
+      if (isCurrentSession()) attemptRef.current = 0
     } catch {
       if (generation !== generationRef.current) return
       if (cleanupGenerationRef.current === generation) return
@@ -287,7 +294,7 @@ export default function LiveCamera({ whepUrl = process.env.NEXT_PUBLIC_MEDIAMTX_
         <video ref={videoRef} autoPlay muted playsInline className={`size-full object-cover ${isActive ? "opacity-100" : "opacity-20"}`} aria-label="Transmisión en vivo de la cámara principal" />
         {!isActive && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-video-foreground"><span className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-video-foreground/10 bg-video-foreground/10"><AlertTriangle className="size-6 text-warning" aria-hidden="true" /></span><p className="font-heading text-lg font-semibold">{configurationMissing ? "Configuración pendiente" : status === "reconnecting" || status === "connecting" ? "Buscando señal…" : "Cámara fuera de línea"}</p><p className="mt-1 max-w-sm text-sm text-video-foreground/75">{configurationMissing ? "Definí NEXT_PUBLIC_MEDIAMTX_WHEP_URL para habilitar esta transmisión." : status === "error" ? "Reintentaremos la conexión automáticamente." : "La transmisión aparecerá aquí cuando esté disponible."}</p>{status === "offline" && !configurationMissing && <Button onClick={() => { attemptRef.current = 0; void connect() }} variant="secondary" size="sm" className="mt-5"><RefreshCw className="size-3.5" /> Reintentar ahora</Button>}{(status === "connecting" || status === "reconnecting") && <LoaderCircle className="mt-5 size-5 animate-spin text-info" aria-label="Cargando" />}</div>}
         <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-lg bg-video-overlay px-2.5 py-1.5 text-[11px] text-video-foreground backdrop-blur-sm"><Radio className="size-3 text-info" /> WHEP / baja latencia</div>
-        {isActive && <div className="absolute bottom-3 right-3 flex gap-1.5"><button type="button" className="rounded-lg bg-video-overlay p-2 text-video-foreground backdrop-blur-sm transition hover:bg-foreground/75" aria-label="Audio silenciado"><VolumeX className="size-4" /></button><button type="button" onClick={() => videoRef.current?.requestFullscreen()} className="rounded-lg bg-video-overlay p-2 text-video-foreground backdrop-blur-sm transition hover:bg-foreground/75" aria-label="Pantalla completa"><Maximize className="size-4" /></button></div>}
+        {isActive && <div className="absolute bottom-3 right-3 flex gap-1.5"><span className="inline-flex items-center gap-1.5 rounded-lg bg-video-overlay px-2.5 py-2 text-xs text-video-foreground backdrop-blur-sm" aria-label="Sin audio"><VolumeX className="size-4" aria-hidden="true" /><span>Sin audio</span></span><button type="button" onClick={() => videoRef.current?.requestFullscreen()} className="rounded-lg bg-video-overlay p-2 text-video-foreground backdrop-blur-sm transition hover:bg-foreground/75" aria-label="Pantalla completa"><Maximize className="size-4" /></button></div>}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-muted-foreground sm:px-5"><span>Señal monitoreada automáticamente</span><span className="font-mono text-[10px] uppercase tracking-wider">{isActive ? "streaming activo" : "sin señal"}</span></div>
     </section>

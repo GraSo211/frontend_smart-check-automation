@@ -1,7 +1,7 @@
 import { Boxes, ShieldCheck, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatKg } from "@/lib/format"
-import type { ProductionRun } from "@/lib/production-data"
+import { CONVEYOR_SPEED_UNIT, type ProductionRun } from "@/lib/production-data"
 
 interface KpiCardsProps {
   runs: ProductionRun[]
@@ -63,7 +63,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
     {
       label: "Promedio de hornos",
       value: hasData ? `${Math.round(m.avgTemp)}°C` : "—",
-      hint: hasData ? `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min` : "Sin medición",
+      hint: hasData ? `Velocidad cinta ${m.avgSpeed.toFixed(1)} ${CONVEYOR_SPEED_UNIT}` : "Sin medición",
       icon: Gauge,
       accent: "bg-warning/10 text-warning",
     },

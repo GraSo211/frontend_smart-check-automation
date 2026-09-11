@@ -117,6 +117,48 @@ describe("server actions de datos del backend", () => {
     await expect(api.getAllProductionRuns()).rejects.toThrow("respuesta inválida para producción")
   })
 
+  it("descarga todas las páginas de producción y conserva más de 100 filas", async () => {
+    const runs = Array.from({ length: 101 }, (_, index) => ({ ...validRun, id: `l-${index}` }))
+    fetchMock.mockImplementation(async (url: string) => {
+      const page = new URL(url).searchParams.get("page") === "2" ? 2 : 1
+      return new Response(JSON.stringify({
+        success: true,
+        data: page === 1 ? runs.slice(0, 100) : runs.slice(100),
+        total: runs.length,
+        page,
+        pageSize: 100,
+      }), { status: 200 })
+    })
+
+    await expect(api.getAllProductionRuns()).resolves.toHaveLength(101)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1][0]).toContain("page=2&pageSize=100")
+  })
+
+  it("no devuelve producción parcial si falla una página posterior", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: [validRun], total: 101, page: 1, pageSize: 100 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("error", { status: 503, statusText: "Unavailable" }))
+
+    await expect(api.getAllProductionRuns()).rejects.toThrow("La API respondió con 503")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("expone el historial de dispositivo con metadatos y URL de página", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: [],
+      total: 41,
+      page: 2,
+      pageSize: 20,
+    }), { status: 200 }))
+
+    await expect(api.getDeviceHistoryPage("node/1", 2, 20)).resolves.toEqual({
+      items: [], total: 41, page: 2, pageSize: 20,
+    })
+    expect(fetchMock.mock.calls[0][0]).toContain("dispositivoId=node%2F1&page=2&pageSize=20")
+  })
+
   it.each([
     ["getAllProductionRuns", () => api.getAllProductionRuns(), "https://backend.example.test/api/v1/lotes-productivos?page=1&pageSize=100"],
     ["getDevices", () => api.getDevices(), "https://backend.example.test/api/v1/dispositivos"],
@@ -125,7 +167,7 @@ describe("server actions de datos del backend", () => {
     ["getLotesPorProducto", () => api.getLotesPorProducto("product/1", 3, 7), "https://backend.example.test/api/v1/lotes-productivos?productoId=product%2F1&page=3&pageSize=7"],
   ])("obtiene datos reales y conserva la URL de paginación para %s", async (_name, action, expectedUrl) => {
     const data = _name === "getLotesPorProducto"
-      ? { success: true, data: [], total: 0 }
+      ? { success: true, data: [], total: 0, page: 3, pageSize: 7 }
       : { success: true, data: [] }
     fetchMock.mockResolvedValue(new Response(JSON.stringify(data), { status: 200 }))
 
@@ -150,7 +192,11 @@ describe("server actions de datos del backend", () => {
     ["getProductosConParametros", () => api.getProductosConParametros()],
     ["getLotesPorProducto", () => api.getLotesPorProducto("product-1")],
   ])("conserva un resultado vacío válido en %s", async (_name, action) => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: [] }), { status: 200 }))
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(
+      _name === "getLotesPorProducto"
+        ? { success: true, data: [], total: 0, page: 1, pageSize: 20 }
+        : { success: true, data: [] },
+    ), { status: 200 }))
 
     const result = await action()
 
@@ -167,7 +213,7 @@ describe("server actions de datos del backend", () => {
     await expect(api.getProductosConParametros()).resolves.toEqual([product])
 
     const lote = { id: "batch-1", productoId: "product-1", turno: "mañana" }
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: [lote], total: 1 }), { status: 200 }))
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: [lote], total: 1, page: 2, pageSize: 10 }), { status: 200 }))
     await expect(api.getLotesPorProducto("product-1", 2, 10)).resolves.toEqual({
       items: [lote],
       total: 1,

@@ -12,6 +12,7 @@ import {
     type ParametroProductoRequest,
 } from "@/lib/parametros-producto"
 import { ApiError } from "@/lib/api-client"
+import { collectPaginatedPages, parseBackendPage, type BackendPage } from "@/lib/pagination"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
 const SESSION_COOKIE = "session_token"
@@ -49,46 +50,58 @@ function getResponseMessage(value: unknown): string {
         : "Error desconocido del servidor";
 }
 
+function validatePageParams(page: number, pageSize: number): void {
+    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+        throw new Error("Parámetros de paginación inválidos.")
+    }
+}
+
 export async function getAllProductionRuns(): Promise<ProductionRun[]> {
     const apiUrl = getApiUrl()
+    const collection = await collectPaginatedPages<ProductionRun>({
+        pageSize: 100,
+        getId: (run) => run.id,
+        fetchPage: async (page): Promise<BackendPage<ProductionRun>> => {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 8000)
+            try {
+                const response = await fetch(`${apiUrl}/api/v1/lotes-productivos?page=${page}&pageSize=100`, {
+                    headers: await getSessionHeaders(),
+                    cache: "no-store",
+                    signal: controller.signal,
+                })
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/lotes-productivos?page=1&pageSize=100`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
+                if (response.status === 401) {
+                    throw new ApiError(401, "Sesión expirada o no autenticado")
+                }
+                if (!response.ok) {
+                    throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+                }
 
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-        if (!isSuccessfulArrayResponse<ProductionRun>(result)) {
-            if (isRecord(result) && result.success === false) {
-                throw new Error(getResponseMessage(result));
+                const result: unknown = await response.json()
+                const pageResult = parseBackendPage<ProductionRun>(result, {
+                    requestedPage: page,
+                    requestedPageSize: 100,
+                    allowLegacyMetadata: true,
+                })
+                if (!pageResult) {
+                    if (isRecord(result) && result.success === false) throw new Error(getResponseMessage(result))
+                    throw new Error("La API devolvió una respuesta inválida para producción.")
+                }
+                const data = parseProductionPayload(pageResult.items)
+                if (data === null) throw new Error("La API devolvió una respuesta inválida para producción.")
+                return { ...pageResult, items: data }
+            } catch (e) {
+                if (e instanceof Error && e.name === "AbortError") {
+                    throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los datos de producción no están disponibles.")
+                }
+                throw e
+            } finally {
+                clearTimeout(timeout)
             }
-            throw new Error("La API devolvió una respuesta inválida para producción.");
-        }
-        const data = parseProductionPayload(result);
-        if (data === null) {
-            throw new Error("La API devolvió una respuesta inválida para producción.");
-        }
-        return data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los datos de producción no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+        },
+    })
+    return collection.items
 }
 
 export async function getDevices() {
@@ -135,6 +148,16 @@ export async function getDevices() {
 }
 
 export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize = 20): Promise<SpecificDevice[]> {
+    return (await getDeviceHistoryPageInternal(dispositivoId, page, pageSize, true)).items
+}
+
+async function getDeviceHistoryPageInternal(
+    dispositivoId: string,
+    page: number,
+    pageSize: number,
+    allowLegacyMetadata: boolean,
+): Promise<{ items: SpecificDevice[]; total: number; page: number; pageSize: number }> {
+    validatePageParams(page, pageSize)
     const apiUrl = getApiUrl()
 
     const controller = new AbortController();
@@ -159,13 +182,23 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
 
         const result: unknown = await response.json();
 
-        if (!isSuccessfulArrayResponse<SpecificDevice>(result)) {
+        const pageResult = parseBackendPage<SpecificDevice>(result, {
+            requestedPage: page,
+            requestedPageSize: pageSize,
+            allowLegacyMetadata,
+        })
+        if (!pageResult) {
             if (isRecord(result) && result.success === false) {
                 throw new Error(getResponseMessage(result));
             }
             throw new Error("La API devolvió una respuesta inválida para el historial del dispositivo.");
         }
-        return result.data;
+        return {
+            items: pageResult.items,
+            total: pageResult.total ?? pageResult.items.length,
+            page: pageResult.page,
+            pageSize: pageResult.pageSize,
+        }
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Historial no disponible.");
@@ -176,6 +209,15 @@ export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize
     } finally {
         clearTimeout(timeout);
     }
+}
+
+/** Additive paginated history contract for the device detail consumer. */
+export async function getDeviceHistoryPage(
+    dispositivoId: string,
+    page = 1,
+    pageSize = 20,
+): Promise<{ items: SpecificDevice[]; total: number; page: number; pageSize: number }> {
+    return getDeviceHistoryPageInternal(dispositivoId, page, pageSize, false)
 }
 
 
@@ -225,6 +267,7 @@ export async function getLotesPorProducto(
     page = 1,
     pageSize = 20,
 ): Promise<LotesPorProducto> {
+    validatePageParams(page, pageSize)
     const apiUrl = getApiUrl()
 
     const controller = new AbortController();
@@ -249,25 +292,22 @@ export async function getLotesPorProducto(
 
         const result: unknown = await response.json();
 
-        if (!isSuccessfulArrayResponse<LoteProductivo>(result)) {
+        const pageResult = parseBackendPage<LoteProductivo>(result, {
+            requestedPage: page,
+            requestedPageSize: pageSize,
+        })
+        if (!pageResult || pageResult.total === undefined) {
             if (isRecord(result) && result.success === false) {
                 throw new Error(getResponseMessage(result));
             }
             throw new Error("La API devolvió una respuesta inválida para el historial del producto.");
         }
 
-        const total = isRecord(result) && result.total !== undefined && result.total !== null
-            ? result.total
-            : result.data.length;
-        if (typeof total !== "number") {
-            throw new Error("La API devolvió una respuesta inválida para el historial del producto.");
-        }
-
         return {
-            items: result.data,
-            total,
-            page,
-            pageSize,
+            items: pageResult.items,
+            total: pageResult.total,
+            page: pageResult.page,
+            pageSize: pageResult.pageSize,
         };
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {

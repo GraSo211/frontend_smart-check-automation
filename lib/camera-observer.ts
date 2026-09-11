@@ -64,7 +64,6 @@ export class CameraObserverController {
   private watchdogTimer: TimerHandle | null = null
   private statsInFlight: { generation: number; epoch: number } | null = null
   private previousFramesDecoded: number | null = null
-  private statsSamples = 0
   private observationStartedAt: number | null = null
   private lastEvidenceAt: number | null = null
   private lastPublishedWallTime: number | null = null
@@ -182,7 +181,6 @@ export class CameraObserverController {
 
   private resetObservation() {
     this.previousFramesDecoded = null
-    this.statsSamples = 0
     this.observationStartedAt = this.visible ? this.now() : null
     this.lastEvidenceAt = null
     this.lastPublishedWallTime = null
@@ -246,7 +244,6 @@ export class CameraObserverController {
           framesDecoded = report.framesDecoded
         }
       })
-      this.statsSamples += 1
       if (framesDecoded !== null && this.previousFramesDecoded !== null && framesDecoded > this.previousFramesDecoded) this.recordFrame(this.now())
       if (framesDecoded !== null) this.previousFramesDecoded = framesDecoded
     } catch {
@@ -257,8 +254,7 @@ export class CameraObserverController {
   }
 
   private watchdog(generation: number, epoch: number) {
-    if (!this.isActive(generation, epoch) || this.observationStartedAt === null || !this.hasLiveTrack()) return
-    if (!this.video?.requestVideoFrameCallback && this.statsSamples < 2) return
+    if (!this.isActive(generation, epoch) || this.observationStartedAt === null) return
     const reference = this.lastEvidenceAt ?? this.observationStartedAt
     if (this.now() - reference > CAMERA_EVIDENCE_TTL_MS) this.onStalled()
   }

@@ -1,9 +1,49 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CAMERA_EVIDENCE_TTL_MS, canRequestCameraFrame, getCameraHealth, getReconnectDelay, isCameraEvidenceFresh, isCurrentCameraGeneration, shouldPublishCameraEvidence, startCameraSessionDelete } from "@/lib/camera-health"
 
 describe("reconexión de cámara", () => {
   it("usa backoff progresivo y mantiene el máximo en 10 segundos", () => {
     expect([0, 1, 2, 3, 4].map(getReconnectDelay)).toEqual([1000, 2000, 5000, 10000, 10000])
+  })
+})
+
+describe("limpieza de sesión de cámara", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it("no aborta el DELETE antes de 8 segundos y lo aborta al cumplirlos", () => {
+    const fetchMock = vi.fn<(location: string, request: RequestInit) => Promise<Response>>(() => new Promise<Response>(() => {}))
+    vi.stubGlobal("fetch", fetchMock)
+
+    expect(startCameraSessionDelete("https://camera.test/session")).toBeUndefined()
+    const [, request] = fetchMock.mock.calls[0]
+    const signal = request.signal as AbortSignal
+
+    vi.advanceTimersByTime(7_999)
+    expect(signal.aborted).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(signal.aborted).toBe(true)
+  })
+
+  it.each([
+    ["resuelto", () => Promise.resolve({} as Response)],
+    ["rechazado", () => Promise.reject(new Error("session cleanup failed"))],
+  ])("limpia el timer cuando el DELETE es %s sin propagar errores", async (_description, makeResult) => {
+    const fetchMock = vi.fn(() => makeResult())
+    vi.stubGlobal("fetch", fetchMock)
+
+    startCameraSessionDelete("https://camera.test/session")
+    expect(vi.getTimerCount()).toBe(1)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 
@@ -48,13 +88,4 @@ describe("evidencia de salud de cámara", () => {
     expect(canRequestCameraFrame(42)).toBe(false)
   })
 
-  it("inicia el DELETE de sesión sin bloquear la limpieza local", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({} as Response))
-    vi.stubGlobal("fetch", fetchMock)
-    expect(startCameraSessionDelete("https://camera.test/session")).toBeUndefined()
-    expect(fetchMock).toHaveBeenCalledWith("https://camera.test/session", expect.objectContaining({ method: "DELETE" }))
-    await Promise.resolve()
-    await Promise.resolve()
-    vi.unstubAllGlobals()
-  })
 })

@@ -1,20 +1,23 @@
 import type { Device, SpecificDevice } from "@/lib/devices-data"
 
-export type TelemetryLevel = "normal" | "warning" | "critical"
+export type TelemetryLevel = "normal" | "warning" | "critical" | "unknown"
 
-export function levelFor(value: number, warning: number, critical: number): TelemetryLevel {
+export function levelFor(value: number | null | undefined, warning: number, critical: number): TelemetryLevel {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "unknown"
   if (value >= critical) return "critical"
   if (value >= warning) return "warning"
   return "normal"
 }
 
-export function ramUsedMb(total?: number, free?: number) {
-  if (typeof total !== "number" || typeof free !== "number" || total <= 0) return undefined
+export function ramUsedMb(total?: number | null, free?: number | null) {
+  if (typeof total !== "number" || !Number.isFinite(total) ||
+    typeof free !== "number" || !Number.isFinite(free) || total <= 0) return undefined
   return Math.max(0, total - free)
 }
 
-export function percent(value: number, total?: number) {
-  if (typeof total !== "number" || total <= 0) return undefined
+export function percent(value: number | null | undefined, total?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) ||
+    typeof total !== "number" || !Number.isFinite(total) || total <= 0) return undefined
   return Math.min(100, Math.max(0, (value / total) * 100))
 }
 
@@ -24,16 +27,24 @@ export function formatSnapshot(value: number | undefined, suffix = "%") {
     : "—"
 }
 
-export type TelemetrySample = { dispositivoId: string; receivedAt: string }
+export type TelemetrySample = { dispositivoId: string; receivedAt: string; id?: string | null }
 
-/** Deduplicates by device/report time. Later groups win equal timestamps. */
+/** Deduplicates by device/report id, falling back to device/report time. */
 export function mergeTelemetrySamples<T extends TelemetrySample>(...groups: T[][]): T[] {
   const unique = new Map<string, T>()
   for (const group of groups) for (const sample of group) {
-    const key = `${sample.dispositivoId}|${sample.receivedAt}`
+    const key = sample.id ? `${sample.dispositivoId}|id:${sample.id}` : `${sample.dispositivoId}|at:${sample.receivedAt}`
     unique.set(key, sample)
   }
-  return [...unique.values()].sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
+  return [...unique.values()].map((sample, index) => ({ sample, index })).sort((a, b) => {
+    const aTime = Date.parse(a.sample.receivedAt)
+    const bTime = Date.parse(b.sample.receivedAt)
+    const aValid = Number.isFinite(aTime)
+    const bValid = Number.isFinite(bTime)
+    if (aValid && bValid && aTime !== bTime) return bTime - aTime
+    if (aValid !== bValid) return aValid ? -1 : 1
+    return a.index - b.index
+  }).map(({ sample }) => sample)
 }
 
 /** Keeps incoming live samples when a slower history request resolves. */

@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest"
 import { createCameraObserver } from "@/lib/camera-observer"
+import { CAMERA_EVIDENCE_TTL_MS } from "@/lib/camera-health"
 
 type FrameCallback = (now: number, metadata: unknown) => void
+type TestStatsReport = { type?: string; kind?: string; mediaType?: string; framesDecoded?: number }
 
 function makeVideo() {
   let nextHandle = 0
@@ -30,7 +32,7 @@ function liveTrack() {
 }
 
 function stats(framesDecoded: number) {
-  return { forEach: (callback: (report: unknown) => void) => callback({ type: "inbound-rtp", kind: "video", framesDecoded }) }
+  return { forEach: (callback: (report: TestStatsReport) => void) => callback({ type: "inbound-rtp", kind: "video", framesDecoded }) }
 }
 
 describe("CameraObserverController", () => {
@@ -145,6 +147,85 @@ describe("CameraObserverController", () => {
     observer.setConnected()
     media.invoke(media.pending())
     expect(onEvidence).not.toHaveBeenCalled()
+  })
+
+  it("marca stall si el peer queda conectado sin track durante el TTL", async () => {
+    const onEvidence = vi.fn()
+    const onStalled = vi.fn()
+    const observer = createCameraObserver({ onEvidence, onStalled })
+    observer.start(1, makeVideo().video, {})
+    observer.setConnected()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS + 2_000)
+
+    expect(onEvidence).not.toHaveBeenCalled()
+    expect(onStalled).toHaveBeenCalled()
+  })
+
+  it("marca stall si un track live no entrega callbacks de frame", async () => {
+    const media = makeVideo()
+    const onEvidence = vi.fn()
+    const onStalled = vi.fn()
+    const observer = createCameraObserver({ onEvidence, onStalled })
+    observer.start(1, media.video, {})
+    observer.setTrack(liveTrack())
+    observer.setConnected()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS + 2_000)
+
+    expect(onEvidence).not.toHaveBeenCalled()
+    expect(onStalled).toHaveBeenCalled()
+  })
+
+  it.each([
+    ["queda pendiente", () => new Promise<ReturnType<typeof stats>>(() => {})],
+    ["es rechazada", () => Promise.reject(new Error("stats unavailable"))],
+  ])("marca stall si getStats %s indefinidamente", async (_description, getStats) => {
+    const onEvidence = vi.fn()
+    const onStalled = vi.fn()
+    const observer = createCameraObserver({ onEvidence, onStalled })
+    observer.start(1, { cancelVideoFrameCallback: undefined }, { getStats })
+    observer.setTrack(liveTrack())
+    observer.setConnected()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS + 2_000)
+
+    expect(onEvidence).not.toHaveBeenCalled()
+    expect(onStalled).toHaveBeenCalled()
+  })
+
+  it("marca stall si no existe getStats en el fallback", async () => {
+    const onEvidence = vi.fn()
+    const onStalled = vi.fn()
+    const observer = createCameraObserver({ onEvidence, onStalled })
+    observer.start(1, { cancelVideoFrameCallback: undefined }, {})
+    observer.setTrack(liveTrack())
+    observer.setConnected()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS + 2_000)
+
+    expect(onEvidence).not.toHaveBeenCalled()
+    expect(onStalled).toHaveBeenCalled()
+  })
+
+  it("reinicia el TTL al recibir evidencia real antes del vencimiento", async () => {
+    const media = makeVideo()
+    const onEvidence = vi.fn()
+    const onStalled = vi.fn()
+    const observer = createCameraObserver({ onEvidence, onStalled })
+    observer.start(1, media.video, {})
+    observer.setTrack(liveTrack())
+    observer.setConnected()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS - 1_000)
+    media.invoke(media.pending())
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(onEvidence).toHaveBeenCalledWith(CAMERA_EVIDENCE_TTL_MS - 1_000)
+    expect(onStalled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(CAMERA_EVIDENCE_TTL_MS - 1_000)
+    expect(onStalled).toHaveBeenCalled()
   })
 
   it("dispose cancela callbacks, publicación pendiente y watchdog", async () => {

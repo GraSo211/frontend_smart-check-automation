@@ -8,6 +8,7 @@ import { OvenTemp } from "@/components/shared/oven-temp"
 import { PageButton } from "@/components/shared/page-button"
 import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import { formatKg, formatNumber, formatWindow, qualityRate } from "@/lib/format"
+import { CONVEYOR_SPEED_UNIT } from "@/lib/production-data"
 import type { ProductionRun } from "@/lib/production-data"
 
 const PAGE_SIZE = 10
@@ -179,7 +180,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
                         {hasCrudas ? formatNumber(run.crudas!) : "—"}
                       </span>
                       <div className="text-xs text-muted-foreground">
-                        {hasCrudas && run.crudosKg ? formatKg(run.crudosKg) : "—"}
+                        {hasCrudas && run.crudosKg !== null ? formatKg(run.crudosKg) : "—"}
                       </div>
                     </td>
 
@@ -194,7 +195,7 @@ export function SupervisionTable({ runs }: SupervisionTableProps) {
 
                     <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
                       {run.velocidadCinta.toFixed(2)}
-                      <span className="ml-1 text-xs text-muted-foreground">m/min</span>
+                      <span className="ml-1 text-xs text-muted-foreground">{CONVEYOR_SPEED_UNIT}</span>
                     </td>
                   </tr>
                 )

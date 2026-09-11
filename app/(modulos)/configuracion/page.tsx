@@ -13,12 +13,24 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 interface PageProps {
-  searchParams: Promise<{ productoId?: string | string[] }>
+  searchParams: Promise<{ productoId?: string | string[]; page?: string | string[]; pageSize?: string | string[] }>
+}
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function safePage(value: string | string[] | undefined) {
+  const parsed = Number(firstParam(value))
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1
 }
 
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
-  const productoId = typeof params.productoId === "string" ? params.productoId : null
+  const productoId = firstParam(params.productoId) ?? null
+  const page = safePage(params.page)
+  const requestedPageSize = Number(firstParam(params.pageSize))
+  const pageSize = requestedPageSize === 20 ? 20 : 10
 
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
@@ -38,7 +50,13 @@ export default async function Page({ searchParams }: PageProps) {
   let historialError: string | null = null
   if (selectedProducto) {
     try {
-      lotes = await getLotesPorProducto(selectedProducto.productoId, 1, 100)
+      lotes = await getLotesPorProducto(selectedProducto.productoId, page, pageSize)
+      const lastPage = Math.max(1, Math.ceil(lotes.total / pageSize))
+      if (page > lastPage) {
+        // A deletion can invalidate the URL between navigations. Re-query the
+        // clamped page instead of showing rows returned for the old offset.
+        lotes = await getLotesPorProducto(selectedProducto.productoId, lastPage, pageSize)
+      }
     } catch (error) {
       historialError = error instanceof Error ? error.message : "No se pudo consultar el historial."
     }
@@ -87,6 +105,10 @@ export default async function Page({ searchParams }: PageProps) {
             <ParametersHistory
               lotes={lotes?.items ?? []}
               productoNombre={selectedProducto?.productoNombre ?? ""}
+              productoId={selectedProducto?.productoId ?? null}
+              total={lotes?.total ?? 0}
+              page={lotes?.page ?? page}
+              pageSize={lotes?.pageSize ?? pageSize}
               error={historialError}
             />
           </section>

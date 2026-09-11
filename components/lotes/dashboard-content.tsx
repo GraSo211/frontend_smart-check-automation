@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { CircleAlert } from "lucide-react"
 import { KpiCards } from "@/components/lotes/kpi-cards"
 import { SupervisionTable } from "@/components/lotes/supervision-table"
 import { FiltersBar, DEFAULT_FILTERS, type FiltersState } from "@/components/lotes/filters-bar"
 import type { ProductionRun } from "@/lib/production-data"
 import { useMonitoringActions, useProductionData } from "@/components/monitoring-provider"
+import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
 
 interface DashboardContentProps {
   runs: ProductionRun[]
@@ -14,17 +15,29 @@ interface DashboardContentProps {
   initialError?: string | null
 }
 
+function hasInvalidTempRange(filters: FiltersState): boolean {
+  return (
+    filters.tempMin !== "" &&
+    filters.tempMax !== "" &&
+    Number(filters.tempMin) > Number(filters.tempMax)
+  )
+}
+
 function filterRuns(runs: ProductionRun[], filters: FiltersState): ProductionRun[] {
   if (!Array.isArray(runs) || runs.length === 0) return []
+  const tempRangeInvalid = hasInvalidTempRange(filters)
   return runs.filter((run) => {
     if (filters.search) {
       const q = filters.search.toLowerCase()
       if (!run.productoNombre.toLowerCase().includes(q)) return false
     }
     if (filters.turno !== "todos" && run.turno !== filters.turno) return false
-    const avgTemp = (run.tempHorno1 + run.tempHorno2) / 2
-    if (filters.tempMin !== "" && avgTemp < Number(filters.tempMin)) return false
-    if (filters.tempMax !== "" && avgTemp > Number(filters.tempMax)) return false
+    // Un rango inválido (mín > máx) no se aplica para evitar un vacío silencioso.
+    if (!tempRangeInvalid) {
+      const avgTemp = (run.tempHorno1 + run.tempHorno2) / 2
+      if (filters.tempMin !== "" && avgTemp < Number(filters.tempMin)) return false
+      if (filters.tempMax !== "" && avgTemp > Number(filters.tempMax)) return false
+    }
     return true
   })
 }
@@ -34,29 +47,64 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt, initialError =
   const production = useProductionData(initialRuns, lastSyncAt, initialError)
   const actions = useMonitoringActions()
   const refreshProduction = production.refresh
+  const [streamState, setStreamState] = useState<ConnectionState>("unknown")
+  const [streamRetry, setStreamRetry] = useState(0)
+  const streamEpochRef = useRef(0)
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const eventSource = new EventSource('/api/lotes/events')
-    eventSource.addEventListener("lote.created", (event) => {
-      try {
-        const payload: unknown = JSON.parse((event as MessageEvent).data)
-        // Validation and synchronization confirmation both live in the provider.
-        actions.acceptLoteEvent(payload)
-      } catch { /* Malformed SSE data is ignored and never confirms synchronization. */ }
-    })
-    eventSource.onopen = () => {
-      actions.streamState("lotes", "open")
-      void refreshProduction()
+    let disposed = false
+    let eventSource: EventSource | null = null
+
+    const syncConnection = (current: EventSource) => {
+      const syncEpoch = ++streamEpochRef.current
+      setStreamState("reconnecting")
+      void (async () => {
+        await refreshProduction()
+        const second = await refreshProduction()
+        if (!disposed && syncEpoch === streamEpochRef.current && document.visibilityState === "visible" && current.readyState === (EventSource.OPEN ?? 1) && second === true) setStreamState("connected")
+      })()
     }
-    eventSource.onerror = () => {
-      actions.streamState("lotes", "error", "El stream de lotes no está disponible.")
+
+    const createStream = () => {
+      ++streamEpochRef.current
+      const current = new EventSource('/api/lotes/events')
+      eventSource = current
+      current.addEventListener("lote.created", (event) => {
+        try {
+          const payload: unknown = JSON.parse((event as MessageEvent).data)
+          // Validation and synchronization confirmation both live in the provider.
+          actions.acceptLoteEvent(payload)
+        } catch { /* Malformed SSE data is ignored and never confirms synchronization. */ }
+      })
+      current.onopen = () => {
+        actions.streamState("lotes", "open")
+        syncConnection(current)
+      }
+      current.onerror = () => {
+        streamEpochRef.current += 1
+        setStreamState(current.readyState === EventSource.CLOSED ? "disconnected" : "reconnecting")
+        actions.streamState("lotes", "error", "El stream de lotes no está disponible.")
+      }
     }
+    createStream()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        streamEpochRef.current += 1
+        setStreamState("reconnecting")
+      } else if (eventSource?.readyState === (EventSource.OPEN ?? 1)) {
+        syncConnection(eventSource)
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
-      eventSource.close()
+      disposed = true
+      streamEpochRef.current += 1
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      eventSource?.close()
       actions.streamState("lotes", "closed")
     }
-  }, [actions, refreshProduction])
+  }, [actions, refreshProduction, streamRetry])
 
   const filteredRuns = useMemo(() => filterRuns(production.runs, filters), [filters, production.runs])
 
@@ -88,12 +136,14 @@ export function DashboardContent({ runs: initialRuns, lastSyncAt, initialError =
           No hay datos de producción registrados para mostrar.
         </div>
       )}
+      <div className="flex justify-end"><ConnectionIndicator state={streamState} label="Lotes" onRetry={() => setStreamRetry((retry) => retry + 1)} disabled={production.loading} /></div>
       <KpiCards runs={filteredRuns} />
       <FiltersBar
         filters={filters}
         onChange={setFilters}
         resultsCount={filteredRuns.length}
         totalCount={production.runs.length}
+        tempRangeInvalid={hasInvalidTempRange(filters)}
       />
       <SupervisionTable runs={filteredRuns} />
     </div>

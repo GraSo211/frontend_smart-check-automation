@@ -167,4 +167,17 @@ describe('proxies internos de monitoreo', () => {
     await Promise.resolve()
     expect(cancelled).toBe(true)
   })
+
+  it('conserva el status, body y content-type upstream cuando SSE responde no-2xx', async () => {
+    fetchMock.mockResolvedValue(
+      upstreamResponse('{"message":"backend caído"}', 503, 'application/json'),
+    )
+
+    const response = await proxyMonitoringEvents(request(), '/events')
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(await response.json()).toEqual({ message: 'backend caído' })
+  })
 })

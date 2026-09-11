@@ -31,3 +31,6 @@ export interface ProductionResponse {
   pageSize: number
   totalPages: number
 }
+
+// Confirmed by database/schema.sql:111 in the backend.
+export const CONVEYOR_SPEED_UNIT = "m/s"

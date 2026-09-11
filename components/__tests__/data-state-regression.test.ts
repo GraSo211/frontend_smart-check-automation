@@ -100,4 +100,17 @@ describe("configuración con fallos parciales", () => {
     expect(html).toContain("param-1")
     expect(html).toContain("historial no disponible")
   })
+
+  it("reconsulta la última página si el total redujo una página solicitada", async () => {
+    mocks.getProductosConParametros.mockResolvedValueOnce([product])
+    mocks.getLotesPorProducto
+      .mockResolvedValueOnce({ items: [{ id: "wrong" }], total: 101, page: 999, pageSize: 10 })
+      .mockResolvedValueOnce({ items: [{ id: "last" }], total: 101, page: 11, pageSize: 10 })
+    const { default: Page } = await import("@/app/(modulos)/configuracion/page")
+    const html = renderedProps(await Page({ searchParams: Promise.resolve({ productoId: "prod-1", page: "999", pageSize: "10" }) }))
+    expect(mocks.getLotesPorProducto).toHaveBeenLastCalledWith("prod-1", 11, 10)
+    expect(html).toContain('"page":11')
+    expect(html).toContain("last")
+    expect(html).not.toContain("wrong")
+  })
 })

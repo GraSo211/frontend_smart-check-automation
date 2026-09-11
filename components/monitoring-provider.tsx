@@ -14,9 +14,13 @@ import type { MonitoringView, NodeObservation, ServiceStatus, SourceSync } from 
 import { recordSourceDataEvent, recordSourceQuery } from '@/lib/sync-store'
 import { mergeDeviceUpdate, reconcileDeviceSnapshot } from '@/lib/telemetry'
 import { isRecord, parseDeviceEventPayload, parseDevicesPayload, parseProductionPayload } from '@/lib/monitoring-runtime'
+import { parseBackendPage, parseCompleteCollection } from '@/lib/pagination'
 
 const PROBE_INTERVAL_MS = 30_000
 const VISUAL_REVIEW_MS = 5_000
+// This timeout covers the browser request to the all-pages route. A very
+// large offset collection can exceed 8s and be reported as incomplete; the
+// provider deliberately keeps existing data instead of accepting partial data.
 const REQUEST_TIMEOUT_MS = 8_000
 
 type StreamName = 'lotes' | 'nodos'
@@ -123,6 +127,21 @@ function productionPayload(payload: unknown): ProductionRun | null {
   return parseProductionPayload([value])?.[0] ?? null
 }
 
+function productionSnapshot(payload: unknown): ProductionRun[] | null {
+  const complete = parseCompleteCollection<ProductionRun>(payload, (run) => run.id)
+  if (complete) return parseProductionPayload(complete.items)
+
+  // Keep finite legacy fixtures useful in tests/older deployments, but never
+  // certify a full page without metadata as a complete collection.
+  const legacy = parseBackendPage<ProductionRun>(payload, {
+    requestedPage: 1,
+    requestedPageSize: 100,
+    allowLegacyMetadata: true,
+  })
+  if (!legacy || legacy.hasMetadata || legacy.items.length >= 100) return null
+  return parseProductionPayload(legacy.items)
+}
+
 function MonitoringProviderRuntime({ children }: { children?: React.ReactNode }) {
   const [state, setState] = useState(createInitialMonitoringState)
   const [nodes, setNodes] = useState<Device[] | null>(null)
@@ -221,8 +240,11 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
         const nextObservations: Record<string, NodeObservation> = Object.fromEntries(
           nextDevices.map((device) => [device.dispositivoId, { device, observedAt: requestedSnapshotAt }]),
         )
-        for (const event of nodeEventsRef.current) {
-          if (event.version <= requestedNodeVersion) continue
+        // Keep every uncommitted event until the snapshot has been reconciled.
+        // A failed/cancelled request must leave the journal available to the
+        // next request, and a slow snapshot must not roll back a live update.
+        const eventsToReplay = nodeEventsRef.current
+        for (const event of eventsToReplay) {
           const existing = nextObservations[event.device.dispositivoId]?.device
           nextObservations[event.device.dispositivoId] = {
             device: existing ? mergeObservedDevice(existing, event.device) : event.device,
@@ -231,6 +253,9 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
         }
         nextDevices = Object.values(nextObservations).map((observation) => observation.device)
         if (!active(generation)) return null
+        // Only prune after the reconciled result is accepted. Events arriving
+        // after this synchronous reconciliation remain in the journal.
+        nodeEventsRef.current = nodeEventsRef.current.filter((event) => event.version > requestedNodeVersion)
         const checkedAt = requestedSnapshotAt
         nodesRef.current = nextDevices
         nodeObservationsRef.current = nextObservations
@@ -265,7 +290,7 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
     const version = nodeVersionRef.current + 1
     nodeVersionRef.current = version
     const observedAt = new Date().toISOString()
-    nodeEventsRef.current = [...nodeEventsRef.current.slice(-99), { version, device: update, observedAt }]
+    nodeEventsRef.current = [...nodeEventsRef.current, { version, device: update, observedAt }]
     const current = nodesRef.current ?? []
     const existing = current.find((device) => device.dispositivoId === update.dispositivoId)
     const observedDevice = existing ? mergeObservedDevice(existing, update) : update
@@ -441,7 +466,7 @@ export function useProductionData(
   initialRuns: ProductionRun[],
   initialLastSyncAt: string | null,
   initialError?: string | null,
-): { runs: ProductionRun[]; lastSyncAt: string | null; error: string | null; loading: boolean; refresh: () => Promise<void> } {
+): { runs: ProductionRun[]; lastSyncAt: string | null; error: string | null; loading: boolean; refresh: () => Promise<boolean> } {
   const context = useContext(MonitoringContext)
   const actions = context?.actions ?? fallbackActions
   const monitoring = context?.view ?? fallbackView
@@ -454,7 +479,7 @@ export function useProductionData(
   const acceptedSnapshotAtRef = useRef<string | null>(
     initialLastSyncAt && Number.isFinite(Date.parse(initialLastSyncAt)) ? initialLastSyncAt : null,
   )
-  const requestRef = useRef<Promise<void> | null>(null)
+  const requestRef = useRef<Promise<boolean> | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
   const generationRef = useRef(0)
   const mountedRef = useRef(false)
@@ -490,7 +515,8 @@ export function useProductionData(
     if (!hasContext) return
     return actions.subscribeProduction((run) => {
       eventVersionRef.current += 1
-      eventsRef.current = [...eventsRef.current.slice(-99), {
+      // Keep the whole journal until the all-pages snapshot is accepted.
+      eventsRef.current = [...eventsRef.current, {
         version: eventVersionRef.current,
         run,
         observedAt: new Date().toISOString(),
@@ -503,41 +529,42 @@ export function useProductionData(
     })
   }, [actions, hasContext])
 
-  const refresh = useCallback(async () => {
-    if (!hasContext || typeof document === 'undefined' || document.visibilityState !== 'visible') return
+  const refresh = useCallback(async (): Promise<boolean> => {
+    if (!hasContext || !mountedRef.current || typeof document === 'undefined' || document.visibilityState !== 'visible') return false
     if (requestRef.current) return requestRef.current
     const generation = generationRef.current
     const controller = new AbortController()
     controllerRef.current = controller
-    const requestedEventVersion = eventVersionRef.current
     const requestedSnapshotAt = new Date().toISOString()
-    let request: Promise<void> | null = null
+    let request: Promise<boolean> | null = null
     request = (async () => {
       setLoading(true)
       try {
         const { response, payload } = await fetchJson('/api/lotes/snapshot', controller.signal)
-        if (!mountedRef.current || generationRef.current !== generation || document.visibilityState !== 'visible') return
+        if (!mountedRef.current || generationRef.current !== generation || document.visibilityState !== 'visible') return false
         if (!response.ok) throw new Error(`La API respondió con ${response.status}.`)
-        const nextRuns = parseProductionPayload(payload)
+        const nextRuns = productionSnapshot(payload)
         if (!nextRuns) throw new Error('La API de lotes devolvió una respuesta inválida.')
         const requestedAt = Date.parse(requestedSnapshotAt)
         const acceptedAt = acceptedSnapshotAtRef.current ? Date.parse(acceptedSnapshotAtRef.current) : NaN
-        if (Number.isFinite(acceptedAt) && requestedAt < acceptedAt) return
+        if (Number.isFinite(acceptedAt) && requestedAt < acceptedAt) return false
         const merged = new Map(nextRuns.map((run) => [run.id, run]))
+        // API first, then every live event retained during the request. The
+        // latter wins so a slower HTTP snapshot cannot roll back SSE data.
         for (const event of eventsRef.current) {
-          if (event.version > requestedEventVersion) {
-            merged.set(event.run.id, event.run)
-          }
+          merged.set(event.run.id, event.run)
         }
         acceptedSnapshotAtRef.current = requestedSnapshotAt
         eventsRef.current = eventsRef.current.filter((event) => Date.parse(event.observedAt) > requestedAt)
         setRuns([...merged.values()])
         setError(null)
         actions.confirmSourceQuery('lotes', requestedSnapshotAt)
+        return true
       } catch (nextError) {
         if (mountedRef.current && generationRef.current === generation && !(nextError instanceof Error && nextError.name === 'AbortError')) {
           setError(nextError instanceof Error ? nextError.message : 'No se pudo cargar la producción.')
         }
+        return false
       } finally {
         if (mountedRef.current && generationRef.current === generation) setLoading(false)
         if (requestRef.current === request) requestRef.current = null
