@@ -2,9 +2,21 @@
 
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
-import type { CreateDispositivoRequest, UpdateDispositivoRequest, Device, SpecificDevice } from "@/lib/devices-data";
+import type {
+    Device,
+    EnrollmentCancelResult,
+    EnrollmentCreateRequest,
+    EnrollmentInvitation,
+    SpecificDevice,
+    UpdateDispositivoRequest,
+} from "@/lib/devices-data";
 import type { ProductionRun } from "@/lib/production-data";
-import { parseDevicesPayload, parseProductionPayload } from "@/lib/monitoring-runtime";
+import { parseDevice, parseDevicesPayload, parseProductionPayload } from "@/lib/monitoring-runtime";
+import {
+    parseEnrollmentCancel,
+    parseEnrollmentInvitation,
+    parseEnrollmentInvitations,
+} from "@/lib/enrollment";
 import {
     type LotesPorProducto,
     type LoteProductivo,
@@ -363,9 +375,33 @@ export async function updateParametrosProducto(
     }
 }
 
-// Registers a new Raspberry Pi node in the catalog (POST /api/v1/dispositivos).
-// The backend generates the device UUID, which the Pi must later send as
-// dispositivoId in its pings — the UI surfaces it after creation.
+// ─── Catálogo de nodos: metadatos y ciclo de vida de credenciales ────────────
+//
+// La creación directa de dispositivos ya no existe (POST/DELETE
+// /api/v1/dispositivos responden 405). El alta pasa por una invitación de
+// aprovisionamiento de uso único que la Raspberry consume. Estas acciones
+// mantienen al backend como autoridad: sólo traducen el envelope de error y
+// revalidan la ruta /nodos.
+
+export type DeviceActionResult<T> =
+    | { ok: true; data: T }
+    | { ok: false; errors: string[]; code?: string };
+
+// Códigos de error del backend traducidos a mensajes es-AR claros.
+const ENROLLMENT_ERROR_MESSAGES: Record<string, string> = {
+    validation_error: "Revisá los datos ingresados.",
+    enrollment_consumed: "La invitación ya fue consumida por un dispositivo.",
+    enrollment_unavailable: "La invitación ya no está disponible (venció o fue cancelada).",
+    invalid_transition: "La operación no es válida para el estado actual del nodo.",
+    invalid_lifecycle_transition: "La operación no es válida para el estado actual del nodo.",
+    device_not_found: "El dispositivo no existe.",
+    credential_revoked: "La credencial fue revocada.",
+    credential_used: "La credencial ya fue utilizada.",
+    human_auth_required: "Se requiere una sesión con rol Supervisor o Administrador.",
+    unauthorized: "Sesión expirada o permisos insuficientes.",
+    rate_limited: "Demasiadas solicitudes. Esperá un momento e intentá de nuevo.",
+    internal_error: "Ocurrió un error interno en el servidor.",
+};
 
 // Normalizes the optional camera URL sent to the backend: trim, and drop an
 // empty value so the field is omitted from the JSON body.
@@ -375,27 +411,53 @@ function normalizeWhepUrl(value: string | undefined): string | undefined {
     return trimmed ? trimmed : undefined
 }
 
-// Coerces the backend EstadoDispositivo payload of a freshly created node into
-// the safe Device shape used by the UI.
-function normalizeCreatedDispositivo(raw: unknown): Device | null {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const dispositivoId = typeof r.dispositivoId === "string" ? r.dispositivoId : ""
-  if (!dispositivoId) return null
-
-  const whepUrl = normalizeWhepUrl(typeof r.whepUrl === "string" ? r.whepUrl : undefined)
-  return {
-    dispositivoId,
-    nombre: typeof r.nombre === "string" ? r.nombre : "Nodo",
-    ubicacion: typeof r.ubicacion === "string" ? r.ubicacion : "—",
-    ...(whepUrl ? { whepUrl } : {}),
-    estado: r.estado === "online" ? "online" : "offline",
-    lastSeen: typeof r.lastSeen === "string" ? r.lastSeen : "",
-  }
+function errorCodeOf(result: unknown): string | null {
+    if (!isRecord(result)) return null
+    const errors = result.errors
+    if (isRecord(errors) && typeof errors.code === "string" && errors.code) return errors.code
+    return null
 }
 
-export async function createDispositivo(
-    payload: CreateDispositivoRequest,
-): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
+// The backend error envelope carries `errors:{code}`. Legacy endpoints may send
+// an array of strings instead; both shapes are handled.
+function errorsFromResponse(
+    result: unknown,
+    response: Response,
+): { errors: string[]; code?: string } {
+    const code = errorCodeOf(result)
+    if (code && ENROLLMENT_ERROR_MESSAGES[code]) {
+        return { errors: [ENROLLMENT_ERROR_MESSAGES[code]], code }
+    }
+    if (isRecord(result) && Array.isArray(result.errors)) {
+        const list = result.errors.map(String).filter(Boolean)
+        if (list.length > 0) return { errors: list, ...(code ? { code } : {}) }
+    }
+    if (isRecord(result) && typeof result.message === "string" && result.message) {
+        return { errors: [result.message], ...(code ? { code } : {}) }
+    }
+    if (response.status === 401 || response.status === 403) {
+        return { errors: [ENROLLMENT_ERROR_MESSAGES.unauthorized], code: "unauthorized" }
+    }
+    if (response.status === 429) {
+        return { errors: [ENROLLMENT_ERROR_MESSAGES.rate_limited], code: "rate_limited" }
+    }
+    return {
+        errors: [`La API respondió con ${response.status}: ${response.statusText}`],
+        ...(code ? { code } : {}),
+    }
+}
+
+interface DeviceMutationOptions<T> {
+    path: string
+    method: "POST" | "PUT"
+    body?: unknown
+    parse: (data: unknown) => T | null
+    invalidMessage: string
+}
+
+// Shared POST/PUT helper: cookie-forwarded, no-store, 8s timeout, revalidates
+// the /nodos route on success and translates the error envelope.
+async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<DeviceActionResult<T>> {
     if (!API_URL) {
         return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
     }
@@ -403,30 +465,24 @@ export async function createDispositivo(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
-            method: "POST",
+        const response = await fetch(`${API_URL}${options.path}`, {
+            method: options.method,
             headers: await getSessionHeaders(),
-            body: JSON.stringify({ ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) }),
+            body: JSON.stringify(options.body ?? {}),
             cache: "no-store",
             signal: controller.signal,
         });
 
-        const result = await response.json().catch(() => null);
+        const result: unknown = await response.json().catch(() => null);
 
-        if (response.ok && result?.success) {
-            const data = normalizeCreatedDispositivo(result.data)
-            if (!data) {
-                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
-            }
+        if (response.ok && isRecord(result) && result.success === true) {
+            const data = options.parse(result.data);
+            if (data === null) return { ok: false, errors: [options.invalidMessage] };
             revalidatePath("/nodos");
             return { ok: true, data };
         }
 
-        const errors =
-            Array.isArray(result?.errors) && result.errors.length > 0
-                ? result.errors.map(String)
-                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
-        return { ok: false, errors };
+        return { ok: false, ...errorsFromResponse(result, response) };
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
@@ -435,89 +491,126 @@ export async function createDispositivo(
     } finally {
         clearTimeout(timeout);
     }
+}
+
+// Invitaciones pendientes de aprovisionamiento (lectura: cualquier rol).
+export async function getEnrollmentInvitations(): Promise<EnrollmentInvitation[]> {
+    const apiUrl = getApiUrl();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${apiUrl}/api/v1/dispositivos/enrollments`, {
+            headers: await getSessionHeaders(),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
+        if (!response.ok) {
+            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
+        }
+
+        const result: unknown = await response.json();
+        const data = parseEnrollmentInvitations(result);
+        if (data === null) {
+            if (isRecord(result) && result.success === false) {
+                throw new Error(getResponseMessage(result));
+            }
+            throw new Error("La API devolvió una respuesta inválida para las invitaciones pendientes.");
+        }
+        return data;
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Las invitaciones no están disponibles.");
+        }
+        throw e;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// Emite una invitación temporal de uso único. El `code` viene SÓLO en esta
+// respuesta; nunca se lista ni se vuelve a mostrar.
+export async function createEnrollmentInvitation(
+    payload: EnrollmentCreateRequest,
+): Promise<DeviceActionResult<EnrollmentInvitation>> {
+    const nombre = payload.nombre.trim();
+    const ubicacion = payload.ubicacion?.trim() ?? "";
+    const whepUrl = normalizeWhepUrl(payload.whepUrl);
+    return deviceMutation<EnrollmentInvitation>({
+        path: "/api/v1/dispositivos/enrollments",
+        method: "POST",
+        body: {
+            nombre,
+            ...(ubicacion ? { ubicacion } : {}),
+            ...(whepUrl ? { whepUrl } : {}),
+        },
+        parse: parseEnrollmentInvitation,
+        invalidMessage: "La API devolvió una invitación inválida.",
+    });
+}
+
+// Cancela una invitación pendiente. Consumida => 409 enrollment_consumed.
+export async function cancelEnrollment(
+    enrollmentId: string,
+): Promise<DeviceActionResult<EnrollmentCancelResult>> {
+    return deviceMutation<EnrollmentCancelResult>({
+        path: `/api/v1/dispositivos/enrollments/${encodeURIComponent(enrollmentId)}/cancel`,
+        method: "POST",
+        parse: parseEnrollmentCancel,
+        invalidMessage: "La API devolvió una respuesta inválida al cancelar la invitación.",
+    });
+}
+
+function lifecycleAction(
+    dispositivoId: string,
+    action: "disable" | "enable" | "revoke",
+): Promise<DeviceActionResult<Device>> {
+    return deviceMutation<Device>({
+        path: `/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/${action}`,
+        method: "POST",
+        parse: parseDevice,
+        invalidMessage: "La API devolvió un dispositivo inválido.",
+    });
+}
+
+export async function disableDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
+    return lifecycleAction(dispositivoId, "disable");
+}
+
+export async function enableDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
+    return lifecycleAction(dispositivoId, "enable");
+}
+
+export async function revokeDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
+    return lifecycleAction(dispositivoId, "revoke");
+}
+
+// Reprovisión: revoca la credencial anterior e invalida invitaciones previas;
+// devuelve una invitación nueva (201) con `code` de uso único.
+export async function reprovisionDispositivo(
+    dispositivoId: string,
+): Promise<DeviceActionResult<EnrollmentInvitation>> {
+    return deviceMutation<EnrollmentInvitation>({
+        path: `/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/reprovision`,
+        method: "POST",
+        parse: parseEnrollmentInvitation,
+        invalidMessage: "La API devolvió una invitación de reprovisión inválida.",
+    });
 }
 
 // Updates the name and location of an existing node (PUT /api/v1/dispositivos).
 export async function updateDispositivo(
     payload: UpdateDispositivoRequest,
-): Promise<{ ok: true; data: Device } | { ok: false; errors: string[] }> {
-    if (!API_URL) {
-        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos`, {
-            method: "PUT",
-            headers: await getSessionHeaders(),
-            body: JSON.stringify({ ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) }),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        const result = await response.json().catch(() => null);
-
-        if (response.ok && result?.success) {
-            const data = normalizeCreatedDispositivo(result.data)
-            if (!data) {
-                return { ok: false, errors: ["La API devolvió un dispositivo sin identificador."] };
-            }
-            revalidatePath("/nodos");
-            return { ok: true, data };
-        }
-
-        const errors =
-            Array.isArray(result?.errors) && result.errors.length > 0
-                ? result.errors.map(String)
-                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
-        return { ok: false, errors };
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
-        }
-        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-// Removes a node from the catalog (DELETE /api/v1/dispositivos?dispositivoId=...).
-export async function deleteDispositivo(
-    dispositivoId: string,
-): Promise<{ ok: true } | { ok: false; errors: string[] }> {
-    if (!API_URL) {
-        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${API_URL}/api/v1/dispositivos?dispositivoId=${encodeURIComponent(dispositivoId)}`, {
-            method: "DELETE",
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        const result = await response.json().catch(() => null);
-
-        if (response.ok && result?.success) {
-            revalidatePath("/nodos");
-            return { ok: true };
-        }
-
-        const errors =
-            Array.isArray(result?.errors) && result.errors.length > 0
-                ? result.errors.map(String)
-                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
-        return { ok: false, errors };
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
-        }
-        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
-    } finally {
-        clearTimeout(timeout);
-    }
+): Promise<DeviceActionResult<Device>> {
+    return deviceMutation<Device>({
+        path: "/api/v1/dispositivos",
+        method: "PUT",
+        body: { ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) },
+        parse: parseDevice,
+        invalidMessage: "La API devolvió un dispositivo inválido.",
+    });
 }

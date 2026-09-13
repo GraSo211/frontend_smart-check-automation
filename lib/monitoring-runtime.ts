@@ -62,6 +62,31 @@ function parseMetric(value: unknown, dispositivoId: string): Device['ultimaMetri
   }
 }
 
+const AUTH_STATUS_VALUES = ['unenrolled', 'active', 'disabled', 'revoked'] as const
+
+function parseAuthStatus(value: unknown): Device['authStatus'] {
+  return typeof value === 'string' && (AUTH_STATUS_VALUES as readonly string[]).includes(value)
+    ? (value as Device['authStatus'])
+    : undefined
+}
+
+function parsePendingEnrollment(value: unknown): Device['pendingEnrollment'] {
+  // `undefined` (campo ausente) must stay distinct from `null` (sin pendiente)
+  // so SSE merges don't erase a catalog value the event never carried.
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (!isRecord(value)) return null
+  if (typeof value.enrollmentId !== 'string' || value.enrollmentId === '') return null
+  if (!isValidIso(value.expiresAt)) return null
+  return { enrollmentId: value.enrollmentId, expiresAt: value.expiresAt }
+}
+
+function parseNullableIso(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return isValidIso(value) ? value : undefined
+}
+
 export function parseDevice(value: unknown): Device | null {
   if (!isRecord(value) || typeof value.dispositivoId !== 'string' || value.dispositivoId === '') return null
   if (value.estado !== 'online' && value.estado !== 'offline') return null
@@ -75,6 +100,18 @@ export function parseDevice(value: unknown): Device | null {
   // `whepUrl` is optional: an absent or malformed value must never invalidate
   // the device. A usable camera URL is a non-empty, trimmed string.
   const whepUrl = typeof value.whepUrl === 'string' ? value.whepUrl.trim() : ''
+  // Security fields are optional here: legacy device rows and SSE telemetry
+  // events may omit them, and an absent field must never reject the device.
+  const authStatus = parseAuthStatus(value.authStatus)
+  const keyFingerprint =
+    typeof value.keyFingerprint === 'string' && value.keyFingerprint !== ''
+      ? value.keyFingerprint
+      : value.keyFingerprint === null
+        ? null
+        : undefined
+  const enrolledAt = parseNullableIso(value.enrolledAt)
+  const authUpdatedAt = parseNullableIso(value.authUpdatedAt)
+  const pendingEnrollment = parsePendingEnrollment(value.pendingEnrollment)
   return {
     dispositivoId: value.dispositivoId,
     nombre: typeof value.nombre === 'string' && value.nombre !== '' ? value.nombre : value.dispositivoId,
@@ -84,6 +121,11 @@ export function parseDevice(value: unknown): Device | null {
     ultimaMetrica: metric,
     // An offline node created without telemetry is valid and has no lastSeen yet.
     lastSeen: typeof value.lastSeen === 'string' ? value.lastSeen : '',
+    ...(authStatus !== undefined ? { authStatus } : {}),
+    ...(keyFingerprint !== undefined ? { keyFingerprint } : {}),
+    ...(enrolledAt !== undefined ? { enrolledAt } : {}),
+    ...(authUpdatedAt !== undefined ? { authUpdatedAt } : {}),
+    ...(pendingEnrollment !== undefined ? { pendingEnrollment } : {}),
   }
 }
 

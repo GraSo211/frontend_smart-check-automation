@@ -2,13 +2,14 @@
 
 import { useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { MoreHorizontal, Pencil, Power, PowerOff, RotateCcw, ShieldX, Ticket } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -22,13 +23,26 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { deleteDispositivo, updateDispositivo } from "@/actions/api"
-import type { Device } from "@/lib/devices-data"
+import { EnrollmentCodePanel } from "@/components/nodos/enrollment-code-panel"
+import {
+  disableDispositivo,
+  enableDispositivo,
+  reprovisionDispositivo,
+  revokeDispositivo,
+  updateDispositivo,
+} from "@/actions/api"
+import { deviceAuthStatus, type Device, type EnrollmentInvitation } from "@/lib/devices-data"
+import {
+  LIFECYCLE_LABELS,
+  lifecycleActionsFor,
+  reprovisionConfirmation,
+  revokeConfirmation,
+  type LifecycleAction,
+} from "@/lib/enrollment"
 import { isWhepUrl } from "@/lib/camera-sources"
 
 interface DeviceActionsMenuProps {
   device: Device
-  onDeleted?: (dispositivoId: string) => void
 }
 
 // Cuts React synthetic bubbling from the portaled popups (menu + dialogs) up to
@@ -42,19 +56,32 @@ function stopPropagation(e: { stopPropagation: () => void }) {
   e.stopPropagation()
 }
 
-// Per-card actions (edit / delete) mounted in the device header. The card is a
-// single role="button" container, so clicks and keyboard activation on the
-// trigger stop propagation to avoid toggling the card selection.
-export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps) {
+const ACTION_ICONS = {
+  enable: Power,
+  disable: PowerOff,
+  revoke: ShieldX,
+  reprovision: RotateCcw,
+} as const
+
+// Per-card actions: metadata edit plus credential lifecycle (disable / enable /
+// revoke / reprovision). Revoke and reprovision require an explicit
+// confirmation because they invalidate the current credential immediately.
+export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
   const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
   const [nombre, setNombre] = useState(device.nombre)
   const [ubicacion, setUbicacion] = useState(device.ubicacion)
   const [whepUrl, setWhepUrl] = useState(device.whepUrl ?? "")
   const [nombreError, setNombreError] = useState<string | null>(null)
   const [whepError, setWhepError] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<LifecycleAction | null>(null)
+  const [issued, setIssued] = useState<EnrollmentInvitation | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  const authStatus = deviceAuthStatus(device)
+  const actions = lifecycleActionsFor(authStatus)
+  const unavailable = pending || busy !== null
 
   const openEditDialog = () => {
     setNombre(device.nombre)
@@ -101,22 +128,60 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
     })
   }
 
-  const handleDelete = () => {
+  // Lifecycle handlers. Each branch narrows its own action result so the
+  // reprovision invitation and the device read object never mix.
+  const runLifecycle = (action: LifecycleAction) => {
+    if (unavailable) return
+    setBusy(action)
     startTransition(async () => {
-      const result = await deleteDispositivo(device.dispositivoId)
+      try {
+        if (action === "reprovision") {
+          const result = await reprovisionDispositivo(device.dispositivoId)
+          if (result.ok) {
+            setIssued(result.data)
+            setConfirmAction(null)
+            toast.success("Reprovisión generada. Copiá el código ahora.")
+            router.refresh()
+          } else {
+            toast.error("No se pudo reprovisionar el nodo", { description: result.errors.join(" · ") })
+          }
+          return
+        }
 
-      if (result.ok) {
-        toast.success("Dispositivo eliminado.")
-        setDeleteOpen(false)
-        onDeleted?.(device.dispositivoId)
-        router.refresh()
-      } else {
-        toast.error("No se pudo eliminar el dispositivo", {
-          description: result.errors.join(" · "),
-        })
+        const result =
+          action === "disable"
+            ? await disableDispositivo(device.dispositivoId)
+            : action === "enable"
+              ? await enableDispositivo(device.dispositivoId)
+              : await revokeDispositivo(device.dispositivoId)
+
+        if (result.ok) {
+          toast.success(
+            action === "disable"
+              ? "Nodo deshabilitado. Su credencial quedó bloqueada."
+              : action === "enable"
+                ? "Nodo habilitado. Su credencial vuelve a estar activa."
+                : "Credencial revocada. El nodo deberá reprovisionarse.",
+          )
+          setConfirmAction(null)
+          router.refresh()
+        } else {
+          toast.error("No se pudo actualizar el ciclo de vida del nodo", {
+            description: result.errors.join(" · "),
+          })
+        }
+      } finally {
+        setBusy(null)
       }
     })
   }
+
+  const confirmation =
+    confirmAction === "revoke"
+      ? revokeConfirmation(device.nombre)
+      : confirmAction === "reprovision"
+        ? reprovisionConfirmation(device.nombre)
+        : null
 
   return (
     <>
@@ -144,19 +209,34 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
         />
         <DropdownMenuContent
           align="end"
-          className="min-w-40"
+          className="min-w-44"
           onClick={stopPropagation}
           onKeyDown={stopPropagation}
           onKeyUp={stopPropagation}
         >
           <DropdownMenuItem onClick={openEditDialog}>
             <Pencil aria-hidden="true" />
-            Editar
+            Editar metadatos
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2 aria-hidden="true" />
-            Eliminar
-          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {actions.map((action) => {
+            const Icon = ACTION_ICONS[action]
+            const destructive = action === "revoke"
+            return (
+              <DropdownMenuItem
+                key={action}
+                variant={destructive ? "destructive" : "default"}
+                disabled={unavailable}
+                onClick={() => {
+                  if (action === "revoke" || action === "reprovision") setConfirmAction(action)
+                  else runLifecycle(action)
+                }}
+              >
+                <Icon aria-hidden="true" />
+                {LIFECYCLE_LABELS[action]}
+              </DropdownMenuItem>
+            )
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -167,7 +247,7 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
               <Pencil className="size-5" aria-hidden="true" />
             </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
-            <DialogDescription>Actualizá el nombre y la ubicación del nodo.</DialogDescription>
+            <DialogDescription>Actualizá el nombre, la ubicación y la cámara del nodo.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
@@ -243,30 +323,84 @@ export function DeviceActionsMenu({ device, onDeleted }: DeviceActionsMenuProps)
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog
+        open={confirmAction !== null}
+        onOpenChange={(next) => {
+          if (!next) setConfirmAction(null)
+        }}
+      >
         <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
-          <DialogHeader>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-              <Trash2 className="size-5" aria-hidden="true" />
-            </span>
-            <DialogTitle>¿Eliminar dispositivo?</DialogTitle>
-            <DialogDescription>
-              Se eliminará {device.nombre} y todo su historial de telemetría. Esta acción no se
-              puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose
-              render={
-                <Button type="button" variant="outline">
-                  Cancelar
+          {confirmation && (
+            <>
+              <DialogHeader>
+                <span
+                  className={
+                    confirmAction === "revoke"
+                      ? "flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive"
+                      : "flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                  }
+                >
+                  {confirmAction === "revoke" ? (
+                    <ShieldX className="size-5" aria-hidden="true" />
+                  ) : (
+                    <RotateCcw className="size-5" aria-hidden="true" />
+                  )}
+                </span>
+                <DialogTitle>{confirmation.title}</DialogTitle>
+                <DialogDescription>{confirmation.description}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose
+                  render={
+                    <Button type="button" variant="outline">
+                      Cancelar
+                    </Button>
+                  }
+                />
+                <Button
+                  type="button"
+                  variant={confirmAction === "revoke" ? "destructive" : "default"}
+                  disabled={unavailable}
+                  onClick={() => confirmAction && runLifecycle(confirmAction)}
+                >
+                  {busy === confirmAction ? "Procesando…" : confirmation.confirm}
                 </Button>
-              }
-            />
-            <Button type="button" variant="destructive" disabled={pending} onClick={handleDelete}>
-              {pending ? "Eliminando…" : "Eliminar"}
-            </Button>
-          </DialogFooter>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={issued !== null}
+        onOpenChange={(next) => {
+          if (!next) setIssued(null)
+        }}
+      >
+        <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
+          {issued && issued.code && (
+            <>
+              <DialogHeader>
+                <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                  <Ticket className="size-5" aria-hidden="true" />
+                </span>
+                <DialogTitle>Código de reprovisión</DialogTitle>
+                <DialogDescription>
+                  La credencial anterior ya quedó invalidada. Copiá este código ahora: se muestra una sola vez.
+                </DialogDescription>
+              </DialogHeader>
+              <EnrollmentCodePanel code={issued.code} expiresAt={issued.expiresAt} nombre={issued.nombre} />
+              <DialogFooter>
+                <DialogClose
+                  render={
+                    <Button type="button" variant="default">
+                      Listo, ya lo configuré
+                    </Button>
+                  }
+                />
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

@@ -53,6 +53,23 @@ describe("server actions de datos del backend", () => {
     createdAt: "2026-01-01T10:00:00.000Z",
     updatedAt: "2026-01-01T10:00:00.000Z",
   }
+  const validDeviceRead = {
+    ...validDevice,
+    authStatus: "active",
+    keyFingerprint: "fp-1",
+    enrolledAt: "2026-01-01T09:00:00.000Z",
+    authUpdatedAt: "2026-01-01T09:00:00.000Z",
+    pendingEnrollment: null,
+  }
+  const invitation = {
+    enrollmentId: "enr-1",
+    dispositivoId: null,
+    nombre: "Nodo 1",
+    status: "pending",
+    code: "one-time-code",
+    createdAt: "2026-01-01T10:00:00.000Z",
+    expiresAt: "2026-01-01T10:15:00.000Z",
+  }
 
   beforeAll(async () => {
     process.env.NEXT_PUBLIC_API_URL = "https://backend.example.test/"
@@ -66,21 +83,18 @@ describe("server actions de datos del backend", () => {
   })
 
   it.each([
-    ["getDevices", () => api.getDevices(), "GET"],
-    ["getDeviceHistory", () => api.getDeviceHistory("node/1"), "GET"],
-    ["createDispositivo", () => api.createDispositivo({ nombre: "Nodo", ubicacion: "Línea A" }), "POST"],
-    ["updateDispositivo", () => api.updateDispositivo({ dispositivoId: "node-1", nombre: "Nodo", ubicacion: "Línea A" }), "PUT"],
-    ["deleteDispositivo", () => api.deleteDispositivo("node/1"), "DELETE"],
-  ])("reenvía la cookie de sesión para %s", async (_name, action, method) => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          data: method === "DELETE" ? undefined : method === "GET" && _name === "getDevices" ? [] : method === "GET" ? [] : { dispositivoId: "node-1" },
-        }),
-        { status: 200 },
-      ),
-    )
+    ["getDevices", () => api.getDevices(), "GET", { success: true, data: [] }],
+    ["getEnrollmentInvitations", () => api.getEnrollmentInvitations(), "GET", { success: true, data: [] }],
+    ["getDeviceHistory", () => api.getDeviceHistory("node/1"), "GET", { success: true, data: [] }],
+    ["updateDispositivo", () => api.updateDispositivo({ dispositivoId: "node-1", nombre: "Nodo", ubicacion: "Línea A" }), "PUT", { success: true, data: validDeviceRead }],
+    ["createEnrollmentInvitation", () => api.createEnrollmentInvitation({ nombre: "Nodo" }), "POST", { success: true, data: invitation }],
+    ["cancelEnrollment", () => api.cancelEnrollment("enr/1"), "POST", { success: true, data: { enrollmentId: "enr/1", status: "cancelled" } }],
+    ["disableDispositivo", () => api.disableDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
+    ["enableDispositivo", () => api.enableDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
+    ["revokeDispositivo", () => api.revokeDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
+    ["reprovisionDispositivo", () => api.reprovisionDispositivo("node/1"), "POST", { success: true, data: { ...invitation, dispositivoId: "node-1" } }],
+  ])("reenvía la cookie de sesión para %s", async (_name, action, method, body) => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }))
 
     await action()
 
@@ -91,6 +105,41 @@ describe("server actions de datos del backend", () => {
       Cookie: "session_token=jwt-token",
     })
     expect(options.credentials).toBeUndefined()
+  })
+
+  it("parsea los campos de seguridad del catálogo de dispositivos", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: [validDeviceRead] }), { status: 200 }))
+
+    await expect(api.getDevices()).resolves.toEqual([validDeviceRead])
+  })
+
+  it("mapea el envelope de error del backend a un mensaje en español", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      message: "La invitación ya fue consumida",
+      errors: { code: "enrollment_consumed" },
+    }), { status: 409 }))
+
+    await expect(api.cancelEnrollment("enr-1")).resolves.toEqual({
+      ok: false,
+      errors: ["La invitación ya fue consumida por un dispositivo."],
+      code: "enrollment_consumed",
+    })
+  })
+
+  it("traduce una transición de ciclo de vida inválida a 409", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      message: "Transición de ciclo de vida inválida",
+      errors: { code: "invalid_lifecycle_transition" },
+    }), { status: 409 }))
+
+    const result = await api.enableDispositivo("node-1")
+    expect(result).toEqual({
+      ok: false,
+      errors: ["La operación no es válida para el estado actual del nodo."],
+      code: "invalid_lifecycle_transition",
+    })
   })
 
   it("acepta métricas live con id vacío en la respuesta de dispositivos", async () => {
@@ -315,25 +364,33 @@ describe("server actions de datos del backend", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos")
   })
 
-  it("envía el whepUrl normalizado al crear y lo omite cuando está vacío", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { dispositivoId: "node-1" } }), { status: 200 }))
+  it("normaliza el whepUrl y omite campos vacíos al crear una invitación", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: invitation }), { status: 200 }))
 
-    await api.createDispositivo({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "  https://cam.test/whep  " })
+    await api.createEnrollmentInvitation({ nombre: "  Nodo  ", ubicacion: "   ", whepUrl: "  https://cam.test/whep  " })
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
       nombre: "Nodo",
-      ubicacion: "Línea A",
       whepUrl: "https://cam.test/whep",
     })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/enrollments")
 
     fetchMock.mockClear()
-    await api.createDispositivo({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "   " })
+    await api.createEnrollmentInvitation({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "   " })
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Nodo", ubicacion: "Línea A" })
+  })
+
+  it("codifica los identificadores en las rutas de ciclo de vida", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: validDeviceRead }), { status: 200 }))
+
+    await api.revokeDispositivo("node/1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/node%2F1/revoke")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({})
   })
 
   it("envía el whepUrl al actualizar y lo copia de la respuesta", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       success: true,
-      data: { dispositivoId: "node-1", nombre: "Nodo", ubicacion: "Línea A", whepUrl: "https://cam.test/whep" },
+      data: { ...validDeviceRead, whepUrl: "https://cam.test/whep" },
     }), { status: 200 }))
 
     const result = await api.updateDispositivo({

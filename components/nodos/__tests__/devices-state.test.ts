@@ -27,6 +27,9 @@ vi.mock("@/components/nodos/device-card", () => ({
 vi.mock("@/components/nodos/telemetry-dashboard", () => ({
   TelemetryDashboard: ({ history }: { history: Array<{ id: string }> }) => React.createElement("output", { "data-testid": "recent" }, history.map((item) => item.id).join(",")),
 }))
+vi.mock("@/components/nodos/pending-invitations", () => ({
+  PendingInvitations: () => null,
+}))
 vi.mock("@/components/nodos/device-history", () => ({
   DeviceHistory: (props: { history: Array<{ id: string }>; total: number; page: number; newSamples?: number; onPageChange?: (page: number) => void; onRetry?: () => void; onLatest?: () => void }) => (
     React.createElement("div", null,

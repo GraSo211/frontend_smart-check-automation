@@ -1,8 +1,10 @@
 import type { Metadata } from "next"
-import { getDevices } from "@/actions/api"
-import type { Device } from "@/lib/devices-data"
+import { getDevices, getEnrollmentInvitations } from "@/actions/api"
+import { getSession, hasMinRole } from "@/lib/auth"
+import type { Device, EnrollmentInvitation } from "@/lib/devices-data"
 import DevicesState from "@/components/nodos/devices-state"
-import CreateDeviceDialog from "@/components/nodos/create-device-dialog"
+import EnrollmentInviteDialog from "@/components/nodos/enrollment-invite-dialog"
+import { Lock } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "Estado de los Nodos | Smart-Check Automation",
@@ -11,8 +13,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function Page() {
+  const session = await getSession()
+  // El backend es la autoridad; acá sólo ocultamos los controles de gestión.
+  const canManage = session ? hasMinRole(session.rol, "Supervisor") : false
+
   let devices: Device[] = []
+  let invitations: EnrollmentInvitation[] = []
   let error: string | null = null
+  let invitationsError: string | null = null
   let lastSyncAt: string | null = null
 
   try {
@@ -21,6 +29,12 @@ export default async function Page() {
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
+  }
+
+  try {
+    invitations = await getEnrollmentInvitations()
+  } catch (e) {
+    invitationsError = e instanceof Error ? e.message : "No se pudieron cargar las solicitudes pendientes."
   }
 
   return (
@@ -37,10 +51,18 @@ export default async function Page() {
                 Estado de los Nodos
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo.
+                Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo. El alta se realiza con
+                solicitudes de enrolamiento de uso único.
               </p>
             </div>
-            <CreateDeviceDialog />
+            {canManage ? (
+              <EnrollmentInviteDialog />
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                <Lock className="size-3.5" aria-hidden="true" />
+                Sólo lectura · Operario
+              </span>
+            )}
           </div>
         </header>
 
@@ -53,7 +75,13 @@ export default async function Page() {
           </div>
         )}
 
-        <DevicesState devices={devices} lastSyncAt={lastSyncAt} />
+        <DevicesState
+          devices={devices}
+          lastSyncAt={lastSyncAt}
+          invitations={invitations}
+          invitationsError={invitationsError}
+          canManage={canManage}
+        />
       </main>
     </div>
   )

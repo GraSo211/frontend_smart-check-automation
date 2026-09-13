@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Server } from "lucide-react"
 import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
+import { PendingInvitations } from "@/components/nodos/pending-invitations"
 import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
 import { getDeviceHistoryPage } from "@/actions/api"
 import { mergeTelemetrySamples, samplesForDevice } from "@/lib/telemetry"
-import type { Device, SpecificDevice } from "@/lib/devices-data"
+import type { Device, EnrollmentInvitation, SpecificDevice } from "@/lib/devices-data"
 import { parseDeviceEventPayload } from "@/lib/monitoring-runtime"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
@@ -18,6 +19,11 @@ const RECENT_HISTORY_CAP = 100
 interface DevicesStateProps {
   devices: Device[]
   lastSyncAt: string | null
+  /** Invitaciones de enrolamiento pendientes, separadas de la flota. */
+  invitations?: EnrollmentInvitation[]
+  invitationsError?: string | null
+  /** Supervisor/Administrador pueden gestionar; Operario es sólo lectura. */
+  canManage?: boolean
 }
 
 function sampleKey(sample: SpecificDevice) {
@@ -30,7 +36,13 @@ type LiveJournalEntry = { sample: SpecificDevice; version: number }
 
 // Client container for the node fleet: selection state, live SSE telemetry
 // and the history section of the currently selected device.
-export default function DevicesState({ devices: initialDevices, lastSyncAt }: DevicesStateProps) {
+export default function DevicesState({
+  devices: initialDevices,
+  lastSyncAt,
+  invitations = [],
+  invitationsError = null,
+  canManage = false,
+}: DevicesStateProps) {
   const monitoredDevices = useMonitoringNodes()
   const actions = useMonitoringActions()
   const allDevices = monitoredDevices ?? initialDevices
@@ -348,30 +360,6 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
     if (eventSourceRef.current?.readyState === (EventSource.OPEN ?? 1)) syncStreamRef.current?.(eventSourceRef.current)
   }
 
-  // If the selected device is removed, clear the selection so the history
-  // panel doesn't keep pointing at a node that no longer exists.
-  const handleDeviceDeleted = (dispositivoId: string) => {
-    if (selectedDeviceId !== dispositivoId) return
-    selectedDeviceIdRef.current = null
-    selectionEpochRef.current += 1
-    streamEpochRef.current += 1
-    setStreamState("reconnecting")
-    setSelectedDeviceId(null)
-    setHistory([])
-    setRecentHistory([])
-    setHistoryTotal(0)
-    setHistoryError(null)
-    setHistoryStale(false)
-    setLoadingHistory(false)
-    setNewSamples(0)
-    historyRef.current = []
-    liveHistoryRef.current = []
-    liveJournalRef.current = []
-    liveVersionRef.current = 0
-    newSamplesBaselineRef.current = 0
-    remoteLatestRef.current = []
-  }
-
   const selectedDevice = useMemo(
     () => allDevices.find((device) => device.dispositivoId === selectedDeviceId) ?? null,
     [allDevices, selectedDeviceId],
@@ -382,6 +370,8 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
 
   return (
     <div className="min-w-0 space-y-6">
+      <PendingInvitations invitations={invitations} canManage={canManage} error={invitationsError} />
+
       <section aria-labelledby="nodos-heading">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
@@ -402,7 +392,7 @@ export default function DevicesState({ devices: initialDevices, lastSyncAt }: De
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {allDevices.map((device) => (
-              <DeviceCard key={device.dispositivoId} device={device} selected={selectedDeviceId === device.dispositivoId} onSelect={handleSelect} onDeleted={handleDeviceDeleted} />
+              <DeviceCard key={device.dispositivoId} device={device} selected={selectedDeviceId === device.dispositivoId} onSelect={handleSelect} canManage={canManage} />
             ))}
           </div>
         )}

@@ -1,9 +1,9 @@
 "use client"
 
-import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, type LucideIcon } from "lucide-react"
+import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, KeyRound, ShieldCheck, ShieldX, Ban, RotateCcw, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
-import type { Device } from "@/lib/devices-data"
+import { AUTH_STATUS_LABELS, deviceAuthStatus, type AuthStatus, type Device } from "@/lib/devices-data"
 import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
 
 // Maps each connection state to an icon and color treatment.
@@ -25,19 +25,51 @@ const STATUS_CONFIG: Record<
   },
 }
 
+// Credential state is rendered separately from connectivity: a disabled node
+// may still show a recent heartbeat but cannot authenticate to report.
+const AUTH_CONFIG: Record<
+  AuthStatus,
+  { icon: LucideIcon; badge: string; hint: string | null }
+> = {
+  active: {
+    icon: ShieldCheck,
+    badge: "bg-success/10 text-success ring-success/30",
+    hint: null,
+  },
+  unenrolled: {
+    icon: KeyRound,
+    badge: "bg-muted text-muted-foreground ring-border",
+    hint: "Sin credencial: todavía no puede autenticarse.",
+  },
+  disabled: {
+    icon: Ban,
+    badge: "bg-warning/10 text-warning ring-warning/30",
+    hint: "Credencial bloqueada: no puede reportar hasta habilitarlo.",
+  },
+  revoked: {
+    icon: ShieldX,
+    badge: "bg-destructive/10 text-destructive ring-destructive/30",
+    hint: "Credencial invalidada: requiere reprovisión.",
+  },
+}
+
 const ID_PREVIEW_LENGTH = 12
 
 interface DeviceCardProps {
   device: Device
   selected: boolean
   onSelect: (dispositivoId: string) => void
-  onDeleted?: (dispositivoId: string) => void
+  /** Supervisor/Administrador ven acciones; Operario es sólo lectura. */
+  canManage?: boolean
 }
 
 // Renders a selectable card summarizing a single node's state and last telemetry.
-export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCardProps) {
+export function DeviceCard({ device, selected, onSelect, canManage = false }: DeviceCardProps) {
   const status = STATUS_CONFIG[device.estado]
   const StatusIcon = status.icon
+  const authStatus = deviceAuthStatus(device)
+  const auth = AUTH_CONFIG[authStatus]
+  const AuthIcon = auth.icon
   const metrica = device.ultimaMetrica ?? null
   const shortId =
     device.dispositivoId.length > ID_PREVIEW_LENGTH
@@ -49,7 +81,7 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
       role="button"
       tabIndex={0}
       aria-pressed={selected}
-      aria-label={`${device.nombre}, ${status.label}`}
+      aria-label={`${device.nombre}, ${status.label}, ${AUTH_STATUS_LABELS[authStatus]}`}
       onClick={() => onSelect(device.dispositivoId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -80,7 +112,7 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
           >
             {status.label}
           </span>
-          <DeviceActionsMenu device={device} onDeleted={onDeleted} />
+          {canManage && <DeviceActionsMenu device={device} />}
         </div>
       </div>
 
@@ -95,6 +127,26 @@ export function DeviceCard({ device, selected, onSelect, onDeleted }: DeviceCard
             <Camera className="size-3.5 shrink-0 text-info" aria-hidden="true" />
             <span className="truncate">Cámara configurada</span>
           </p>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+            auth.badge,
+          )}
+          title="Estado de la credencial del nodo (independiente de la conectividad)"
+        >
+          <AuthIcon className="size-3.5" aria-hidden="true" />
+          {AUTH_STATUS_LABELS[authStatus]}
+        </span>
+        {auth.hint && <span className="min-w-0 text-xs text-muted-foreground">{auth.hint}</span>}
+        {device.pendingEnrollment && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info ring-1 ring-inset ring-info/30">
+            <RotateCcw className="size-3.5" aria-hidden="true" />
+            Reprovisión pendiente
+          </span>
         )}
       </div>
 
