@@ -509,7 +509,7 @@ export async function getRegistrationRequests(): Promise<RegistrationRequest[]> 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${apiUrl}/api/registration-requests`, {
+        const response = await fetch(`${apiUrl}/api/v1/registration-requests`, {
             headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
@@ -547,7 +547,7 @@ export async function approveRegistrationRequest(
     requestId: string,
 ): Promise<DeviceActionResult<RegistrationApproval>> {
     return deviceMutation<RegistrationApproval>({
-        path: `/api/registration-requests/${encodeURIComponent(requestId)}/approve`,
+        path: `/api/v1/registration-requests/${encodeURIComponent(requestId)}/approve`,
         method: "POST",
         parse: parseRegistrationApproval,
         invalidMessage: "La API devolvió una aprobación de registro inválida.",
@@ -560,7 +560,7 @@ export async function rejectRegistrationRequest(
     requestId: string,
 ): Promise<DeviceActionResult<RegistrationRejection>> {
     return deviceMutation<RegistrationRejection>({
-        path: `/api/registration-requests/${encodeURIComponent(requestId)}/reject`,
+        path: `/api/v1/registration-requests/${encodeURIComponent(requestId)}/reject`,
         method: "POST",
         parse: parseRegistrationRejection,
         invalidMessage: "La API devolvió un rechazo de registro inválido.",

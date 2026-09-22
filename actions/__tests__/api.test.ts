@@ -366,7 +366,7 @@ describe("server actions de datos del backend", () => {
     }), { status: 200 }))
 
     await expect(api.getRegistrationRequests()).resolves.toEqual([registrationRequest])
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/registration-requests")
   })
 
   it("rechaza un envelope de solicitudes de registro malformado", async () => {
@@ -385,7 +385,7 @@ describe("server actions de datos del backend", () => {
     }), { status: 200 }))
 
     const result = await api.approveRegistrationRequest("req/1")
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests/req%2F1/approve")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/registration-requests/req%2F1/approve")
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({})
     expect(result).toEqual({
       ok: true,
@@ -400,7 +400,7 @@ describe("server actions de datos del backend", () => {
     }), { status: 200 }))
 
     const result = await api.rejectRegistrationRequest("req/1")
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests/req%2F1/reject")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/registration-requests/req%2F1/reject")
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({})
     expect(result).toEqual({ ok: true, data: { requestId: "req/1", status: "REJECTED" } })
   })

@@ -56,7 +56,7 @@ export function parseRegistrationRequest(value: unknown): RegistrationRequest | 
   }
 }
 
-/** Parses the GET /registration-requests envelope; null means malformed. */
+/** Parses the GET /api/v1/registration-requests envelope; null means malformed. */
 export function parseRegistrationRequests(payload: unknown): RegistrationRequest[] | null {
   if (!isRecord(payload) || payload.success !== true) return null
   const data = payload.data
