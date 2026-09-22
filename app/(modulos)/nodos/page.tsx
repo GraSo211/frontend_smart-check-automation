@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
-import { getDevices, getEnrollmentInvitations } from "@/actions/api"
+import { getDevices, getRegistrationRequests } from "@/actions/api"
 import { getSession, hasMinRole } from "@/lib/auth"
-import type { Device, EnrollmentInvitation } from "@/lib/devices-data"
+import type { Device, RegistrationRequest } from "@/lib/devices-data"
 import DevicesState from "@/components/nodos/devices-state"
-import EnrollmentInviteDialog from "@/components/nodos/enrollment-invite-dialog"
 import { Lock } from "lucide-react"
 
 export const metadata: Metadata = {
@@ -18,9 +17,9 @@ export default async function Page() {
   const canManage = session ? hasMinRole(session.rol, "Supervisor") : false
 
   let devices: Device[] = []
-  let invitations: EnrollmentInvitation[] = []
+  let registrationRequests: RegistrationRequest[] = []
   let error: string | null = null
-  let invitationsError: string | null = null
+  let registrationRequestsError: string | null = null
   let lastSyncAt: string | null = null
 
   try {
@@ -31,10 +30,15 @@ export default async function Page() {
     error = e instanceof Error ? e.message : "Error desconocido"
   }
 
-  try {
-    invitations = await getEnrollmentInvitations()
-  } catch (e) {
-    invitationsError = e instanceof Error ? e.message : "No se pudieron cargar las solicitudes pendientes."
+  // El backend restringe el listado a Supervisor/Admin: un Operario no debe
+  // disparar una petición que ya sabemos que va a responder 403.
+  if (canManage) {
+    try {
+      registrationRequests = await getRegistrationRequests()
+    } catch (e) {
+      registrationRequestsError =
+        e instanceof Error ? e.message : "No se pudieron cargar las solicitudes de registro."
+    }
   }
 
   return (
@@ -51,13 +55,11 @@ export default async function Page() {
                 Estado de los Nodos
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo. El alta se realiza con
-                solicitudes de enrolamiento de uso único.
+                Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo. La Raspberry pide el alta y un
+                Supervisor o Administrador la aprueba desde este panel.
               </p>
             </div>
-            {canManage ? (
-              <EnrollmentInviteDialog />
-            ) : (
+            {!canManage && (
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                 <Lock className="size-3.5" aria-hidden="true" />
                 Sólo lectura · Operario
@@ -78,8 +80,8 @@ export default async function Page() {
         <DevicesState
           devices={devices}
           lastSyncAt={lastSyncAt}
-          invitations={invitations}
-          invitationsError={invitationsError}
+          registrationRequests={registrationRequests}
+          registrationRequestsError={registrationRequestsError}
           canManage={canManage}
         />
       </main>

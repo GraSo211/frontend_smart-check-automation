@@ -1,6 +1,6 @@
 "use client"
 
-import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, KeyRound, ShieldCheck, ShieldX, Ban, RotateCcw, type LucideIcon } from "lucide-react"
+import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, KeyRound, ShieldCheck, ShieldX, Ban, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import { AUTH_STATUS_LABELS, deviceAuthStatus, type AuthStatus, type Device } from "@/lib/devices-data"
@@ -44,12 +44,12 @@ const AUTH_CONFIG: Record<
   disabled: {
     icon: Ban,
     badge: "bg-warning/10 text-warning ring-warning/30",
-    hint: "Credencial bloqueada: no puede reportar hasta habilitarlo.",
+    hint: "Credencial bloqueada: no puede autenticarse.",
   },
   revoked: {
     icon: ShieldX,
     badge: "bg-destructive/10 text-destructive ring-destructive/30",
-    hint: "Credencial invalidada: requiere reprovisión.",
+    hint: "Credencial invalidada: no puede autenticarse.",
   },
 }
 
@@ -142,12 +142,6 @@ export function DeviceCard({ device, selected, onSelect, canManage = false }: De
           {AUTH_STATUS_LABELS[authStatus]}
         </span>
         {auth.hint && <span className="min-w-0 text-xs text-muted-foreground">{auth.hint}</span>}
-        {device.pendingEnrollment && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info ring-1 ring-inset ring-info/30">
-            <RotateCcw className="size-3.5" aria-hidden="true" />
-            Reprovisión pendiente
-          </span>
-        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

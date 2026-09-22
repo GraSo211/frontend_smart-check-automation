@@ -56,17 +56,13 @@ describe("server actions de datos del backend", () => {
   const validDeviceRead = {
     ...validDevice,
     authStatus: "active",
-    keyFingerprint: "fp-1",
-    enrolledAt: "2026-01-01T09:00:00.000Z",
+    hasSecret: true,
     authUpdatedAt: "2026-01-01T09:00:00.000Z",
-    pendingEnrollment: null,
   }
-  const invitation = {
-    enrollmentId: "enr-1",
-    dispositivoId: null,
-    nombre: "Nodo 1",
-    status: "pending",
-    code: "one-time-code",
+  const registrationRequest = {
+    requestId: "req-1",
+    hostname: "pi-1",
+    status: "PENDING",
     createdAt: "2026-01-01T10:00:00.000Z",
     expiresAt: "2026-01-01T10:15:00.000Z",
   }
@@ -84,15 +80,11 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getDevices", () => api.getDevices(), "GET", { success: true, data: [] }],
-    ["getEnrollmentInvitations", () => api.getEnrollmentInvitations(), "GET", { success: true, data: [] }],
+    ["getRegistrationRequests", () => api.getRegistrationRequests(), "GET", { success: true, data: [] }],
     ["getDeviceHistory", () => api.getDeviceHistory("node/1"), "GET", { success: true, data: [] }],
     ["updateDispositivo", () => api.updateDispositivo({ dispositivoId: "node-1", nombre: "Nodo", ubicacion: "Línea A" }), "PUT", { success: true, data: validDeviceRead }],
-    ["createEnrollmentInvitation", () => api.createEnrollmentInvitation({ nombre: "Nodo" }), "POST", { success: true, data: invitation }],
-    ["cancelEnrollment", () => api.cancelEnrollment("enr/1"), "POST", { success: true, data: { enrollmentId: "enr/1", status: "cancelled" } }],
-    ["disableDispositivo", () => api.disableDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
-    ["enableDispositivo", () => api.enableDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
-    ["revokeDispositivo", () => api.revokeDispositivo("node/1"), "POST", { success: true, data: validDeviceRead }],
-    ["reprovisionDispositivo", () => api.reprovisionDispositivo("node/1"), "POST", { success: true, data: { ...invitation, dispositivoId: "node-1" } }],
+    ["approveRegistrationRequest", () => api.approveRegistrationRequest("req-1"), "POST", { success: true, data: { request_id: "req-1", status: "APPROVED", device_id: "node-1" } }],
+    ["rejectRegistrationRequest", () => api.rejectRegistrationRequest("req-1"), "POST", { success: true, data: { requestId: "req-1", status: "REJECTED" } }],
   ])("reenvía la cookie de sesión para %s", async (_name, action, method, body) => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }))
 
@@ -113,32 +105,34 @@ describe("server actions de datos del backend", () => {
     await expect(api.getDevices()).resolves.toEqual([validDeviceRead])
   })
 
-  it("mapea el envelope de error del backend a un mensaje en español", async () => {
+  it("mapea un código de error del backend a un mensaje en español", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       success: false,
-      message: "La invitación ya fue consumida",
-      errors: { code: "enrollment_consumed" },
-    }), { status: 409 }))
+      message: "El dispositivo no existe",
+      errors: { code: "device_not_found" },
+    }), { status: 404 }))
 
-    await expect(api.cancelEnrollment("enr-1")).resolves.toEqual({
+    await expect(api.approveRegistrationRequest("req-1")).resolves.toEqual({
       ok: false,
-      errors: ["La invitación ya fue consumida por un dispositivo."],
-      code: "enrollment_consumed",
+      errors: ["El dispositivo no existe."],
+      code: "device_not_found",
     })
   })
 
-  it("traduce una transición de ciclo de vida inválida a 409", async () => {
+  it.each([
+    [404, "La solicitud de registro no existe."],
+    [409, "La solicitud de registro ya fue resuelta."],
+    [410, "La solicitud de registro expiró."],
+  ])("traduce el estado HTTP %i de una solicitud de registro", async (status, message) => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       success: false,
-      message: "Transición de ciclo de vida inválida",
-      errors: { code: "invalid_lifecycle_transition" },
-    }), { status: 409 }))
+      message: "",
+      errors: null,
+    }), { status }))
 
-    const result = await api.enableDispositivo("node-1")
-    expect(result).toEqual({
+    await expect(api.rejectRegistrationRequest("req-1")).resolves.toEqual({
       ok: false,
-      errors: ["La operación no es válida para el estado actual del nodo."],
-      code: "invalid_lifecycle_transition",
+      errors: [message],
     })
   })
 
@@ -364,27 +358,51 @@ describe("server actions de datos del backend", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos")
   })
 
-  it("normaliza el whepUrl y omite campos vacíos al crear una invitación", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: invitation }), { status: 200 }))
+  it("lee las solicitudes de registro y valida el envelope", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      message: "ok",
+      data: [registrationRequest],
+    }), { status: 200 }))
 
-    await api.createEnrollmentInvitation({ nombre: "  Nodo  ", ubicacion: "   ", whepUrl: "  https://cam.test/whep  " })
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
-      nombre: "Nodo",
-      whepUrl: "https://cam.test/whep",
-    })
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/enrollments")
-
-    fetchMock.mockClear()
-    await api.createEnrollmentInvitation({ nombre: "Nodo", ubicacion: "Línea A", whepUrl: "   " })
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Nodo", ubicacion: "Línea A" })
+    await expect(api.getRegistrationRequests()).resolves.toEqual([registrationRequest])
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests")
   })
 
-  it("codifica los identificadores en las rutas de ciclo de vida", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: validDeviceRead }), { status: 200 }))
+  it("rechaza un envelope de solicitudes de registro malformado", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: [{ requestId: "req-1", status: "PENDING", createdAt: "bad", expiresAt: "bad" }],
+    }), { status: 200 }))
 
-    await api.revokeDispositivo("node/1")
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/node%2F1/revoke")
+    await expect(api.getRegistrationRequests()).rejects.toThrow("respuesta inválida para las solicitudes de registro")
+  })
+
+  it("normaliza la aprobación en snake_case y codifica la ruta", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { request_id: "req/1", status: "APPROVED", device_id: "node-1" },
+    }), { status: 200 }))
+
+    const result = await api.approveRegistrationRequest("req/1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests/req%2F1/approve")
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({})
+    expect(result).toEqual({
+      ok: true,
+      data: { requestId: "req/1", status: "APPROVED", deviceId: "node-1" },
+    })
+  })
+
+  it("codifica los identificadores en la ruta de rechazo", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { requestId: "req/1", status: "REJECTED" },
+    }), { status: 200 }))
+
+    const result = await api.rejectRegistrationRequest("req/1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/registration-requests/req%2F1/reject")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({})
+    expect(result).toEqual({ ok: true, data: { requestId: "req/1", status: "REJECTED" } })
   })
 
   it("envía el whepUrl al actualizar y lo copia de la respuesta", async () => {

@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Server } from "lucide-react"
 import { DeviceCard } from "@/components/nodos/device-card"
 import { DeviceHistory } from "@/components/nodos/device-history"
-import { PendingInvitations } from "@/components/nodos/pending-invitations"
+import { PendingRegistrationRequests } from "@/components/nodos/pending-registration-requests"
 import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
 import { getDeviceHistoryPage } from "@/actions/api"
 import { mergeTelemetrySamples, samplesForDevice } from "@/lib/telemetry"
-import type { Device, EnrollmentInvitation, SpecificDevice } from "@/lib/devices-data"
+import type { Device, RegistrationRequest, SpecificDevice } from "@/lib/devices-data"
 import { parseDeviceEventPayload } from "@/lib/monitoring-runtime"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
@@ -19,9 +19,9 @@ const RECENT_HISTORY_CAP = 100
 interface DevicesStateProps {
   devices: Device[]
   lastSyncAt: string | null
-  /** Invitaciones de enrolamiento pendientes, separadas de la flota. */
-  invitations?: EnrollmentInvitation[]
-  invitationsError?: string | null
+  /** Solicitudes de registro pendientes, separadas de la flota. */
+  registrationRequests?: RegistrationRequest[]
+  registrationRequestsError?: string | null
   /** Supervisor/Administrador pueden gestionar; Operario es sólo lectura. */
   canManage?: boolean
 }
@@ -39,8 +39,8 @@ type LiveJournalEntry = { sample: SpecificDevice; version: number }
 export default function DevicesState({
   devices: initialDevices,
   lastSyncAt,
-  invitations = [],
-  invitationsError = null,
+  registrationRequests = [],
+  registrationRequestsError = null,
   canManage = false,
 }: DevicesStateProps) {
   const monitoredDevices = useMonitoringNodes()
@@ -370,7 +370,13 @@ export default function DevicesState({
 
   return (
     <div className="min-w-0 space-y-6">
-      <PendingInvitations invitations={invitations} canManage={canManage} error={invitationsError} />
+      {canManage && (
+        <PendingRegistrationRequests
+          requests={registrationRequests}
+          canManage={canManage}
+          error={registrationRequestsError}
+        />
+      )}
 
       <section aria-labelledby="nodos-heading">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

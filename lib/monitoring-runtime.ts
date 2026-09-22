@@ -70,17 +70,6 @@ function parseAuthStatus(value: unknown): Device['authStatus'] {
     : undefined
 }
 
-function parsePendingEnrollment(value: unknown): Device['pendingEnrollment'] {
-  // `undefined` (campo ausente) must stay distinct from `null` (sin pendiente)
-  // so SSE merges don't erase a catalog value the event never carried.
-  if (value === undefined) return undefined
-  if (value === null) return null
-  if (!isRecord(value)) return null
-  if (typeof value.enrollmentId !== 'string' || value.enrollmentId === '') return null
-  if (!isValidIso(value.expiresAt)) return null
-  return { enrollmentId: value.enrollmentId, expiresAt: value.expiresAt }
-}
-
 function parseNullableIso(value: unknown): string | null | undefined {
   if (value === undefined) return undefined
   if (value === null) return null
@@ -103,15 +92,9 @@ export function parseDevice(value: unknown): Device | null {
   // Security fields are optional here: legacy device rows and SSE telemetry
   // events may omit them, and an absent field must never reject the device.
   const authStatus = parseAuthStatus(value.authStatus)
-  const keyFingerprint =
-    typeof value.keyFingerprint === 'string' && value.keyFingerprint !== ''
-      ? value.keyFingerprint
-      : value.keyFingerprint === null
-        ? null
-        : undefined
-  const enrolledAt = parseNullableIso(value.enrolledAt)
+  // `hasSecret` is optional: absent means the payload did not carry the field.
+  const hasSecret = typeof value.hasSecret === 'boolean' ? value.hasSecret : undefined
   const authUpdatedAt = parseNullableIso(value.authUpdatedAt)
-  const pendingEnrollment = parsePendingEnrollment(value.pendingEnrollment)
   return {
     dispositivoId: value.dispositivoId,
     nombre: typeof value.nombre === 'string' && value.nombre !== '' ? value.nombre : value.dispositivoId,
@@ -122,10 +105,8 @@ export function parseDevice(value: unknown): Device | null {
     // An offline node created without telemetry is valid and has no lastSeen yet.
     lastSeen: typeof value.lastSeen === 'string' ? value.lastSeen : '',
     ...(authStatus !== undefined ? { authStatus } : {}),
-    ...(keyFingerprint !== undefined ? { keyFingerprint } : {}),
-    ...(enrolledAt !== undefined ? { enrolledAt } : {}),
+    ...(hasSecret !== undefined ? { hasSecret } : {}),
     ...(authUpdatedAt !== undefined ? { authUpdatedAt } : {}),
-    ...(pendingEnrollment !== undefined ? { pendingEnrollment } : {}),
   }
 }
 

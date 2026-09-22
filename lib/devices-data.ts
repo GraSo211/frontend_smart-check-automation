@@ -23,10 +23,30 @@ export function deviceAuthStatus(device: Pick<Device, "authStatus">): AuthStatus
     return device.authStatus ?? "unenrolled";
 }
 
-/** Invitación de aprovisionamiento pendiente (reprovisión de un nodo existente). */
-export type PendingEnrollment = {
-    enrollmentId: string;
+/** Estado de una solicitud de registro de dispositivo enviada por un nodo. */
+export type RegistrationRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+/** Solicitud de registro pendiente de aprobación/rechazo (panel). */
+export type RegistrationRequest = {
+    requestId: string;
+    hostname: string;
+    status: RegistrationRequestStatus;
+    deviceId?: string;
+    createdAt: string;
     expiresAt: string;
+};
+
+/** Resultado normalizado de aprobar una solicitud (el backend lo envía en snake_case). */
+export type RegistrationApproval = {
+    requestId: string;
+    status: "APPROVED";
+    deviceId: string;
+};
+
+/** Resultado normalizado de rechazar una solicitud. */
+export type RegistrationRejection = {
+    requestId: string;
+    status: "REJECTED";
 };
 
 export type Device = {
@@ -54,19 +74,9 @@ export type Device = {
      * telemetría no los incluyen; el backend los devuelve siempre en GET.
      */
     authStatus?: AuthStatus;
-    /** Huella de la credencial vigente (sólo active/disabled). */
-    keyFingerprint?: string | null;
-    enrolledAt?: string | null;
+    /** Indica si el nodo ya posee un secreto de autenticación provisionado. */
+    hasSecret?: boolean;
     authUpdatedAt?: string | null;
-    /** `null` = sin invitación pendiente; ausente = payload sin el campo. */
-    pendingEnrollment?: PendingEnrollment | null;
-};
-
-/** Datos del formulario para emitir una invitación de enrolamiento. */
-export type EnrollmentCreateRequest = {
-    nombre: string;
-    ubicacion?: string;
-    whepUrl?: string;
 };
 
 export type UpdateDispositivoRequest = {
@@ -74,28 +84,6 @@ export type UpdateDispositivoRequest = {
     nombre: string;
     ubicacion: string;
     whepUrl?: string;
-};
-
-/**
- * Invitación de aprovisionamiento. `code` se incluye SÓLO en la respuesta de
- * emisión (creación o reprovisión); los listados nunca lo exponen.
- */
-export type EnrollmentInvitation = {
-    enrollmentId: string;
-    dispositivoId: string | null;
-    nombre: string;
-    ubicacion?: string;
-    whepUrl?: string;
-    status: "pending";
-    code?: string;
-    createdAt: string;
-    expiresAt: string;
-};
-
-/** Respuesta del endpoint de cancelación. */
-export type EnrollmentCancelResult = {
-    enrollmentId: string;
-    status: "cancelled";
 };
 
 export type DeviceHistoryResponse = {

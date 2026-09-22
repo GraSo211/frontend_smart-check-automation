@@ -41,6 +41,21 @@ describe('monitoring runtime validation', () => {
     expect(parseDeviceEventPayload({ success: true, data: liveDevice })?.ultimaMetrica?.id).toBe('')
   })
 
+  it('parsea hasSecret opcional y no invalida el dispositivo por un valor no booleano', () => {
+    expect(parseDeviceEventPayload({ ...device, hasSecret: true })?.hasSecret).toBe(true)
+    expect(parseDeviceEventPayload({ ...device, hasSecret: false })?.hasSecret).toBe(false)
+    expect(parseDeviceEventPayload({ ...device, hasSecret: 42 })?.hasSecret).toBeUndefined()
+    expect(parseDeviceEventPayload(device)?.hasSecret).toBeUndefined()
+  })
+
+  it('ignora los campos heredados de enrolamiento que ya no existen', () => {
+    const legacy = { ...device, keyFingerprint: 'fp-1', enrolledAt: '2026-01-01T09:00:00.000Z', pendingEnrollment: null }
+    const parsed = parseDeviceEventPayload(legacy)
+    expect(parsed?.dispositivoId).toBe('n-1')
+    expect(parsed).not.toHaveProperty('keyFingerprint')
+    expect(parsed).not.toHaveProperty('pendingEnrollment')
+  })
+
   it('parsea un whepUrl opcional sin rechazar el dispositivo', () => {
     expect(parseDeviceEventPayload({ ...device, whepUrl: '  https://cam.test/whep  ' })?.whepUrl).toBe('https://cam.test/whep')
     expect(parseDeviceEventPayload({ ...device, whepUrl: '   ' })?.whepUrl).toBeUndefined()

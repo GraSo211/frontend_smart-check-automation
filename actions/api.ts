@@ -4,19 +4,19 @@ import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import type {
     Device,
-    EnrollmentCancelResult,
-    EnrollmentCreateRequest,
-    EnrollmentInvitation,
+    RegistrationApproval,
+    RegistrationRejection,
+    RegistrationRequest,
     SpecificDevice,
     UpdateDispositivoRequest,
 } from "@/lib/devices-data";
 import type { ProductionRun } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseProductionPayload } from "@/lib/monitoring-runtime";
 import {
-    parseEnrollmentCancel,
-    parseEnrollmentInvitation,
-    parseEnrollmentInvitations,
-} from "@/lib/enrollment";
+    parseRegistrationApproval,
+    parseRegistrationRejection,
+    parseRegistrationRequests,
+} from "@/lib/registration";
 import {
     type LotesPorProducto,
     type LoteProductivo,
@@ -378,29 +378,30 @@ export async function updateParametrosProducto(
 // ─── Catálogo de nodos: metadatos y ciclo de vida de credenciales ────────────
 //
 // La creación directa de dispositivos ya no existe (POST/DELETE
-// /api/v1/dispositivos responden 405). El alta pasa por una invitación de
-// aprovisionamiento de uso único que la Raspberry consume. Estas acciones
-// mantienen al backend como autoridad: sólo traducen el envelope de error y
-// revalidan la ruta /nodos.
+// /api/v1/dispositivos responden 405). El alta pasa por una solicitud de
+// registro que la Raspberry envía y que un Supervisor/Admin aprueba o rechaza.
+// Estas acciones mantienen al backend como autoridad: sólo traducen el envelope
+// de error y revalidan la ruta /nodos.
 
 export type DeviceActionResult<T> =
     | { ok: true; data: T }
     | { ok: false; errors: string[]; code?: string };
 
 // Códigos de error del backend traducidos a mensajes es-AR claros.
-const ENROLLMENT_ERROR_MESSAGES: Record<string, string> = {
+const DEVICE_ERROR_MESSAGES: Record<string, string> = {
     validation_error: "Revisá los datos ingresados.",
-    enrollment_consumed: "La invitación ya fue consumida por un dispositivo.",
-    enrollment_unavailable: "La invitación ya no está disponible (venció o fue cancelada).",
-    invalid_transition: "La operación no es válida para el estado actual del nodo.",
-    invalid_lifecycle_transition: "La operación no es válida para el estado actual del nodo.",
     device_not_found: "El dispositivo no existe.",
-    credential_revoked: "La credencial fue revocada.",
-    credential_used: "La credencial ya fue utilizada.",
     human_auth_required: "Se requiere una sesión con rol Supervisor o Administrador.",
     unauthorized: "Sesión expirada o permisos insuficientes.",
     rate_limited: "Demasiadas solicitudes. Esperá un momento e intentá de nuevo.",
     internal_error: "Ocurrió un error interno en el servidor.",
+};
+
+// Fallbacks por HTTP status específicos de las solicitudes de registro.
+const REGISTRATION_STATUS_MESSAGES: Record<number, string> = {
+    404: "La solicitud de registro no existe.",
+    409: "La solicitud de registro ya fue resuelta.",
+    410: "La solicitud de registro expiró.",
 };
 
 // Normalizes the optional camera URL sent to the backend: trim, and drop an
@@ -423,10 +424,15 @@ function errorCodeOf(result: unknown): string | null {
 function errorsFromResponse(
     result: unknown,
     response: Response,
+    statusMessages?: Record<number, string>,
 ): { errors: string[]; code?: string } {
     const code = errorCodeOf(result)
-    if (code && ENROLLMENT_ERROR_MESSAGES[code]) {
-        return { errors: [ENROLLMENT_ERROR_MESSAGES[code]], code }
+    if (code && DEVICE_ERROR_MESSAGES[code]) {
+        return { errors: [DEVICE_ERROR_MESSAGES[code]], code }
+    }
+    const statusMessage = statusMessages?.[response.status]
+    if (statusMessage) {
+        return { errors: [statusMessage], ...(code ? { code } : {}) }
     }
     if (isRecord(result) && Array.isArray(result.errors)) {
         const list = result.errors.map(String).filter(Boolean)
@@ -436,10 +442,10 @@ function errorsFromResponse(
         return { errors: [result.message], ...(code ? { code } : {}) }
     }
     if (response.status === 401 || response.status === 403) {
-        return { errors: [ENROLLMENT_ERROR_MESSAGES.unauthorized], code: "unauthorized" }
+        return { errors: [DEVICE_ERROR_MESSAGES.unauthorized], code: "unauthorized" }
     }
     if (response.status === 429) {
-        return { errors: [ENROLLMENT_ERROR_MESSAGES.rate_limited], code: "rate_limited" }
+        return { errors: [DEVICE_ERROR_MESSAGES.rate_limited], code: "rate_limited" }
     }
     return {
         errors: [`La API respondió con ${response.status}: ${response.statusText}`],
@@ -453,6 +459,8 @@ interface DeviceMutationOptions<T> {
     body?: unknown
     parse: (data: unknown) => T | null
     invalidMessage: string
+    /** Mensajes por HTTP status, específicos del endpoint (p. ej. solicitudes). */
+    statusMessages?: Record<number, string>
 }
 
 // Shared POST/PUT helper: cookie-forwarded, no-store, 8s timeout, revalidates
@@ -482,7 +490,7 @@ async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<Dev
             return { ok: true, data };
         }
 
-        return { ok: false, ...errorsFromResponse(result, response) };
+        return { ok: false, ...errorsFromResponse(result, response, options.statusMessages) };
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
@@ -493,14 +501,15 @@ async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<Dev
     }
 }
 
-// Invitaciones pendientes de aprovisionamiento (lectura: cualquier rol).
-export async function getEnrollmentInvitations(): Promise<EnrollmentInvitation[]> {
+// Solicitudes de registro de dispositivos (lectura: sólo Supervisor/Admin;
+// el backend responde 401/403 si el rol no alcanza).
+export async function getRegistrationRequests(): Promise<RegistrationRequest[]> {
     const apiUrl = getApiUrl();
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${apiUrl}/api/v1/dispositivos/enrollments`, {
+        const response = await fetch(`${apiUrl}/api/registration-requests`, {
             headers: await getSessionHeaders(),
             cache: "no-store",
             signal: controller.signal,
@@ -514,17 +523,17 @@ export async function getEnrollmentInvitations(): Promise<EnrollmentInvitation[]
         }
 
         const result: unknown = await response.json();
-        const data = parseEnrollmentInvitations(result);
+        const data = parseRegistrationRequests(result);
         if (data === null) {
             if (isRecord(result) && result.success === false) {
                 throw new Error(getResponseMessage(result));
             }
-            throw new Error("La API devolvió una respuesta inválida para las invitaciones pendientes.");
+            throw new Error("La API devolvió una respuesta inválida para las solicitudes de registro.");
         }
         return data;
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Las invitaciones no están disponibles.");
+            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Las solicitudes de registro no están disponibles.");
         }
         throw e;
     } finally {
@@ -532,73 +541,30 @@ export async function getEnrollmentInvitations(): Promise<EnrollmentInvitation[]
     }
 }
 
-// Emite una invitación temporal de uso único. El `code` viene SÓLO en esta
-// respuesta; nunca se lista ni se vuelve a mostrar.
-export async function createEnrollmentInvitation(
-    payload: EnrollmentCreateRequest,
-): Promise<DeviceActionResult<EnrollmentInvitation>> {
-    const nombre = payload.nombre.trim();
-    const ubicacion = payload.ubicacion?.trim() ?? "";
-    const whepUrl = normalizeWhepUrl(payload.whepUrl);
-    return deviceMutation<EnrollmentInvitation>({
-        path: "/api/v1/dispositivos/enrollments",
+// Aprueba una solicitud de registro. El backend responde en snake_case
+// (`request_id`, `device_id`) y se normaliza al contrato camelCase.
+export async function approveRegistrationRequest(
+    requestId: string,
+): Promise<DeviceActionResult<RegistrationApproval>> {
+    return deviceMutation<RegistrationApproval>({
+        path: `/api/registration-requests/${encodeURIComponent(requestId)}/approve`,
         method: "POST",
-        body: {
-            nombre,
-            ...(ubicacion ? { ubicacion } : {}),
-            ...(whepUrl ? { whepUrl } : {}),
-        },
-        parse: parseEnrollmentInvitation,
-        invalidMessage: "La API devolvió una invitación inválida.",
+        parse: parseRegistrationApproval,
+        invalidMessage: "La API devolvió una aprobación de registro inválida.",
+        statusMessages: REGISTRATION_STATUS_MESSAGES,
     });
 }
 
-// Cancela una invitación pendiente. Consumida => 409 enrollment_consumed.
-export async function cancelEnrollment(
-    enrollmentId: string,
-): Promise<DeviceActionResult<EnrollmentCancelResult>> {
-    return deviceMutation<EnrollmentCancelResult>({
-        path: `/api/v1/dispositivos/enrollments/${encodeURIComponent(enrollmentId)}/cancel`,
+// Rechaza una solicitud de registro. El backend responde en camelCase.
+export async function rejectRegistrationRequest(
+    requestId: string,
+): Promise<DeviceActionResult<RegistrationRejection>> {
+    return deviceMutation<RegistrationRejection>({
+        path: `/api/registration-requests/${encodeURIComponent(requestId)}/reject`,
         method: "POST",
-        parse: parseEnrollmentCancel,
-        invalidMessage: "La API devolvió una respuesta inválida al cancelar la invitación.",
-    });
-}
-
-function lifecycleAction(
-    dispositivoId: string,
-    action: "disable" | "enable" | "revoke",
-): Promise<DeviceActionResult<Device>> {
-    return deviceMutation<Device>({
-        path: `/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/${action}`,
-        method: "POST",
-        parse: parseDevice,
-        invalidMessage: "La API devolvió un dispositivo inválido.",
-    });
-}
-
-export async function disableDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
-    return lifecycleAction(dispositivoId, "disable");
-}
-
-export async function enableDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
-    return lifecycleAction(dispositivoId, "enable");
-}
-
-export async function revokeDispositivo(dispositivoId: string): Promise<DeviceActionResult<Device>> {
-    return lifecycleAction(dispositivoId, "revoke");
-}
-
-// Reprovisión: revoca la credencial anterior e invalida invitaciones previas;
-// devuelve una invitación nueva (201) con `code` de uso único.
-export async function reprovisionDispositivo(
-    dispositivoId: string,
-): Promise<DeviceActionResult<EnrollmentInvitation>> {
-    return deviceMutation<EnrollmentInvitation>({
-        path: `/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/reprovision`,
-        method: "POST",
-        parse: parseEnrollmentInvitation,
-        invalidMessage: "La API devolvió una invitación de reprovisión inválida.",
+        parse: parseRegistrationRejection,
+        invalidMessage: "La API devolvió un rechazo de registro inválido.",
+        statusMessages: REGISTRATION_STATUS_MESSAGES,
     });
 }
 

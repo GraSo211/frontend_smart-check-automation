@@ -2,7 +2,7 @@
 
 import React from "react"
 import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
 import type { Device } from "@/lib/devices-data"
 
@@ -11,10 +11,6 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("@/actions/api", () => ({
-  disableDispositivo: vi.fn(),
-  enableDispositivo: vi.fn(),
-  reprovisionDispositivo: vi.fn(),
-  revokeDispositivo: vi.fn(),
   updateDispositivo: vi.fn(),
 }))
 
@@ -32,57 +28,37 @@ function device(overrides: Partial<Device> = {}): Device {
   }
 }
 
-async function openMenu() {
+async function openEditDialog() {
   render(React.createElement(DeviceActionsMenu, { device: device() }))
-  fireEvent.click(screen.getByLabelText("Acciones de Nodo 1"))
-  await screen.findByText("Revocar credencial")
+  fireEvent.click(screen.getByLabelText("Editar metadatos"))
+  await screen.findByText("Editar dispositivo")
 }
 
-describe("menú de ciclo de vida del nodo", () => {
-  it("ofrece las acciones válidas y pide confirmación al revocar", async () => {
-    await openMenu()
-
-    expect(screen.getByText("Deshabilitar")).toBeTruthy()
-    expect(screen.getByText("Reprovisionar")).toBeTruthy()
-    expect(screen.queryByText("Habilitar")).toBeNull()
-
-    fireEvent.click(screen.getByText("Revocar credencial"))
-    await screen.findByText("¿Revocar la credencial de este nodo?")
-    expect(screen.getByText(/invalidada de inmediato/)).toBeTruthy()
+describe("acción de edición del nodo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it("pide confirmación al reprovisionar y aclara que la credencial vieja se invalida", async () => {
-    render(React.createElement(DeviceActionsMenu, { device: device({ authStatus: "disabled" }) }))
-    fireEvent.click(screen.getByLabelText("Acciones de Nodo 1"))
-    await screen.findByText("Reprovisionar")
+  it("expone un botón directo de edición y ninguna acción de ciclo de vida", () => {
+    render(React.createElement(DeviceActionsMenu, { device: device() }))
 
-    expect(screen.getByText("Habilitar")).toBeTruthy()
+    const trigger = screen.getByLabelText("Editar metadatos")
+    expect(trigger.getAttribute("title")).toBe("Editar metadatos")
+    expect(trigger.getAttribute("type")).toBe("button")
+
+    // Sin menú desplegable: el nombre sólo vive en el aria-label, no como texto.
+    expect(screen.queryByText("Editar metadatos")).toBeNull()
     expect(screen.queryByText("Deshabilitar")).toBeNull()
-
-    fireEvent.click(screen.getByText("Reprovisionar"))
-    await screen.findByText("¿Reprovisionar este nodo?")
-    expect(screen.getByText(/credencial anterior/)).toBeTruthy()
-  })
-
-  it("ofrece sólo reprovisionar para un nodo revocado", async () => {
-    render(React.createElement(DeviceActionsMenu, { device: device({ authStatus: "revoked" }) }))
-    fireEvent.click(screen.getByLabelText("Acciones de Nodo 1"))
-    await screen.findByText("Reprovisionar")
-
+    expect(screen.queryByText("Habilitar")).toBeNull()
     expect(screen.queryByText("Revocar credencial")).toBeNull()
-    expect(screen.queryByText("Habilitar")).toBeNull()
-    expect(screen.queryByText("Deshabilitar")).toBeNull()
+    expect(screen.queryByText("Reprovisionar")).toBeNull()
   })
 
-  it("no ofrece revocar, habilitar ni deshabilitar para un nodo sin enrolar", async () => {
-    // El backend rechaza esas tres transiciones con 409 para `unenrolled`;
-    // reprovisionar sigue siendo válido para un dispositivo existente.
-    render(React.createElement(DeviceActionsMenu, { device: device({ authStatus: "unenrolled" }) }))
-    fireEvent.click(screen.getByLabelText("Acciones de Nodo 1"))
-    await screen.findByText("Reprovisionar")
+  it("abre el diálogo de edición con nombre, ubicación y cámara", async () => {
+    await openEditDialog()
 
-    expect(screen.queryByText("Revocar credencial")).toBeNull()
-    expect(screen.queryByText("Habilitar")).toBeNull()
-    expect(screen.queryByText("Deshabilitar")).toBeNull()
+    expect(screen.getByLabelText("Nombre")).toBeTruthy()
+    expect(screen.getByLabelText("Ubicación")).toBeTruthy()
+    expect(screen.getByLabelText("URL WHEP (cámara)")).toBeTruthy()
   })
 })
