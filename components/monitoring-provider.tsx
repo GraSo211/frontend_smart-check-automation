@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { Device } from '@/lib/devices-data'
-import type { ProductionRun } from '@/lib/production-data'
+import type { LoteSector } from '@/lib/production-data'
 import {
   createInitialMonitoringState,
   confirmDataEvent,
@@ -13,7 +13,7 @@ import {
 import type { MonitoringView, NodeObservation, ServiceStatus, SourceSync } from '@/lib/monitoring-types'
 import { recordSourceDataEvent, recordSourceQuery } from '@/lib/sync-store'
 import { mergeDeviceUpdate, reconcileDeviceSnapshot } from '@/lib/telemetry'
-import { isRecord, parseDeviceEventPayload, parseDevicesPayload, parseProductionPayload } from '@/lib/monitoring-runtime'
+import { isRecord, parseDeviceEventPayload, parseDevicesPayload, parseLoteSectorPayload } from '@/lib/monitoring-runtime'
 import { parseBackendPage, parseCompleteCollection } from '@/lib/pagination'
 
 const PROBE_INTERVAL_MS = 30_000
@@ -25,7 +25,7 @@ const REQUEST_TIMEOUT_MS = 8_000
 
 type StreamName = 'lotes' | 'nodos'
 type StreamState = 'open' | 'error' | 'closed'
-type ProductionListener = (run: ProductionRun) => void
+type ProductionListener = (run: LoteSector) => void
 
 export type MonitoringActions = {
   reportCamera: (status: ServiceStatus) => void
@@ -121,25 +121,38 @@ function readBackendStatus(result: JsonResult): ServiceStatus {
   return { availability: 'unknown', checkedAt, detail: 'La respuesta de salud del backend no es válida.' }
 }
 
-function productionPayload(payload: unknown): ProductionRun | null {
+function productionPayload(payload: unknown): LoteSector | null {
   if (!isRecord(payload) || ('success' in payload && payload.success !== true)) return null
   const value = 'data' in payload ? payload.data : payload
-  return parseProductionPayload([value])?.[0] ?? null
+  return parseLoteSectorPayload([value])?.[0] ?? null
 }
 
-function productionSnapshot(payload: unknown): ProductionRun[] | null {
-  const complete = parseCompleteCollection<ProductionRun>(payload, (run) => run.id)
-  if (complete) return parseProductionPayload(complete.items)
+function productionSnapshot(payload: unknown): LoteSector[] | null {
+  const complete = parseCompleteCollection<LoteSector>(payload, (lote) => lote.id)
+  if (complete) return parseLoteSectorPayload(complete.items)
 
   // Keep finite legacy fixtures useful in tests/older deployments, but never
   // certify a full page without metadata as a complete collection.
-  const legacy = parseBackendPage<ProductionRun>(payload, {
+  const legacy = parseBackendPage<LoteSector>(payload, {
     requestedPage: 1,
     requestedPageSize: 100,
     allowLegacyMetadata: true,
   })
   if (!legacy || legacy.hasMetadata || legacy.items.length >= 100) return null
-  return parseProductionPayload(legacy.items)
+  return parseLoteSectorPayload(legacy.items)
+}
+
+// The global snapshot route flags when a sector was capped or its collected
+// rows fell short of the reported total. Absent/legacy payloads are not
+// truncated.
+function snapshotTruncated(payload: unknown): boolean {
+  return isRecord(payload) && payload.truncada === true
+}
+
+// Newest-first ordering by `abierto_en`; the backend contract returns the
+// history ordered that way, so an unknown SSE lote is inserted in place.
+function sortByAbiertoEnDesc(runs: LoteSector[]): LoteSector[] {
+  return [...runs].sort((a, b) => Date.parse(b.abierto_en) - Date.parse(a.abierto_en))
 }
 
 function MonitoringProviderRuntime({ children }: { children?: React.ReactNode }) {
@@ -156,7 +169,6 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
   const nodeRefreshRef = useRef<Promise<Device[] | null> | null>(null)
   const probeRef = useRef<Promise<void> | null>(null)
   const productionListenersRef = useRef(new Set<ProductionListener>())
-  const productionIdsRef = useRef(new Set<string>())
   const controllersRef = useRef(new Set<AbortController>())
   const generationRef = useRef(0)
   const mountedRef = useRef(false)
@@ -331,7 +343,6 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
   const acceptLoteEvent = useCallback((payload: unknown): boolean => {
     const run = productionPayload(payload)
     if (!run || !mountedRef.current || !visible()) return false
-    productionIdsRef.current.add(run.id)
     productionListenersRef.current.forEach((listener) => listener(run))
     updateSync('lotes', (current) => recordSourceDataEvent(current, new Date().toISOString()))
     return true
@@ -463,10 +474,10 @@ export function useMonitoringNodes(): Device[] | null {
 }
 
 export function useProductionData(
-  initialRuns: ProductionRun[],
+  initialRuns: LoteSector[],
   initialLastSyncAt: string | null,
   initialError?: string | null,
-): { runs: ProductionRun[]; lastSyncAt: string | null; error: string | null; loading: boolean; refresh: () => Promise<boolean> } {
+): { runs: LoteSector[]; lastSyncAt: string | null; error: string | null; loading: boolean; truncated: boolean; refresh: () => Promise<boolean> } {
   const context = useContext(MonitoringContext)
   const actions = context?.actions ?? fallbackActions
   const monitoring = context?.view ?? fallbackView
@@ -474,8 +485,9 @@ export function useProductionData(
   const [runs, setRuns] = useState(initialRuns)
   const [error, setError] = useState(initialError ?? null)
   const [loading, setLoading] = useState(false)
+  const [truncated, setTruncated] = useState(false)
   const eventVersionRef = useRef(0)
-  const eventsRef = useRef<Array<{ version: number; run: ProductionRun; observedAt: string }>>([])
+  const eventsRef = useRef<Array<{ version: number; run: LoteSector; observedAt: string }>>([])
   const acceptedSnapshotAtRef = useRef<string | null>(
     initialLastSyncAt && Number.isFinite(Date.parse(initialLastSyncAt)) ? initialLastSyncAt : null,
   )
@@ -523,7 +535,9 @@ export function useProductionData(
       }]
       setRuns((current) => {
         const index = current.findIndex((item) => item.id === run.id)
-        return index < 0 ? [run, ...current] : current.map((item, itemIndex) => itemIndex === index ? run : item)
+        if (index >= 0) return current.map((item, itemIndex) => itemIndex === index ? run : item)
+        // Unknown id: insert newest-first by `abierto_en` instead of prepending.
+        return sortByAbiertoEnDesc([...current, run])
       })
       setError(null)
     })
@@ -545,6 +559,7 @@ export function useProductionData(
         if (!response.ok) throw new Error(`La API respondió con ${response.status}.`)
         const nextRuns = productionSnapshot(payload)
         if (!nextRuns) throw new Error('La API de lotes devolvió una respuesta inválida.')
+        const nextTruncated = snapshotTruncated(payload)
         const requestedAt = Date.parse(requestedSnapshotAt)
         const acceptedAt = acceptedSnapshotAtRef.current ? Date.parse(acceptedSnapshotAtRef.current) : NaN
         if (Number.isFinite(acceptedAt) && requestedAt < acceptedAt) return false
@@ -557,6 +572,7 @@ export function useProductionData(
         acceptedSnapshotAtRef.current = requestedSnapshotAt
         eventsRef.current = eventsRef.current.filter((event) => Date.parse(event.observedAt) > requestedAt)
         setRuns([...merged.values()])
+        setTruncated(nextTruncated)
         setError(null)
         actions.confirmSourceQuery('lotes', requestedSnapshotAt)
         return true
@@ -617,6 +633,7 @@ export function useProductionData(
     lastSyncAt: monitoring.sync.lotes.lastConfirmedAt ?? initialLastSyncAt,
     error,
     loading,
+    truncated,
     refresh,
   }
 }

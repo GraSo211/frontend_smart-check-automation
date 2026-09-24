@@ -1,6 +1,6 @@
 "use client"
 
-import { Camera, MapPin } from "lucide-react"
+import { Camera, Layers } from "lucide-react"
 import SegmentedControl from "@/components/supervision/segmented-control"
 import type { CameraNode } from "@/lib/camera-sources"
 
@@ -29,8 +29,8 @@ export default function NodeSelector({ nodes, selectedNodeId, onSelectNode }: No
           <div className="min-w-0">
             <p className="truncate font-heading text-sm font-semibold text-foreground">{node.nombre}</p>
             <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-              {node.ubicacion ? <MapPin className="size-3 shrink-0" aria-hidden="true" /> : null}
-              {node.ubicacion || "Sin ubicación"}
+              {node.sector ? <Layers className="size-3 shrink-0" aria-hidden="true" /> : null}
+              {node.sector || "Sin sector"}
             </p>
           </div>
         </div>

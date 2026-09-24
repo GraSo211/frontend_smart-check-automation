@@ -10,6 +10,7 @@ const PUBLIC_PATHS = ['/login', '/unauthorized']
 const PROTECTED_ROUTES: Array<{ prefix: string; minRole: UserRole }> = [
   { prefix: '/usuarios', minRole: 'Administrador' },
   { prefix: '/supervision', minRole: 'Supervisor' },
+  { prefix: '/sectores', minRole: 'Supervisor' },
 ]
 
 const SESSION_COOKIE = 'session_token'

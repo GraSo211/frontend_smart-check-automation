@@ -2,6 +2,7 @@ import {
   Database,
   Eye,
   LayoutDashboard,
+  MapPin,
   SlidersHorizontal,
   TriangleAlert,
   Users,
@@ -33,6 +34,7 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
     label: "Sistema",
     items: [
       { href: "/configuracion", label: "Parámetros de Configuración", icon: SlidersHorizontal },
+      { href: "/sectores", label: "Sectores", icon: MapPin },
       { href: "/alertas", label: "Manejo de Alertas", icon: TriangleAlert },
       { href: "/nodos", label: "Estado de los Nodos", icon: Cpu },
       { href: "/usuarios", label: "Usuarios y Roles", icon: Users },

@@ -95,7 +95,7 @@ describe("cuenta regresiva de vencimiento", () => {
     expect(isRegistrationStale("2026-01-01T09:59:00.000Z", now)).toBe(false)
   })
 
-  it("formatea el reloj de vencimiento en UTC", () => {
-    expect(registrationExpiryClock("2026-01-01T10:15:00.000Z")).toBe("10:15")
+  it("formatea el reloj de vencimiento en horario de Buenos Aires", () => {
+    expect(registrationExpiryClock("2026-01-01T10:15:00.000Z")).toBe("07:15")
   })
 })

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { approveRegistrationRequest, rejectRegistrationRequest } from "@/actions/api"
 import { isRegistrationStale, registrationExpiryClock, registrationRemaining } from "@/lib/registration"
+import { APP_TIME_ZONE } from "@/lib/format"
 import type { RegistrationRequest } from "@/lib/devices-data"
 
 interface PendingRegistrationRequestsProps {
@@ -33,6 +34,7 @@ type Busy = { requestId: string; action: "approve" | "reject" } | null
 const requestedAtFormatter = new Intl.DateTimeFormat("es-AR", {
   dateStyle: "short",
   timeStyle: "short",
+  timeZone: APP_TIME_ZONE,
 })
 
 // La solicitud de registro la origina la propia Raspberry: el nodo pide
@@ -168,7 +170,7 @@ export function PendingRegistrationRequests({
                       }
                     >
                       <Clock className="size-3.5" aria-hidden="true" />
-                      {remaining.expired ? "Vencida" : remaining.label} · {registrationExpiryClock(request.expiresAt)} UTC
+                      {remaining.expired ? "Vencida" : remaining.label} · {registrationExpiryClock(request.expiresAt)}
                     </span>
                     {canManage && (
                       <>

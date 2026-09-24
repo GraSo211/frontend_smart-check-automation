@@ -1,11 +1,14 @@
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { LoteSector } from "@/lib/production-data"
 
 const mocks = vi.hoisted(() => ({
-  getAllProductionRuns: vi.fn(),
+  getAllLotes: vi.fn(),
+  getSectores: vi.fn(),
+  getLotes: vi.fn(),
+  getLoteAbierto: vi.fn(),
   getProductosConParametros: vi.fn(),
-  getLotesPorProducto: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => mocks)
@@ -45,13 +48,34 @@ const product = {
   updatedAt: "2026-01-01",
 }
 
+const sector = { id: "s-1", nombre: "Horno 1" }
+
+function lote(id: string): LoteSector {
+  return {
+    id,
+    sector_id: "s-1",
+    estado: "ABIERTO",
+    producto_id: "prod-1",
+    producto_nombre: "Producto real",
+    abierto_en: "2026-01-01T10:00:00.000Z",
+    abierto_por: { device_id: "d-1", type: "ENTRADA_HORNO" },
+    conteos: { ok: 1, crudo: null, quemado: 0, total: 1 },
+    ultimo_evento_en: "2026-01-01T10:05:00.000Z",
+    inactividad_segundos: 1,
+  }
+}
+
 function renderedProps(element: React.ReactElement) {
   return renderToStaticMarkup(element).replaceAll("&quot;", '"')
 }
 
+beforeEach(() => {
+  for (const fn of Object.values(mocks)) fn.mockReset()
+})
+
 describe("estados sin datos de producción", () => {
   it("conserva un vacío válido y sincroniza sólo la respuesta exitosa", async () => {
-    mocks.getAllProductionRuns.mockResolvedValueOnce([])
+    mocks.getAllLotes.mockResolvedValueOnce([])
     const { default: Page } = await import("@/app/(modulos)/page")
     const html = renderedProps(await Page())
     expect(html).toContain('"runs":[]')
@@ -60,7 +84,7 @@ describe("estados sin datos de producción", () => {
   })
 
   it("no reemplaza un error por conteos o datos de respaldo", async () => {
-    mocks.getAllProductionRuns.mockRejectedValueOnce(new Error("API caída"))
+    mocks.getAllLotes.mockRejectedValueOnce(new Error("API caída"))
     const { default: Page } = await import("@/app/(modulos)/page")
     const html = renderedProps(await Page())
     expect(html).toContain('"runs":[]')
@@ -69,14 +93,20 @@ describe("estados sin datos de producción", () => {
   })
 
   it("mantiene vacío y error explícitos en la página de lotes", async () => {
-    mocks.getAllProductionRuns.mockResolvedValueOnce([])
+    mocks.getSectores.mockResolvedValueOnce([sector])
+    mocks.getAllLotes.mockResolvedValueOnce([])
+    mocks.getLoteAbierto.mockResolvedValueOnce(null)
     const { default: Page } = await import("@/app/(modulos)/lotes/page")
-    const empty = renderedProps(await Page())
+    const empty = renderedProps(await Page({ searchParams: Promise.resolve({}) }))
     expect(empty).toContain('"runs":[]')
     expect(empty).toContain('"lastSyncAt":"')
+    expect(empty).toContain('"initialError":null')
+    expect(empty).toContain('"selectedSectorId":"s-1"')
 
-    mocks.getAllProductionRuns.mockRejectedValueOnce(new Error("lotes no disponibles"))
-    const failed = renderedProps(await Page())
+    mocks.getSectores.mockResolvedValueOnce([sector])
+    mocks.getAllLotes.mockRejectedValueOnce(new Error("lotes no disponibles"))
+    mocks.getLoteAbierto.mockResolvedValueOnce(null)
+    const failed = renderedProps(await Page({ searchParams: Promise.resolve({}) }))
     expect(failed).toContain('"runs":[]')
     expect(failed).toContain('"lastSyncAt":null')
     expect(failed).toContain("lotes no disponibles")
@@ -86,31 +116,51 @@ describe("estados sin datos de producción", () => {
 describe("configuración con fallos parciales", () => {
   it("expone el fallo del listado sin habilitar una configuración ficticia", async () => {
     mocks.getProductosConParametros.mockRejectedValueOnce(new Error("productos no disponibles"))
+    mocks.getSectores.mockResolvedValueOnce([])
     const { default: Page } = await import("@/app/(modulos)/configuracion/page")
     const html = renderedProps(await Page({ searchParams: Promise.resolve({}) }))
     expect(html).toContain("productos no disponibles")
     expect(html).toContain('"producto":null')
+    expect(html).toContain('"lotes":[]')
+    expect(mocks.getLotes).not.toHaveBeenCalled()
   })
 
   it("mantiene parámetros reales aunque falle el historial", async () => {
     mocks.getProductosConParametros.mockResolvedValueOnce([product])
-    mocks.getLotesPorProducto.mockRejectedValueOnce(new Error("historial no disponible"))
+    mocks.getSectores.mockResolvedValueOnce([sector])
+    mocks.getLotes.mockRejectedValueOnce(new Error("historial no disponible"))
     const { default: Page } = await import("@/app/(modulos)/configuracion/page")
     const html = renderedProps(await Page({ searchParams: Promise.resolve({ productoId: "prod-1" }) }))
     expect(html).toContain("param-1")
     expect(html).toContain("historial no disponible")
+    expect(mocks.getLotes).toHaveBeenCalledWith("s-1", {
+      productoId: "prod-1",
+      limite: 100,
+      antesDe: undefined,
+    })
   })
 
-  it("reconsulta la última página si el total redujo una página solicitada", async () => {
+  it("sigue el cursor del backend y entrega todas las corridas al historial", async () => {
     mocks.getProductosConParametros.mockResolvedValueOnce([product])
-    mocks.getLotesPorProducto
-      .mockResolvedValueOnce({ items: [{ id: "wrong" }], total: 101, page: 999, pageSize: 10 })
-      .mockResolvedValueOnce({ items: [{ id: "last" }], total: 101, page: 11, pageSize: 10 })
+    mocks.getSectores.mockResolvedValueOnce([sector])
+    mocks.getLotes
+      .mockResolvedValueOnce({ items: [lote("cursor-lote-1")], total: 2, siguienteCursor: "cursor-1" })
+      .mockResolvedValueOnce({ items: [lote("cursor-lote-2")], total: 2, siguienteCursor: null })
     const { default: Page } = await import("@/app/(modulos)/configuracion/page")
-    const html = renderedProps(await Page({ searchParams: Promise.resolve({ productoId: "prod-1", page: "999", pageSize: "10" }) }))
-    expect(mocks.getLotesPorProducto).toHaveBeenLastCalledWith("prod-1", 11, 10)
-    expect(html).toContain('"page":11')
-    expect(html).toContain("last")
-    expect(html).not.toContain("wrong")
+    const html = renderedProps(await Page({ searchParams: Promise.resolve({ productoId: "prod-1" }) }))
+
+    expect(mocks.getLotes).toHaveBeenCalledTimes(2)
+    expect(mocks.getLotes).toHaveBeenNthCalledWith(1, "s-1", {
+      productoId: "prod-1",
+      limite: 100,
+      antesDe: undefined,
+    })
+    expect(mocks.getLotes).toHaveBeenNthCalledWith(2, "s-1", {
+      productoId: "prod-1",
+      limite: 100,
+      antesDe: "cursor-1",
+    })
+    expect(html).toContain("cursor-lote-1")
+    expect(html).toContain("cursor-lote-2")
   })
 })

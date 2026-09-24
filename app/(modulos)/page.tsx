@@ -1,12 +1,12 @@
 import { DashboardContent } from "@/components/dashboard-content"
-import { getAllProductionRuns } from "@/actions/api"
+import { getAllLotes } from "@/actions/api"
 import { getSession } from "@/lib/auth"
-import type { ProductionRun } from "@/lib/production-data"
+import type { LoteSector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
 export default async function Page() {
-  let runs: ProductionRun[] = []
+  let runs: LoteSector[] = []
   let error: string | null = null
   let lastSyncAt: string | null = null
 
@@ -14,7 +14,7 @@ export default async function Page() {
   const userRole = session?.rol ?? "Operario"
 
   try {
-    const apiRuns = await getAllProductionRuns()
+    const apiRuns = await getAllLotes()
     runs = apiRuns
     lastSyncAt = new Date().toISOString()
   } catch (e) {

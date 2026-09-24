@@ -49,12 +49,18 @@ export type RegistrationRejection = {
     status: "REJECTED";
 };
 
+/** Rol funcional del nodo dentro de un sector (entrada/salida del horno). */
+export type DeviceType = "ENTRADA_HORNO" | "SALIDA_HORNO";
+
 export type Device = {
     dispositivoId: string;
     nombre: string;
-    ubicacion: string;
     /** URL WHEP de la cámara publicada por este nodo. Opcional. */
     whepUrl?: string;
+    /** Rol funcional del nodo en su sector. Opcional (eventos SSE pueden omitirlo). */
+    type?: DeviceType;
+    /** Sector al que pertenece el nodo. Opcional. */
+    sectorId?: string;
     estado: "online" | "offline";
     ultimaMetrica?: {
         id: string;
@@ -81,8 +87,17 @@ export type Device = {
 
 export type UpdateDispositivoRequest = {
     dispositivoId: string;
-    nombre: string;
-    ubicacion: string;
+    /**
+     * El nombre es inmutable desde el panel: solo la propia Raspberry lo cambia
+     * vía su endpoint autenticado. La actualización del panel maneja únicamente
+     * el sector y la URL WHEP. Enviar `nombre` al backend provoca un 400.
+     */
+    /**
+     * Sector destino; `null` desasigna el nodo de su sector. Es obligatorio:
+     * el backend interpreta la ausencia de la clave igual que `null`, así que
+     * exigirlo evita desasignaciones accidentales al editar solo sector/WHEP.
+     */
+    sectorId: string | null;
     whepUrl?: string;
 };
 

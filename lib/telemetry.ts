@@ -29,13 +29,57 @@ export function formatSnapshot(value: number | undefined, suffix = "%") {
 
 export type TelemetrySample = { dispositivoId: string; receivedAt: string; id?: string | null }
 
+/**
+ * Identidad estable de un reporte físico, para conciliar dos fuentes que
+ * describen la misma muestra con distinto `id`.
+ *
+ * Es necesario porque el SSE `dispositivo.metric` difunde `ultimaMetrica.id`
+ * vacío (la métrica se inserta de forma asíncrona y el id recién se asigna
+ * después del broadcast), mientras que el historial HTTP sí trae el id real de
+ * PostgreSQL. Además el `receivedAt` del SSE llega con nanosegundos y el de la
+ * base con microsegundos, así que la comparación usa el tiempo parseado al
+ * segundo: los nodos reportan cada ~10 s, por lo que dos reportes distintos del
+ * mismo nodo nunca caen en el mismo segundo.
+ */
+export function telemetryReportKey(sample: TelemetrySample): string | null {
+  const time = Date.parse(sample.receivedAt)
+  if (!Number.isFinite(time)) return null
+  return `${sample.dispositivoId}|t:${Math.floor(time / 1000)}`
+}
+
+function telemetrySampleKey(sample: TelemetrySample): string {
+  return sample.id
+    ? `${sample.dispositivoId}|id:${sample.id}`
+    : `${sample.dispositivoId}|at:${sample.receivedAt}`
+}
+
 /** Deduplicates by device/report id, falling back to device/report time. */
 export function mergeTelemetrySamples<T extends TelemetrySample>(...groups: T[][]): T[] {
   const unique = new Map<string, T>()
+  const keyByReport = new Map<string, string>()
+
   for (const group of groups) for (const sample of group) {
-    const key = sample.id ? `${sample.dispositivoId}|id:${sample.id}` : `${sample.dispositivoId}|at:${sample.receivedAt}`
+    const key = telemetrySampleKey(sample)
+    const report = telemetryReportKey(sample)
+    const previousKey = report ? keyByReport.get(report) : undefined
+    const previous = previousKey ? unique.get(previousKey) : undefined
+
+    // La misma muestra observada por SSE (sin id) y por el historial HTTP (con
+    // id) debe colapsar en una sola fila. Sólo se unifican cuando una de las dos
+    // trae id y la otra no: dos reportes distintos con id propio se conservan.
+    if (previous && previousKey && report && previousKey !== key && Boolean(previous.id) !== Boolean(sample.id)) {
+      const keepKey = previous.id ? previousKey : key
+      const keepId = previous.id || sample.id
+      unique.delete(previousKey)
+      unique.set(keepKey, { ...sample, id: keepId } as T)
+      keyByReport.set(report, keepKey)
+      continue
+    }
+
     unique.set(key, sample)
+    if (report) keyByReport.set(report, key)
   }
+
   return [...unique.values()].map((sample, index) => ({ sample, index })).sort((a, b) => {
     const aTime = Date.parse(a.sample.receivedAt)
     const bTime = Date.parse(b.sample.receivedAt)

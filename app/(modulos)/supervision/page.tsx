@@ -1,12 +1,25 @@
 import type { Metadata } from "next"
 import { Activity, ShieldCheck } from "lucide-react"
+import { getSectores } from "@/actions/api"
+import type { Sector } from "@/lib/production-data"
 import SupervisionView from "@/components/supervision/supervision-view"
 
 export const metadata: Metadata = {
   title: "Supervisión en Vivo | Smart-Check Automation",
 }
 
-export default function Page() {
+export const dynamic = "force-dynamic"
+
+export default async function Page() {
+  // Los sectores resuelven el nombre mostrado en el selector de cámara. Si la
+  // consulta falla, la supervisión sigue funcionando y el sector queda vacío.
+  let sectores: Sector[] = []
+  try {
+    sectores = await getSectores()
+  } catch {
+    sectores = []
+  }
+
   return (
     <main className="flex min-h-screen flex-1 flex-col bg-background">
       <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
@@ -31,7 +44,7 @@ export default function Page() {
           </div>
         </header>
 
-        <SupervisionView />
+        <SupervisionView sectores={sectores} />
       </div>
     </main>
   )

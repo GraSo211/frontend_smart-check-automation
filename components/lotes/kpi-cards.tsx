@@ -1,35 +1,26 @@
 import { Boxes, ShieldCheck, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatKg } from "@/lib/format"
-import { CONVEYOR_SPEED_UNIT, type ProductionRun } from "@/lib/production-data"
+import type { LoteSector } from "@/lib/production-data"
 
 interface KpiCardsProps {
-  runs: ProductionRun[]
+  runs: LoteSector[]
 }
 
-// Computes the top-row summary metrics across the full production dataset.
-function computeMetrics(runs: ProductionRun[]) {
-  const totalKg = runs.reduce(
-    (sum, r) => sum + r.correctosKg + r.quemadosKg + (r.crudosKg ?? 0),
+// Computes the summary metrics available in the sector/lotes contract. Weight,
+// oven temperature and conveyor speed no longer travel in the model, so their
+// cards keep a literal placeholder instead of a fabricated value.
+function computeMetrics(runs: LoteSector[]) {
+  const totalUnits = runs.reduce((sum, run) => sum + run.conteos.total, 0)
+  const totalOk = runs.reduce((sum, run) => sum + (run.conteos.ok ?? 0), 0)
+  const totalDefects = runs.reduce(
+    (sum, run) => sum + (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0),
     0,
   )
-  const totalCorrect = runs.reduce((sum, r) => sum + r.correctos, 0)
-  const totalUnits = runs.reduce((sum, r) => sum + r.totalUnidades, 0)
-  const totalBurnt = runs.reduce((sum, r) => sum + r.quemados, 0)
-  const avgTemp = runs.length
-    ? runs.reduce((sum, r) => sum + (r.tempHorno1 + r.tempHorno2) / 2, 0) / runs.length
-    : 0
-  const avgSpeed = runs.length
-    ? runs.reduce((sum, r) => sum + r.velocidadCinta, 0) / runs.length
-    : 0
 
   return {
-    totalKg,
     totalUnits,
-    qualityRate: totalUnits ? (totalCorrect / totalUnits) * 100 : 0,
-    defectRate: totalUnits ? (totalBurnt / totalUnits) * 100 : 0,
-    avgTemp,
-    avgSpeed,
+    qualityRate: totalUnits ? (totalOk / totalUnits) * 100 : 0,
+    defectRate: totalUnits ? (totalDefects / totalUnits) * 100 : 0,
   }
 }
 
@@ -38,32 +29,39 @@ export function KpiCards({ runs }: KpiCardsProps) {
   const m = computeMetrics(runs)
 
   const hasData = runs.length > 0
+  const hasUnits = hasData && m.totalUnits > 0
+  // A bucket the model never emits stays null: an all-null `ok` (or all-null
+  // `quemado`+`crudo`) must render "—" instead of a fabricated 0.0% rate.
+  const hasOk = runs.some((run) => run.conteos.ok !== null)
+  const hasWaste = runs.some(
+    (run) => run.conteos.quemado !== null || run.conteos.crudo !== null,
+  )
   const cards = [
     {
       label: "Unidades procesadas totales en Kg",
-      value: hasData ? formatKg(m.totalKg) : "—",
+      value: "—",
       hint: `${runs.length} lotes de producción`,
       icon: Boxes,
       accent: "bg-primary/10 text-primary",
     },
     {
       label: "Tasa de calidad general",
-      value: hasData ? `${m.qualityRate.toFixed(1)}%` : "—",
+      value: hasUnits && hasOk ? `${m.qualityRate.toFixed(1)}%` : "—",
       hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
       accent: "bg-success/10 text-success",
     },
     {
       label: "Tasa de merma",
-      value: hasData ? `${m.defectRate.toFixed(1)}%` : "—",
-      hint: "Unidades quemadas / total",
+      value: hasUnits && hasWaste ? `${m.defectRate.toFixed(1)}%` : "—",
+      hint: "Quemados y crudos vs total",
       icon: Flame,
       accent: "bg-destructive/10 text-destructive",
     },
     {
       label: "Promedio de hornos",
-      value: hasData ? `${Math.round(m.avgTemp)}°C` : "—",
-      hint: hasData ? `Velocidad cinta ${m.avgSpeed.toFixed(1)} ${CONVEYOR_SPEED_UNIT}` : "Sin medición",
+      value: "—",
+      hint: "Velocidad cinta —",
       icon: Gauge,
       accent: "bg-warning/10 text-warning",
     },

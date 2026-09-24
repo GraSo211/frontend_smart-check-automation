@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
-import { getDevices, getRegistrationRequests } from "@/actions/api"
+import { getDevices, getRegistrationRequests, getSectores } from "@/actions/api"
 import { getSession, hasMinRole } from "@/lib/auth"
 import type { Device, RegistrationRequest } from "@/lib/devices-data"
+import type { Sector } from "@/lib/production-data"
 import DevicesState from "@/components/nodos/devices-state"
 import { Lock } from "lucide-react"
 
@@ -28,6 +29,16 @@ export default async function Page() {
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
+  }
+
+  // Los sectores alimentan la tarjeta (nombre del sector) y el menú de edición.
+  // Si fallan, la flota se sigue mostrando y el menú deshabilita la asignación.
+  let sectores: Sector[] = []
+  let sectoresError: string | null = null
+  try {
+    sectores = await getSectores()
+  } catch (e) {
+    sectoresError = e instanceof Error ? e.message : "No se pudieron cargar los sectores."
   }
 
   // El backend restringe el listado a Supervisor/Admin: un Operario no debe
@@ -83,6 +94,8 @@ export default async function Page() {
           registrationRequests={registrationRequests}
           registrationRequestsError={registrationRequestsError}
           canManage={canManage}
+          sectores={sectores}
+          sectoresError={sectoresError}
         />
       </main>
     </div>

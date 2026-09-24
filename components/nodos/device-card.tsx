@@ -1,9 +1,10 @@
 "use client"
 
-import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, MapPin, Camera, Clock, SearchX, KeyRound, ShieldCheck, ShieldX, Ban, type LucideIcon } from "lucide-react"
+import { BrainCircuit, Wifi, WifiOff, Cpu, MemoryStick, Thermometer, Layers, Camera, Clock, SearchX, KeyRound, ShieldCheck, ShieldX, Ban, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import { AUTH_STATUS_LABELS, deviceAuthStatus, type AuthStatus, type Device } from "@/lib/devices-data"
+import type { Sector } from "@/lib/production-data"
 import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
 
 // Maps each connection state to an icon and color treatment.
@@ -61,10 +62,24 @@ interface DeviceCardProps {
   onSelect: (dispositivoId: string) => void
   /** Supervisor/Administrador ven acciones; Operario es sólo lectura. */
   canManage?: boolean
+  /** Nombre del sector resuelto por el contenedor (mapa sectorId→nombre). */
+  sectorName?: string | null
+  /** Sectores disponibles, reenviados al menú de edición del nodo. */
+  sectores?: Sector[]
+  /** Error de carga de sectores: deshabilita la asignación en el menú. */
+  sectoresError?: string | null
 }
 
 // Renders a selectable card summarizing a single node's state and last telemetry.
-export function DeviceCard({ device, selected, onSelect, canManage = false }: DeviceCardProps) {
+export function DeviceCard({
+  device,
+  selected,
+  onSelect,
+  canManage = false,
+  sectorName = null,
+  sectores = [],
+  sectoresError = null,
+}: DeviceCardProps) {
   const status = STATUS_CONFIG[device.estado]
   const StatusIcon = status.icon
   const authStatus = deviceAuthStatus(device)
@@ -112,16 +127,29 @@ export function DeviceCard({ device, selected, onSelect, canManage = false }: De
           >
             {status.label}
           </span>
-          {canManage && <DeviceActionsMenu device={device} />}
+          {canManage && (
+            <DeviceActionsMenu
+              device={device}
+              sectores={sectores}
+              sectoresError={sectoresError}
+            />
+          )}
         </div>
       </div>
 
       <div className="mt-3">
         <h3 className="break-words text-sm font-semibold text-foreground">{device.nombre}</h3>
-        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-          <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-          {device.ubicacion}
-        </p>
+        {sectorName ? (
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            <Layers className="size-3.5 shrink-0" aria-hidden="true" />
+            {sectorName}
+          </p>
+        ) : (
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70">
+            <Layers className="size-3.5 shrink-0" aria-hidden="true" />
+            Sin sector
+          </p>
+        )}
         {device.whepUrl && (
           <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={device.whepUrl}>
             <Camera className="size-3.5 shrink-0 text-info" aria-hidden="true" />

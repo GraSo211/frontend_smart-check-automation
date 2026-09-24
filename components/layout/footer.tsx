@@ -3,12 +3,13 @@
 import Image from "next/image"
 import { Radio } from "lucide-react"
 import { useMonitoring } from "@/components/monitoring-provider"
+import { APP_TIME_ZONE } from "@/lib/format"
 import type { SourceSync } from "@/lib/monitoring-types"
 
 function syncText(source: SourceSync) {
   if (!source.lastConfirmedAt || source.freshness === "never") return { time: "—", age: "Sin confirmar" }
   const age = source.freshness === "stale" ? "Desactualizada" : "Actualizada"
-  return { time: new Date(source.lastConfirmedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }), age }
+  return { time: new Date(source.lastConfirmedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: APP_TIME_ZONE }), age }
 }
 
 // Bottom footer showing the timestamp of the last successful backend sync.

@@ -42,6 +42,19 @@ describe('proxy de autorización', () => {
     expect(response.headers.get('location')).toBe('https://app.example/unauthorized')
   })
 
+  it.each(['Administrador', 'Supervisor'])('permite %s en /sectores', (role) => {
+    const response = proxy(request('/sectores', role as 'Administrador' | 'Supervisor'))
+
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('X-User-Role')).toBe(role)
+  })
+
+  it('rechaza Operario en /sectores', () => {
+    const response = proxy(request('/sectores', 'Operario'))
+
+    expect(response.headers.get('location')).toBe('https://app.example/unauthorized')
+  })
+
   it('preserva pathname y query al pedir login', () => {
     const response = proxy(request('/supervision?camera=main&turno=noche'))
 

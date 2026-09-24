@@ -11,6 +11,7 @@ import {
   type RegistrationRequest,
   type RegistrationRequestStatus,
 } from "@/lib/devices-data"
+import { APP_TIME_ZONE } from "@/lib/format"
 
 export type Remaining = { expired: boolean; ms: number; label: string }
 
@@ -115,11 +116,11 @@ export function isRegistrationStale(
   return ms > 0 && ms <= thresholdMs
 }
 
-/** Short es-AR clock for a registration request expiry (e.g. "18:42", UTC). */
+/** Short es-AR clock for a registration request expiry (e.g. "18:42", Buenos Aires time). */
 export function registrationExpiryClock(expiresAt: string): string {
   const date = new Date(expiresAt)
   if (!Number.isFinite(date.getTime())) return "—"
-  return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" })
+  return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: APP_TIME_ZONE })
 }
 
 /** Label for the auth status, guarding against malformed values. */

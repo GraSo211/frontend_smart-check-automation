@@ -50,7 +50,7 @@ describe("solicitudes de registro pendientes", () => {
 
     expect(screen.getByText("rasp-01")).toBeTruthy()
     expect(screen.getByText(/Vence en 10 min/)).toBeTruthy()
-    expect(screen.getByText(/10:15 UTC/)).toBeTruthy()
+    expect(screen.getByText(/10:15/)).toBeTruthy()
   })
 
   it("aprueba la solicitud directamente y refresca el listado", async () => {

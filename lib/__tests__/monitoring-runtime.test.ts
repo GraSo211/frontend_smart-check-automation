@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { parseDeviceEventPayload, parseDevicesPayload, parseProductionPayload } from '@/lib/monitoring-runtime'
+import { describe, expect, it, vi } from 'vitest'
+import { parseDeviceEventPayload, parseDevicesPayload, parseLoteSectorPayload } from '@/lib/monitoring-runtime'
 
 const metric = {
   id: 'm-1', dispositivoId: 'n-1', cpuPct: 1, memRamDisponibleMb: 2,
   tempChip: 3, aiProcessorPct: 4, receivedAt: '2026-01-01T10:00:00.000Z',
 }
 
-const device = { dispositivoId: 'n-1', nombre: 'Nodo 1', ubicacion: 'Línea', estado: 'offline', ultimaMetrica: undefined }
+const device = { dispositivoId: 'n-1', nombre: 'Nodo 1', estado: 'offline', ultimaMetrica: undefined }
 const liveDevice = {
   ...device,
   estado: 'online',
@@ -14,13 +14,17 @@ const liveDevice = {
   ultimaMetrica: { ...metric, id: '' },
 }
 
-const run = {
-  id: 'l-1', productoId: 'p-1', productoNombre: 'Producto', turno: 'mañana',
-  inicioAt: '2026-01-01T10:00:00.000Z', finAt: '2026-01-01T11:00:00.000Z',
-  totalUnidades: 10, correctos: 9, quemados: 1, crudas: null, correctosKg: 1,
-  quemadosKg: 1, crudosKg: null, tempHorno1: 100, tempCombHorno1: 20,
-  tempHorno2: 100, tempCombHorno2: 20, velocidadCinta: 2,
-  createdAt: '2026-01-01T10:00:00.000Z', updatedAt: '2026-01-01T10:00:00.000Z',
+const lote = {
+  id: 'l-1',
+  sector_id: 's-1',
+  estado: 'ABIERTO',
+  producto_id: 'p-1',
+  producto_nombre: 'Tostada',
+  abierto_en: '2026-01-01T10:00:00.000Z',
+  abierto_por: { device_id: 'd-1', type: 'ENTRADA_HORNO' },
+  conteos: { ok: 9, crudo: null, quemado: 1, total: 10 },
+  ultimo_evento_en: '2026-01-01T10:05:00.000Z',
+  inactividad_segundos: 12.5,
 }
 
 describe('monitoring runtime validation', () => {
@@ -73,14 +77,80 @@ describe('monitoring runtime validation', () => {
     expect(parseDevicesPayload({ success: true, data: [liveDevice, malformed] })).toBeNull()
   })
 
-  it('exige todos los campos numéricos de lotes', () => {
-    expect(parseProductionPayload({ success: true, data: [run] })).toHaveLength(1)
-    expect(parseProductionPayload({ success: false, data: [run] })).toBeNull()
-    const incomplete = { ...run, totalUnidades: undefined }
-    expect(parseProductionPayload([incomplete])).toBeNull()
+  it('parsea type y sectorId opcionales y los omite si son inválidos sin rechazar el nodo', () => {
+    expect(parseDeviceEventPayload({ ...liveDevice, type: 'ENTRADA_HORNO', sectorId: 'horno-1' }))
+      .toMatchObject({ type: 'ENTRADA_HORNO', sectorId: 'horno-1' })
+    expect(parseDeviceEventPayload({ ...liveDevice, type: 'SALIDA_HORNO' })?.type).toBe('SALIDA_HORNO')
+    // `ubicacion` ya no forma parte del contrato del dispositivo.
+    expect(parseDeviceEventPayload({ ...liveDevice, ubicacion: 'Línea' })).not.toHaveProperty('ubicacion')
+    // Malformed or absent values are omitted without invalidating the device.
+    expect(parseDeviceEventPayload({ ...liveDevice, type: 'OTRO', sectorId: '' })).toMatchObject({
+      dispositivoId: 'n-1',
+    })
+    expect(parseDeviceEventPayload({ ...liveDevice, type: 'OTRO', sectorId: '' })).not.toHaveProperty('type')
+    expect(parseDeviceEventPayload({ ...liveDevice, type: 'OTRO', sectorId: '' })).not.toHaveProperty('sectorId')
+    expect(parseDeviceEventPayload(liveDevice)).not.toHaveProperty('type')
+    expect(parseDeviceEventPayload(liveDevice)).not.toHaveProperty('sectorId')
   })
 
-  it('rechaza fechas de lote inválidas', () => {
-    expect(parseProductionPayload({ success: true, data: [{ ...run, finAt: 'not-a-date' }] })).toBeNull()
+  it('acepta el envelope exitoso y un array crudo de lotes', () => {
+    expect(parseLoteSectorPayload({ success: true, data: [lote] })).toEqual([lote])
+    expect(parseLoteSectorPayload([lote])).toEqual([lote])
+    expect(parseLoteSectorPayload({ success: true, data: [] })).toEqual([])
+  })
+
+  it('acepta buckets null y abierto_por/cerrado_en/motivo_cierre ausentes o null', () => {
+    const closed = {
+      ...lote,
+      estado: 'CERRADO',
+      abierto_por: null,
+      conteos: { ok: null, crudo: null, quemado: 2, total: 2 },
+      cerrado_en: '2026-01-01T11:00:00.000Z',
+      motivo_cierre: 'sin_detecciones',
+    }
+    expect(parseLoteSectorPayload([closed])).toHaveLength(1)
+
+    const withoutOptional: Record<string, unknown> = { ...lote }
+    delete withoutOptional.abierto_por
+    delete withoutOptional.ultimo_evento_en
+    expect(parseLoteSectorPayload([withoutOptional])).toHaveLength(1)
+
+    const nullable = { ...lote, abierto_por: null, ultimo_evento_en: null, cerrado_en: null, motivo_cierre: null }
+    expect(parseLoteSectorPayload([nullable])).toHaveLength(1)
+  })
+
+  it('acepta abierto_por.type vacío o desconocido como lote degradado, no inválido', () => {
+    // El backend emite type:"" cuando dispositivos.tipo IS NULL (schema lo permite).
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: 'd1', type: '' } }])).toHaveLength(1)
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: 'd1', type: 'SALIDA_HORNO' } }])).toHaveLength(1)
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: 'd1', type: 'DESCONOCIDO' } }])).toHaveLength(1)
+    // device_id sigue siendo obligatorio.
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: '', type: '' } }])).toEqual([])
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: 'd1', type: 7 } }])).toEqual([])
+  })
+
+  it('descarta la fila inválida y conserva las válidas (parser no atómico)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const invalid = { ...lote, id: 'bad-1', estado: 'PENDIENTE' }
+    const result = parseLoteSectorPayload({ success: true, data: [lote, invalid, { ...lote, id: 'l-2' }] })
+    expect(result).not.toBeNull()
+    expect(result).toHaveLength(2)
+    expect(result?.map((item) => item.id)).toEqual(['l-1', 'l-2'])
+    expect(result?.some((item) => item.id === 'bad-1')).toBe(false)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('rechaza un envelope inválido y devuelve null', () => {
+    expect(parseLoteSectorPayload({ success: false, data: [lote] })).toBeNull()
+    expect(parseLoteSectorPayload({ success: true, data: null })).toBeNull()
+    expect(parseLoteSectorPayload({ success: true, data: { not: 'an array' } })).toBeNull()
+  })
+
+  it('rechaza lotes con fechas o conteos inválidos', () => {
+    expect(parseLoteSectorPayload([{ ...lote, abierto_en: 'not-a-date' }])).toEqual([])
+    expect(parseLoteSectorPayload([{ ...lote, conteos: { ok: 1, crudo: 1, quemado: 1, total: 'x' } }])).toEqual([])
+    expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: '', type: 'ENTRADA_HORNO' } }])).toEqual([])
+    expect(parseLoteSectorPayload([{ ...lote, estado: 'ABIERTO', cerrado_en: 'not-a-date' }])).toEqual([])
   })
 })

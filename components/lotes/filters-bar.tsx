@@ -1,46 +1,44 @@
 "use client"
 
 import { Search, X } from "lucide-react"
-import type { ProductionRun } from "@/lib/production-data"
+import { SectorSelect } from "@/components/shared/sector-select"
+import type { Sector } from "@/lib/production-data"
+
+export type EstadoFilter = "todos" | "ABIERTO" | "CERRADO"
 
 export interface FiltersState {
   search: string
-  turno: ProductionRun["turno"] | "todos"
-  tempMin: string
-  tempMax: string
+  estado: EstadoFilter
 }
 
 export const DEFAULT_FILTERS: FiltersState = {
   search: "",
-  turno: "todos",
-  tempMin: "",
-  tempMax: "",
+  estado: "todos",
 }
 
 interface FiltersBarProps {
   filters: FiltersState
   onChange: (filters: FiltersState) => void
+  /** Sectores disponibles para acotar la supervisión. */
+  sectores: Sector[]
+  /** Sector activo (vive en la URL, no en `filters`). */
+  selectedSectorId: string | null
+  onSectorChange: (id: string) => void
   resultsCount: number
   totalCount: number
-  tempRangeInvalid?: boolean
 }
 
 export function FiltersBar({
   filters,
   onChange,
+  sectores,
+  selectedSectorId,
+  onSectorChange,
   resultsCount,
   totalCount,
-  tempRangeInvalid = false,
 }: FiltersBarProps) {
-  const tempRangeError = tempRangeInvalid
-    ? "Debe ser mayor a la temperatura mínima."
-    : undefined
-
-  const hasActiveFilters =
-    filters.search !== "" ||
-    filters.turno !== "todos" ||
-    filters.tempMin !== "" ||
-    filters.tempMax !== ""
+  const hasActiveFilters = filters.search !== "" || filters.estado !== "todos"
+  const hasSectores = sectores.length > 0
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
@@ -48,7 +46,7 @@ export function FiltersBar({
         <div>
           <h2 className="text-base font-semibold text-foreground">Filtros</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Acotá la supervisión por producto, turno y temperatura.
+            Acotá la supervisión por sector, producto y estado del lote.
           </p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -60,6 +58,17 @@ export function FiltersBar({
 
       <div className="p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+          <div className="w-full sm:w-56">
+            <SectorSelect
+              id="sector"
+              label="Sector"
+              value={selectedSectorId ?? ""}
+              onChange={onSectorChange}
+              sectores={sectores}
+              disabled={!hasSectores}
+            />
+          </div>
+
           <div className="flex-1">
             <label
               htmlFor="search"
@@ -83,71 +92,25 @@ export function FiltersBar({
             </div>
           </div>
 
-          <div className="w-full sm:w-40">
+          <div className="w-full sm:w-44">
             <label
-              htmlFor="turno"
+              htmlFor="estado"
               className="mb-1.5 block text-xs font-medium text-muted-foreground"
             >
-              Turno
+              Estado
             </label>
             <select
-              id="turno"
-              value={filters.turno}
+              id="estado"
+              value={filters.estado}
               onChange={(e) =>
-                onChange({
-                  ...filters,
-                  turno: e.target.value as FiltersState["turno"],
-                })
+                onChange({ ...filters, estado: e.target.value as EstadoFilter })
               }
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
             >
               <option value="todos">Todos</option>
-              <option value="mañana">Mañana</option>
-              <option value="tarde">Tarde</option>
-              <option value="noche">Noche</option>
+              <option value="ABIERTO">Abierto</option>
+              <option value="CERRADO">Cerrado</option>
             </select>
-          </div>
-
-          <div className="w-full sm:w-28">
-            <label
-              htmlFor="tempMin"
-              className="mb-1.5 block text-xs font-medium text-muted-foreground"
-            >
-              Temp. mín (°C)
-            </label>
-            <input
-              id="tempMin"
-              type="number"
-              min={0}
-              max={300}
-              value={filters.tempMin}
-              aria-invalid={tempRangeInvalid ? true : undefined}
-              aria-describedby={tempRangeError ? "temp-range-error" : undefined}
-              onChange={(e) => onChange({ ...filters, tempMin: e.target.value })}
-              placeholder="0"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 aria-invalid:border-destructive"
-            />
-          </div>
-
-          <div className="w-full sm:w-28">
-            <label
-              htmlFor="tempMax"
-              className="mb-1.5 block text-xs font-medium text-muted-foreground"
-            >
-              Temp. máx (°C)
-            </label>
-            <input
-              id="tempMax"
-              type="number"
-              min={0}
-              max={300}
-              value={filters.tempMax}
-              aria-invalid={tempRangeInvalid ? true : undefined}
-              aria-describedby={tempRangeError ? "temp-range-error" : undefined}
-              onChange={(e) => onChange({ ...filters, tempMax: e.target.value })}
-              placeholder="300"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 aria-invalid:border-destructive"
-            />
           </div>
 
           <button
@@ -160,11 +123,6 @@ export function FiltersBar({
             Limpiar
           </button>
         </div>
-        {tempRangeError && (
-          <p id="temp-range-error" role="alert" className="mt-3 text-xs text-destructive">
-            {tempRangeError}
-          </p>
-        )}
       </div>
     </div>
   )

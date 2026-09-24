@@ -28,19 +28,30 @@ There is no `tsc` script; run `pnpm exec tsc --noEmit` if you need a one-off typ
 ## Layout
 
 ```
-app/                      Next.js App Router entry — single page at app/page.tsx
+app/                      Next.js App Router
   layout.tsx              Root layout, metadata, Analytics mount, Header + Footer
-  page.tsx                Dashboard page (async server component, force-dynamic): fetches runs via getAllProductionRuns() → DashboardContent
+  (auth)/                 Login / unauthorized routes
+  (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → DashboardContent
+  (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → lotes DashboardContent
+  (modulos)/configuracion/ getProductosConParametros() + getSectores() + cursor-walked getLotes() → config panels
+  api/lotes/snapshot/     Global multi-sector lote snapshot proxy (parallel sectors, cursor walk, `truncada` flag)
+  api/lotes/events/       SSE proxy to the backend /api/v1/lotes/events
+  api/nodos/*             Device snapshot/events proxies
+  api/system-status/      Backend health probe
   globals.css             Tailwind v4 @import + @theme inline design tokens (oklch)
 actions/
   api.ts                  Server data fetchers against the external REST backend. See "Data flow" below.
-components/               Feature components (dashboard-content, kpi-cards, supervision-table, filters-bar, turno-badge, mode-toggle, theme-provider)
+components/
+  dashboard-content.tsx   Home dashboard composition ("use client")
+  monitoring-provider.tsx Global monitoring store + SSE client; exposes useProductionData()
+  lotes/                  Sector-scoped dashboard: dashboard-content, kpi-cards, supervision-table, filters-bar, lote-abierto-card
+  configuracion/          product-card, product-parameters, parameters-history
   layout/                 header.tsx, footer.tsx (mounted by app/layout.tsx)
   ui/                     shadcn-generated primitives (base-nova style). Add new ones with `pnpm dlx shadcn@latest add <name>`.
 lib/
   utils.ts                `cn()` helper (clsx + tailwind-merge)
   format.ts               es-AR Intl formatters used across the dashboard
-  production-data.ts      ProductionRun/ProductionResponse API response types
+  production-data.ts      LoteSector/Sector/Producto/Conteos API contract types
   devices-data.ts         Device and telemetry API response types
   parametros-producto.ts  Product parameter and batch history types + validation
   sync-store.ts           Client store for the "última sincronización" timestamp
@@ -48,7 +59,9 @@ lib/
 public/                   Static icons + create-next-app placeholder assets (do not delete the placeholders — they're treated as content for now)
 ```
 
-Data flow: `app/page.tsx` is an async server component (`export const dynamic = "force-dynamic"` — never statically prerendered) that calls `getAllProductionRuns()` from `actions/api.ts`, which GETs `GET ${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos?page=1&pageSize=100` with an 8s `AbortController` timeout and `cache: "no-store"`. Configuration and device actions use the same error propagation policy; successful empty arrays remain empty and malformed responses are errors. The page hands `runs` + `lastSyncAt` to `DashboardContent` (`components/dashboard-content.tsx`, `"use client"`), which holds filter state and an `EventSource` SSE subscription to `${NEXT_PUBLIC_API_URL}/api/v1/lotes-productivos/events` for live `lote.created` pushes, and composes `KpiCards` + `FiltersBar` + `SupervisionTable`.
+Data flow: the backend contract is the **sector/lotes** one. `actions/api.ts` exposes `getSectores()` (`GET /api/v1/sectores`), `getProductos()` (`GET /api/v1/productos`), `getLotes(sectorId, { productoId?, limite?, antesDe? })` (`GET /api/v1/lotes`, cursor-paginated via `siguiente_cursor`; `sector_id` is required with OAuth), `getAllLotes()` (walks every sector in parallel, following each cursor, deduplicated by id), and `getLoteAbierto(sectorId)` (`GET /api/v1/lotes/abierto`, `lote:null` when there is none). All use an 8s `AbortController` timeout and `cache: "no-store"`, and forward the OAuth `session_token` cookie via `getSessionHeaders()`.
+
+The home page (`app/(modulos)/page.tsx`) calls `getAllLotes()`; `/lotes` adds `getSectores()` + `getLoteAbierto()`; `/configuracion` walks `getLotes()` per sector/product. The client provider (`components/monitoring-provider.tsx`) stays **global**: it fetches the global snapshot from `app/api/lotes/snapshot/route.ts` (parallel sectors, cursor walk, emits a `truncada` flag) and subscribes to `app/api/lotes/events/route.ts` (`lote.creado` / `lote.actualizado` / `lote.cerrado`, payload = raw `LoteSector`). `useProductionData()` returns `LoteSector[]` plus `truncated`; pages filter by sector client-side.
 
 Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout prevents a cold-start from blocking a request indefinitely; the resulting error is propagated to the page.
 
@@ -67,8 +80,8 @@ Backend: there IS now an external backend — a Go service on Render (free-tier)
 - `lucide-react` is pinned at `^1.16.0` and `next` at `16.2.6` (pinned exact, no caret). Don't bump either casually — other deps assume these versions.
 - The `pnpm dev` server uses Turbopack by default in Next 16; the page is fully client-rendered for the table and footer (both marked `"use client"`). KPI cards and header are server components.
 - `package.json` `name` is still the default `my-project` and `README.md` is unmodified `create-next-app` boilerplate — neither is the source of truth for the project name (use `app/layout.tsx` metadata / footer string `Smart-Check Automation`).
-- Build-time static generation of `/` used to time out (>60 s) on Vercel because the server component fetched the Render backend during prerender (Render free-tier cold-start). Fixed with `export const dynamic = "force-dynamic"` in `app/page.tsx` + the 8s `AbortController` timeout in `actions/api.ts`. Do NOT remove either, or the Vercel build will break again when Render is cold.
-- The SSE `EventSource` in `components/dashboard-content.tsx` also hits Render; a cold backend there will keep the client retrying silently. Tolerated for now — see the backend note under "Data flow".
+- Build-time static generation of `/` used to time out (>60 s) on Vercel because the server component fetched the Render backend during prerender (Render free-tier cold-start). Fixed with `export const dynamic = "force-dynamic"` in `app/(modulos)/page.tsx` + the 8s `AbortController` timeout in `actions/api.ts`. Do NOT remove either, or the Vercel build will break again when Render is cold.
+- The SSE `EventSource` in `components/lotes/dashboard-content.tsx` (via the `/api/lotes/events` proxy) also hits Render; a cold backend there will keep the client retrying silently. Tolerated for now — see the backend note under "Data flow".
 - `package.json` runs Vitest through `pnpm test`; don't assume Jest by default.
 
 ## Skills

@@ -1,23 +1,62 @@
-
 import { DashboardContent } from "@/components/lotes/dashboard-content"
-import { getAllProductionRuns } from "@/actions/api"
-import type { ProductionRun } from "@/lib/production-data"
+import { getAllLotes, getLoteAbierto, getSectores } from "@/actions/api"
+import type { LoteSector, Sector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
-export default async function Page() {
-  let runs: ProductionRun[] = []
+interface PageProps {
+  searchParams: Promise<{ sector_id?: string | string[] }>
+}
+
+function firstParam(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw && raw !== "" ? raw : null
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams
+  const requestedSectorId = firstParam(params.sector_id)
+
+  let sectores: Sector[] = []
+  let sectoresError: string | null = null
+  try {
+    sectores = await getSectores()
+  } catch (e) {
+    sectoresError = e instanceof Error ? e.message : "Error desconocido"
+    sectores = []
+  }
+
+  let runs: LoteSector[] = []
   let error: string | null = null
   let lastSyncAt: string | null = null
 
   try {
-    const response = await getAllProductionRuns()
-    runs = response
-
+    runs = await getAllLotes()
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
     runs = []
+  }
+
+  if (!error && sectoresError) error = sectoresError
+
+  // A valid `sector_id` in the URL wins; otherwise default to the first sector.
+  let selectedSectorId: string | null
+  if (requestedSectorId && sectores.some((sector) => sector.id === requestedSectorId)) {
+    selectedSectorId = requestedSectorId
+  } else {
+    selectedSectorId = sectores[0]?.id ?? null
+  }
+
+  // A missing/failed open lote is a valid state: the card falls back to the
+  // live SSE-derived value, so this never blocks the page.
+  let initialLoteAbierto: LoteSector | null = null
+  if (selectedSectorId) {
+    try {
+      initialLoteAbierto = await getLoteAbierto(selectedSectorId)
+    } catch {
+      initialLoteAbierto = null
+    }
   }
 
   return (
@@ -32,11 +71,18 @@ export default async function Page() {
             Supervisión de Producción
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Información de telemetría y calidad en todas las líneas de producción.
+            Supervisión por sector: lote abierto, conteos en tiempo real y el historial de producción.
           </p>
         </header>
 
-        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} initialError={error} />
+        <DashboardContent
+          runs={runs}
+          lastSyncAt={lastSyncAt}
+          initialError={error}
+          sectores={sectores}
+          selectedSectorId={selectedSectorId}
+          initialLoteAbierto={initialLoteAbierto}
+        />
       </main>
     </div>
   )

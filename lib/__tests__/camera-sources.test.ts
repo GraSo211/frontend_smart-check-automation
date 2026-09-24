@@ -5,7 +5,6 @@ import type { Device } from "@/lib/devices-data"
 function device(overrides: Partial<Device> & { dispositivoId: string }): Device {
   return {
     nombre: "Nodo",
-    ubicacion: "Línea",
     estado: "offline",
     lastSeen: "",
     ...overrides,
@@ -15,14 +14,41 @@ function device(overrides: Partial<Device> & { dispositivoId: string }): Device 
 describe("cameraNodesFromDevices", () => {
   it("mapea sólo los dispositivos con whepUrl y preserva el orden", () => {
     const devices: Device[] = [
-      device({ dispositivoId: "n-1", nombre: "Raspberry Entrada", ubicacion: "Entrada del horno", whepUrl: "https://cam.test/entrada/whep" }),
-      device({ dispositivoId: "n-2", nombre: "Sin cámara", ubicacion: "Depósito" }),
-      device({ dispositivoId: "n-3", nombre: "Raspberry Salida", ubicacion: "Salida del horno", whepUrl: "https://cam.test/salida/whep" }),
+      device({ dispositivoId: "n-1", nombre: "Raspberry Entrada", sectorId: "sec-1", whepUrl: "https://cam.test/entrada/whep" }),
+      device({ dispositivoId: "n-2", nombre: "Sin cámara", sectorId: "sec-2" }),
+      device({ dispositivoId: "n-3", nombre: "Raspberry Salida", sectorId: "sec-3", whepUrl: "https://cam.test/salida/whep" }),
     ]
+    const sectorNames = new Map([
+      ["sec-1", "Entrada del horno"],
+      ["sec-3", "Salida del horno"],
+    ])
 
-    expect(cameraNodesFromDevices(devices)).toEqual([
-      { id: "n-1", nombre: "Raspberry Entrada", ubicacion: "Entrada del horno", whepUrl: "https://cam.test/entrada/whep" },
-      { id: "n-3", nombre: "Raspberry Salida", ubicacion: "Salida del horno", whepUrl: "https://cam.test/salida/whep" },
+    expect(cameraNodesFromDevices(devices, sectorNames)).toEqual([
+      { id: "n-1", nombre: "Raspberry Entrada", sector: "Entrada del horno", whepUrl: "https://cam.test/entrada/whep" },
+      { id: "n-3", nombre: "Raspberry Salida", sector: "Salida del horno", whepUrl: "https://cam.test/salida/whep" },
+    ])
+  })
+
+  it("acepta un Record sectorId→nombre como mapa de sectores", () => {
+    const nodes = cameraNodesFromDevices(
+      [device({ dispositivoId: "n-1", sectorId: "sec-1", whepUrl: "https://cam.test/whep" })],
+      { "sec-1": "Horno 1" },
+    )
+
+    expect(nodes).toEqual([
+      { id: "n-1", nombre: "Nodo", sector: "Horno 1", whepUrl: "https://cam.test/whep" },
+    ])
+  })
+
+  it("deja el sector vacío si no hay mapa o el dispositivo no tiene sector", () => {
+    const nodes = cameraNodesFromDevices([
+      device({ dispositivoId: "n-1", whepUrl: "https://cam.test/whep" }),
+      device({ dispositivoId: "n-2", sectorId: "sec-9", whepUrl: "https://cam.test/otra/whep" }),
+    ])
+
+    expect(nodes).toEqual([
+      { id: "n-1", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/whep" },
+      { id: "n-2", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/otra/whep" },
     ])
   })
 
@@ -39,7 +65,7 @@ describe("cameraNodesFromDevices", () => {
     ])
 
     expect(nodes).toEqual([
-      { id: "n-1", nombre: "Nodo", ubicacion: "Línea", whepUrl: "https://cam.test/whep" },
+      { id: "n-1", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/whep" },
     ])
   })
 })

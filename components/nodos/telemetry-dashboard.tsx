@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { Activity, BrainCircuit, HardDrive, MemoryStick, Thermometer } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { APP_TIME_ZONE } from "@/lib/format"
 import { buildDashboardSamples, formatSnapshot, levelFor, percent, ramUsedMb } from "@/lib/telemetry"
 import type { Device, SpecificDevice } from "@/lib/devices-data"
 
@@ -24,7 +25,7 @@ export function TelemetryDashboard({ device, history, live = false }: Props) {
     <section className={cn("min-w-0 space-y-4 transition-opacity", offline && "telemetry-offline")} aria-label={`Panel de gráficos de ${device.nombre}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{live && metric ? "Lectura en vivo" : "Última telemetría registrada"}</p><h2 className="mt-1 break-words text-xl font-semibold">Pulso de {device.nombre}</h2></div>
-        {offline && <span className="offline-badge max-w-full whitespace-normal break-words" role="status">Offline — Último reporte: {new Date(metric?.receivedAt || device.lastSeen).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>}
+        {offline && <span className="offline-badge max-w-full whitespace-normal break-words" role="status">Offline — Último reporte: {new Date(metric?.receivedAt || device.lastSeen).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: APP_TIME_ZONE })}</span>}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={Activity} label="CPU" value={current?.cpuPct} previous={samples.at(-2)?.cpuPct} level={levelFor(current?.cpuPct, 70, 85)} />
@@ -63,4 +64,4 @@ function RamChart({ rows, total, used }: { rows: SpecificDevice[]; total?: numbe
 function DiskCard({ available, total }: { available: number; total: number }) { const used=total-available; const pct=percent(used,total); return <article className="rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-start justify-between"><div><h3 className="font-semibold">Almacenamiento</h3><p className="mt-1 text-xs text-muted-foreground">Capacidad del dispositivo</p></div><HardDrive className="size-5 text-primary" /></div><div className="mt-6 h-3 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-all" style={pct === undefined ? undefined : { width: `${pct}%` }} /></div><div className="mt-3 flex justify-between text-xs"><span>{used.toLocaleString("es-AR")} MB usados</span><span className="text-muted-foreground">{available.toLocaleString("es-AR")} MB disponibles · {typeof pct === "number" ? pct.toFixed(0) : "Sin datos"}%</span></div></article> }
 function Grid(){return <g stroke="currentColor" opacity=".09"><line x1="0" x2="640" y1="0" y2="0"/><line x1="0" x2="640" y1="95" y2="95"/><line x1="0" x2="640" y1="190" y2="190"/></g>}
 function Legend({color,text}:{color:string;text:string}){return <span className="inline-flex items-center gap-1.5"><i className="size-2 rounded-full" style={{backgroundColor:color}} />{text}</span>}
-function Tooltip({row,fields}:{row:SpecificDevice;fields:[string,number | null | undefined,string][]}){return <div className="pointer-events-none absolute right-2 top-5 rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg"><p className="mb-1 text-muted-foreground">{new Date(row.receivedAt).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</p>{fields.map(([label,value,color])=><p key={label} className="flex gap-2"><i className="size-2 self-center rounded-full" style={{backgroundColor:color}} />{label} <strong>{formatSnapshot(value === null ? undefined : value)}</strong></p>)}</div>}
+function Tooltip({row,fields}:{row:SpecificDevice;fields:[string,number | null | undefined,string][]}){return <div className="pointer-events-none absolute right-2 top-5 rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg"><p className="mb-1 text-muted-foreground">{new Date(row.receivedAt).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit",timeZone:APP_TIME_ZONE})}</p>{fields.map(([label,value,color])=><p key={label} className="flex gap-2"><i className="size-2 self-center rounded-full" style={{backgroundColor:color}} />{label} <strong>{formatSnapshot(value === null ? undefined : value)}</strong></p>)}</div>}

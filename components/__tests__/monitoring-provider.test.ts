@@ -4,7 +4,7 @@ import React from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Device } from '@/lib/devices-data'
-import type { ProductionRun } from '@/lib/production-data'
+import type { LoteSector } from '@/lib/production-data'
 
 const proxyMonitoringJsonMock = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/monitoring-server', () => ({ proxyMonitoringJson: proxyMonitoringJsonMock }))
@@ -28,7 +28,6 @@ function device(dispositivoId: string, estado: Device['estado'], cpuPct?: number
   return {
     dispositivoId,
     nombre: dispositivoId,
-    ubicacion: 'planta',
     estado,
     ...(cpuPct === undefined ? {} : {
       ultimaMetrica: {
@@ -45,32 +44,26 @@ function device(dispositivoId: string, estado: Device['estado'], cpuPct?: number
   }
 }
 
-function run(id: string): ProductionRun {
+function run(id: string, total = 10): LoteSector {
   return {
     id,
-    productoId: 'producto',
-    productoNombre: 'Producto',
-    turno: 'mañana',
-    inicioAt: at,
-    finAt: at,
-    createdAt: at,
-    updatedAt: at,
-    totalUnidades: 10,
-    correctos: 10,
-    quemados: 0,
-    crudas: null,
-    correctosKg: 1,
-    quemadosKg: 0,
-    crudosKg: null,
-    tempHorno1: 100,
-    tempCombHorno1: 100,
-    tempHorno2: 100,
-    tempCombHorno2: 100,
-    velocidadCinta: 1,
+    sector_id: 'sector-1',
+    estado: 'ABIERTO',
+    producto_id: 'producto',
+    producto_nombre: 'Producto',
+    abierto_en: at,
+    abierto_por: { device_id: 'd-1', type: 'ENTRADA_HORNO' },
+    conteos: { ok: total, crudo: null, quemado: 0, total },
+    ultimo_evento_en: at,
+    inactividad_segundos: 1,
   }
 }
 
-function Probe({ initialRuns = [], lastSyncAt = null }: { initialRuns?: ProductionRun[]; lastSyncAt?: string | null }) {
+function runAt(id: string, abiertoEn: string): LoteSector {
+  return { ...run(id), abierto_en: abiertoEn }
+}
+
+function Probe({ initialRuns = [], lastSyncAt = null }: { initialRuns?: LoteSector[]; lastSyncAt?: string | null }) {
   const actions = useMonitoringActions()
   const view = useMonitoring()
   const nodes = useMonitoringNodes()
@@ -80,7 +73,8 @@ function Probe({ initialRuns = [], lastSyncAt = null }: { initialRuns?: Producti
     React.createElement('output', { 'data-testid': 'node-details' }, nodes?.map((item) => `${item.dispositivoId}:${item.estado}:${item.ultimaMetrica?.cpuPct ?? 'none'}`).join(',') ?? ''),
     React.createElement('output', { 'data-testid': 'runs' }, production.runs.map((item) => item.id).join(',')),
     React.createElement('output', { 'data-testid': 'run-count' }, production.runs.length),
-    React.createElement('output', { 'data-testid': 'run-values' }, production.runs.map((item) => `${item.id}:${item.totalUnidades}`).join(',')),
+    React.createElement('output', { 'data-testid': 'run-values' }, production.runs.map((item) => `${item.id}:${item.conteos.total}`).join(',')),
+    React.createElement('output', { 'data-testid': 'truncated' }, String(production.truncated)),
     React.createElement('button', { onClick: () => actions.seedNodes([device('a', 'online'), device('b', 'online')], at) }, 'seed'),
     React.createElement('button', { onClick: () => actions.seedNodes([device('a', 'online', 10), device('b', 'online')], '2026-01-01T09:59:00.000Z') }, 'seed-old'),
     React.createElement('button', { onClick: () => actions.seedNodes([device('a', 'online', 10), device('b', 'online')], '2026-01-01T10:01:00.000Z') }, 'seed-t1'),
@@ -89,8 +83,12 @@ function Probe({ initialRuns = [], lastSyncAt = null }: { initialRuns?: Producti
     React.createElement('button', { onClick: () => actions.acceptNodeEvent({ data: device('a', 'offline', 90), success: true }) }, 'event-a'),
     React.createElement('button', { onClick: () => { for (let index = 0; index < 100; index += 1) actions.acceptNodeEvent({ data: device(`other-${index}`, 'online'), success: true }) } }, 'bulk-nodes'),
     React.createElement('button', { onClick: () => actions.acceptLoteEvent({ data: run('live'), success: true }) }, 'lote'),
-    React.createElement('button', { onClick: () => actions.acceptLoteEvent({ data: { ...run('same'), totalUnidades: 99 }, success: true }) }, 'stale-live'),
+    React.createElement('button', { onClick: () => actions.acceptLoteEvent({ data: run('same', 99), success: true }) }, 'stale-live'),
     React.createElement('button', { onClick: () => { for (let index = 0; index < 101; index += 1) actions.acceptLoteEvent({ data: run(`bulk-${index}`), success: true }) } }, 'bulk-lotes'),
+    React.createElement('button', { onClick: () => {
+      actions.acceptLoteEvent({ data: runAt('older', '2026-01-01T09:00:00.000Z'), success: true })
+      actions.acceptLoteEvent({ data: runAt('newer', '2026-01-01T11:00:00.000Z'), success: true })
+    } }, 'ordered-lotes'),
   )
 }
 
@@ -158,6 +156,21 @@ describe('MonitoringProvider montado', () => {
 
     expect(screen.getByTestId('runs').textContent).toContain('bulk-100')
     expect(screen.getByTestId('run-values').textContent).toContain('same:99')
+  })
+
+  it('inserta un lote desconocido ordenado por abierto_en descendente', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input).includes('/api/lotes/snapshot')) {
+        return Promise.resolve(response({ success: true, data: [], total: 0, page: 1, pageSize: 100 }))
+      }
+      if (String(input).includes('system-status')) return Promise.resolve(response({ status: 'healthy' }))
+      return Promise.resolve(response([]))
+    }))
+    render(React.createElement(MonitoringProvider, null, React.createElement(Probe)))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    await act(async () => fireEvent.click(screen.getByText('ordered-lotes')))
+    expect(screen.getByTestId('runs').textContent).toBe('newer,older')
   })
 
   it('conserva un evento de nodo independiente tras un snapshot pendiente y más de 100 eventos', async () => {
@@ -239,16 +252,22 @@ describe('MonitoringProvider montado', () => {
     expect(screen.getByTestId('node-details').textContent).toContain('a:offline:90')
   })
 
-  it.each([101, 201])('integra el snapshot paginado de %s registros con el provider', async (total) => {
+  it.each([101, 201])('integra el snapshot global paginado de %s registros con el provider', async (total) => {
     const rows = Array.from({ length: total }, (_, index) => run(`route-${index}`))
     proxyMonitoringJsonMock.mockImplementation(async (_request: Request, path: string) => {
-      const page = Number(new URL(path, 'https://backend.test').searchParams.get('page'))
+      if (path.startsWith('/api/v1/sectores')) {
+        return response({ success: true, data: [{ id: 's-1', nombre: 'Horno 1' }] })
+      }
+      const offset = Number(new URL(path, 'https://backend.test').searchParams.get('antes_de') ?? '0')
+      const slice = rows.slice(offset, offset + 100)
+      const next = offset + 100 < total ? String(offset + 100) : null
       return response({
         success: true,
-        data: rows.slice((page - 1) * 100, page * 100),
+        data: slice,
         total,
-        page,
+        page: 1,
         pageSize: 100,
+        ...(next ? { siguiente_cursor: next } : {}),
       })
     })
 
@@ -258,8 +277,14 @@ describe('MonitoringProvider montado', () => {
     expect(routeResponse.status).toBe(200)
     const snapshotPayload = await routeResponse.json()
     expect(snapshotPayload.data).toHaveLength(total)
-    expect(proxyMonitoringJsonMock).toHaveBeenCalledTimes(Math.ceil(total / 100))
-    expect(proxyMonitoringJsonMock).toHaveBeenCalledWith(expect.any(Request), expect.stringContaining('page=1&pageSize=100'), true)
+    expect(snapshotPayload.truncada).toBe(false)
+    expect(proxyMonitoringJsonMock).toHaveBeenCalledTimes(1 + Math.ceil(total / 100))
+    expect(proxyMonitoringJsonMock).toHaveBeenCalledWith(expect.any(Request), '/api/v1/sectores', true)
+    expect(proxyMonitoringJsonMock).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.stringContaining('/api/v1/lotes?sector_id=s-1&limite=100'),
+      true,
+    )
     expect((proxyMonitoringJsonMock.mock.calls[0][0] as Request).headers.get('cookie')).toBe('session_token=jwt-token')
 
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
@@ -271,17 +296,69 @@ describe('MonitoringProvider montado', () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     expect(screen.getByTestId('run-count').textContent).toBe(String(total))
+    expect(screen.getByTestId('truncated').textContent).toBe('false')
   })
 
   it('no publica un snapshot route parcial cuando falla una página posterior', async () => {
     proxyMonitoringJsonMock
-      .mockResolvedValueOnce(response({ success: true, data: [run('route-0')], total: 101, page: 1, pageSize: 100 }))
+      .mockResolvedValueOnce(response({ success: true, data: [{ id: 's-1', nombre: 'Horno 1' }] }))
+      .mockResolvedValueOnce(response({ success: true, data: [run('route-0')], total: 101, page: 1, pageSize: 100, siguiente_cursor: '100' }))
       .mockResolvedValueOnce(response({ success: false, message: 'fallo página 2' }, 503))
 
     const routeResponse = await getLotesSnapshot(new Request('https://panel.test/api/lotes/snapshot'))
 
     expect(routeResponse.status).toBe(503)
-    expect(proxyMonitoringJsonMock).toHaveBeenCalledTimes(2)
+    expect(proxyMonitoringJsonMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('devuelve 502 si los sectores no son válidos y no consulta lotes', async () => {
+    proxyMonitoringJsonMock.mockResolvedValueOnce(response({ success: true, data: null }))
+
+    const routeResponse = await getLotesSnapshot(new Request('https://panel.test/api/lotes/snapshot'))
+
+    expect(routeResponse.status).toBe(502)
+    await expect(routeResponse.json()).resolves.toMatchObject({ success: false })
+    expect(proxyMonitoringJsonMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('marca truncada=true cuando un sector alcanza el tope de páginas con cursor pendiente', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    proxyMonitoringJsonMock.mockImplementation(async (_request: Request, path: string) => {
+      if (path.startsWith('/api/v1/sectores')) {
+        return response({ success: true, data: [{ id: 's-1', nombre: 'Horno 1' }] })
+      }
+      const antesDe = new URL(path, 'https://backend.test').searchParams.get('antes_de')
+      const pageIndex = antesDe ? Number(antesDe) : 0
+      return response({
+        success: true,
+        data: [run(`capped-${pageIndex}`)],
+        total: 20,
+        page: 1,
+        pageSize: 100,
+        siguiente_cursor: String(pageIndex + 1),
+      })
+    })
+
+    const routeResponse = await getLotesSnapshot(new Request('https://panel.test/api/lotes/snapshot'))
+    expect(routeResponse.status).toBe(200)
+    const payload = await routeResponse.json()
+    expect(payload.truncada).toBe(true)
+    expect(payload.data).toHaveLength(20)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('expone truncated=true del snapshot route en el provider', async () => {
+    const snapshotPayload = { success: true, data: [run('t-1')], total: 1, page: 1, pageSize: 100, truncada: true }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input).includes('/api/lotes/snapshot')) return Promise.resolve(response(snapshotPayload))
+      if (String(input).includes('system-status')) return Promise.resolve(response({ status: 'healthy' }))
+      return Promise.resolve(response([]))
+    }))
+    render(React.createElement(MonitoringProvider, null, React.createElement(Probe)))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(screen.getByTestId('truncated').textContent).toBe('true')
   })
 
   it('propaga cancelación del snapshot sin certificar datos', async () => {

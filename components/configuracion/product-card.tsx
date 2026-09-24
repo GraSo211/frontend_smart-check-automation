@@ -24,7 +24,7 @@ export default function ProductGrid({ productos = [], selectedId, error }: Produ
   const buttonsRef = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const select = (productoId: string) => {
-    router.push(`/configuracion?productoId=${encodeURIComponent(productoId)}&page=1&pageSize=10`)
+    router.push(`/configuracion?productoId=${encodeURIComponent(productoId)}`)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

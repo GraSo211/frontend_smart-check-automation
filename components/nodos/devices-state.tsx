@@ -7,8 +7,9 @@ import { DeviceHistory } from "@/components/nodos/device-history"
 import { PendingRegistrationRequests } from "@/components/nodos/pending-registration-requests"
 import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
 import { getDeviceHistoryPage } from "@/actions/api"
-import { mergeTelemetrySamples, samplesForDevice } from "@/lib/telemetry"
+import { mergeTelemetrySamples, samplesForDevice, telemetryReportKey } from "@/lib/telemetry"
 import type { Device, RegistrationRequest, SpecificDevice } from "@/lib/devices-data"
+import type { Sector } from "@/lib/production-data"
 import { parseDeviceEventPayload } from "@/lib/monitoring-runtime"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
@@ -24,9 +25,18 @@ interface DevicesStateProps {
   registrationRequestsError?: string | null
   /** Supervisor/Administrador pueden gestionar; Operario es sólo lectura. */
   canManage?: boolean
+  /** Sectores disponibles para mostrar y asignar a cada nodo. */
+  sectores?: Sector[]
+  /** Si la carga de sectores falló, el menú deshabilita la asignación. */
+  sectoresError?: string | null
 }
 
 function sampleKey(sample: SpecificDevice) {
+  // El SSE emite la métrica sin id (la fila recién se inserta async en el
+  // backend), así que el mismo reporte del historial HTTP debe reconocerse por
+  // dispositivo + tiempo para no contarse como "muestra nueva".
+  const report = telemetryReportKey(sample)
+  if (report) return report
   return sample.id
     ? `${sample.dispositivoId}|id:${sample.id}`
     : `${sample.dispositivoId}|at:${sample.receivedAt}`
@@ -42,6 +52,8 @@ export default function DevicesState({
   registrationRequests = [],
   registrationRequestsError = null,
   canManage = false,
+  sectores = [],
+  sectoresError = null,
 }: DevicesStateProps) {
   const monitoredDevices = useMonitoringNodes()
   const actions = useMonitoringActions()
@@ -365,6 +377,25 @@ export default function DevicesState({
     [allDevices, selectedDeviceId],
   )
 
+  // Un nodo puede desaparecer de la flota (p. ej. eliminado desde el panel) sin
+  // un evento SSE de baja. La selección efectiva se deriva de `selectedDevice`:
+  // si el id ya no existe, el dashboard y el historial se tratan como vacíos.
+  const activeSelectedDeviceId = selectedDevice ? selectedDeviceId : null
+
+  // Este efecto sólo sincroniza los refs que usan el stream y el polling para
+  // no consultar un dispositivo inexistente; no dispara renders.
+  useEffect(() => {
+    if (!selectedDeviceId || selectedDevice) return
+    selectedDeviceIdRef.current = null
+    selectionEpochRef.current += 1
+    streamEpochRef.current += 1
+  }, [selectedDeviceId, selectedDevice])
+
+  const sectorNameById = useMemo(
+    () => new Map(sectores.map((sector) => [sector.id, sector.nombre])),
+    [sectores],
+  )
+
   const onlineCount = allDevices.filter((device) => device.estado === "online").length
   const offlineCount = allDevices.length - onlineCount
 
@@ -398,7 +429,16 @@ export default function DevicesState({
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {allDevices.map((device) => (
-              <DeviceCard key={device.dispositivoId} device={device} selected={selectedDeviceId === device.dispositivoId} onSelect={handleSelect} canManage={canManage} />
+              <DeviceCard
+                key={device.dispositivoId}
+                device={device}
+                selected={selectedDeviceId === device.dispositivoId}
+                onSelect={handleSelect}
+                canManage={canManage}
+                sectorName={device.sectorId ? sectorNameById.get(device.sectorId) ?? null : null}
+                sectores={sectores}
+                sectoresError={sectoresError}
+              />
             ))}
           </div>
         )}
@@ -407,15 +447,15 @@ export default function DevicesState({
       {selectedDevice && <TelemetryDashboard device={selectedDevice} history={recentHistory} live={streamState === "connected" && Boolean(selectedDevice.ultimaMetrica)} />}
 
       <DeviceHistory
-        deviceId={selectedDeviceId}
+        deviceId={activeSelectedDeviceId}
         deviceName={selectedDevice?.nombre ?? null}
-        history={history.slice(0, HISTORY_PAGE_SIZE)}
-        loading={loadingHistory}
-        error={historyError}
-        total={historyTotal}
-        page={historyPage}
-        stale={historyStale}
-        newSamples={newSamples}
+        history={activeSelectedDeviceId ? history.slice(0, HISTORY_PAGE_SIZE) : []}
+        loading={activeSelectedDeviceId ? loadingHistory : false}
+        error={activeSelectedDeviceId ? historyError : null}
+        total={activeSelectedDeviceId ? historyTotal : 0}
+        page={activeSelectedDeviceId ? historyPage : 1}
+        stale={activeSelectedDeviceId ? historyStale : false}
+        newSamples={activeSelectedDeviceId ? newSamples : 0}
         onLatest={() => {
           if (selectedDeviceIdRef.current) void requestHistory(selectedDeviceIdRef.current, 1, selectionEpochRef.current)
         }}

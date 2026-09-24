@@ -1,4 +1,4 @@
-// Types mirroring the backend /api/v1/parametros-producto and lote history shapes.
+// Types mirroring the backend /api/v1/parametros-producto shapes.
 
 // Recommended parameters bound to a product (GET /api/v1/parametros-producto).
 export interface ParametroProducto {
@@ -29,29 +29,6 @@ export interface ParametroProductoRequest {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
-}
-
-// A single batch run used by the per-product history. Horno/cinta fields are
-// nullable (the Go backend marshals nil *float64 as null).
-export interface LoteProductivo {
-  id: string
-  productoId: string
-  productoNombre: string
-  turno: "mañana" | "tarde" | "noche"
-  inicioAt: string
-  finAt?: string
-  tempHorno1: number | null
-  tempCombHorno1: number | null
-  tempHorno2: number | null
-  tempCombHorno2: number | null
-  velocidadCinta: number | null
-}
-
-export interface LotesPorProducto {
-  items: LoteProductivo[]
-  total: number
-  page: number
-  pageSize: number
 }
 
 // Mirrors the backend `ParametroProductoRequest.Validate()` so the form can

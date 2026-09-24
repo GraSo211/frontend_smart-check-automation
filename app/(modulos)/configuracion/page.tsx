@@ -1,9 +1,9 @@
 import ProductGrid from "@/components/configuracion/product-card"
 import ProductParameters from "@/components/configuracion/product-parameters"
 import { ParametersHistory } from "@/components/configuracion/parameters-history"
-import { getLotesPorProducto, getProductosConParametros } from "@/actions/api"
+import { getLotes, getProductosConParametros, getSectores } from "@/actions/api"
 import { getSession } from "@/lib/auth"
-import type { LotesPorProducto } from "@/lib/parametros-producto"
+import type { LoteSector, Sector } from "@/lib/production-data"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
@@ -12,28 +12,40 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
+// Historial por sector: se itera el cursor del backend con un tope defensivo
+// para no encadenar páginas sin fin.
+const MAX_HISTORY_PAGES = 20
+
 interface PageProps {
-  searchParams: Promise<{ productoId?: string | string[]; page?: string | string[]; pageSize?: string | string[] }>
+  searchParams: Promise<{ productoId?: string | string[]; sector_id?: string | string[] }>
 }
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
 
-function safePage(value: string | string[] | undefined) {
-  const parsed = Number(firstParam(value))
-  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1
-}
-
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
   const productoId = firstParam(params.productoId) ?? null
-  const page = safePage(params.page)
-  const requestedPageSize = Number(firstParam(params.pageSize))
-  const pageSize = requestedPageSize === 20 ? 20 : 10
+  const requestedSectorId = firstParam(params.sector_id) ?? null
 
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
+
+  let sectores: Sector[] = []
+  let sectoresError: string | null = null
+  try {
+    sectores = await getSectores()
+  } catch (error) {
+    sectoresError = error instanceof Error ? error.message : "No se pudieron consultar los sectores."
+  }
+
+  // Un sector_id inválido (o ausente) cae al primer sector disponible.
+  const selectedSectorId =
+    requestedSectorId && sectores.some((s) => s.id === requestedSectorId)
+      ? requestedSectorId
+      : sectores[0]?.id ?? null
+  const selectedSector = sectores.find((s) => s.id === selectedSectorId) ?? null
 
   let productos: Awaited<ReturnType<typeof getProductosConParametros>> = []
   let productosError: string | null = null
@@ -46,16 +58,20 @@ export default async function Page({ searchParams }: PageProps) {
     ? productos.find((p) => p.productoId === productoId) ?? null
     : null
 
-  let lotes: LotesPorProducto | null = null
-  let historialError: string | null = null
-  if (selectedProducto) {
+  let lotes: LoteSector[] = []
+  let historialError: string | null = sectoresError
+  if (selectedProducto && selectedSectorId && !sectoresError) {
     try {
-      lotes = await getLotesPorProducto(selectedProducto.productoId, page, pageSize)
-      const lastPage = Math.max(1, Math.ceil(lotes.total / pageSize))
-      if (page > lastPage) {
-        // A deletion can invalidate the URL between navigations. Re-query the
-        // clamped page instead of showing rows returned for the old offset.
-        lotes = await getLotesPorProducto(selectedProducto.productoId, lastPage, pageSize)
+      let cursor: string | undefined
+      for (let page = 0; page < MAX_HISTORY_PAGES; page += 1) {
+        const result = await getLotes(selectedSectorId, {
+          productoId: selectedProducto.productoId,
+          limite: 100,
+          antesDe: cursor,
+        })
+        lotes = lotes.concat(result.items)
+        if (!result.siguienteCursor) break
+        cursor = result.siguienteCursor
       }
     } catch (error) {
       historialError = error instanceof Error ? error.message : "No se pudo consultar el historial."
@@ -103,12 +119,13 @@ export default async function Page({ searchParams }: PageProps) {
 
           <section aria-label="Historial de corridas">
             <ParametersHistory
-              lotes={lotes?.items ?? []}
+              key={`${selectedProducto?.productoId ?? ""}:${selectedSectorId ?? ""}`}
+              lotes={lotes}
               productoNombre={selectedProducto?.productoNombre ?? ""}
               productoId={selectedProducto?.productoId ?? null}
-              total={lotes?.total ?? 0}
-              page={lotes?.page ?? page}
-              pageSize={lotes?.pageSize ?? pageSize}
+              sectores={sectores}
+              sector={selectedSector}
+              selectedSectorId={selectedSectorId}
               error={historialError}
             />
           </section>

@@ -50,11 +50,11 @@ describe("formatDate", () => {
 
 describe("formatTime", () => {
   it("formats an ISO time string to HH:mm", () => {
-    expect(formatTime("2026-06-02T06:00:00.000Z")).toBe("06:00")
+    expect(formatTime("2026-06-02T06:00:00.000Z")).toBe("03:00")
   })
 
   it("pads single-digit hours", () => {
-    expect(formatTime("2026-06-02T08:30:00.000Z")).toBe("08:30")
+    expect(formatTime("2026-06-02T08:30:00.000Z")).toBe("05:30")
   })
 })
 
@@ -62,8 +62,8 @@ describe("formatWindow", () => {
   it("builds a compact date · time–time string", () => {
     const result = formatWindow("2026-06-02T06:00:00.000Z", "2026-06-02T08:30:00.000Z")
     expect(result).toContain("·")
-    expect(result).toContain("06:00")
-    expect(result).toContain("08:30")
+    expect(result).toContain("03:00")
+    expect(result).toContain("05:30")
   })
 })
 

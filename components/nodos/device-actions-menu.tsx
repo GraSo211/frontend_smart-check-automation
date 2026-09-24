@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition, type FormEvent } from "react"
+import { useRef, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { Pencil } from "lucide-react"
+import { Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,12 +16,18 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { updateDispositivo } from "@/actions/api"
+import { SectorSelect } from "@/components/shared/sector-select"
+import { deleteDispositivo, updateDispositivo } from "@/actions/api"
 import type { Device } from "@/lib/devices-data"
+import type { Sector } from "@/lib/production-data"
 import { isWhepUrl } from "@/lib/camera-sources"
 
 interface DeviceActionsMenuProps {
   device: Device
+  /** Sectores disponibles para asignar al nodo. */
+  sectores?: Sector[]
+  /** Si la carga de sectores falló, se deshabilita la asignación para no perder la actual. */
+  sectoresError?: string | null
 }
 
 // Cuts React synthetic bubbling from the portaled dialog up to DeviceCard's
@@ -36,23 +42,28 @@ function stopPropagation(e: { stopPropagation: () => void }) {
 }
 
 // Per-card actions. The new backend no longer exposes the credential lifecycle
-// (disable / enable / revoke / reprovision), so the only remaining action is the
-// metadata edit (PUT /api/v1/dispositivos).
-export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
+// (disable / enable / revoke / reprovision), so the remaining actions are the
+// metadata edit (PUT /api/v1/dispositivos) and the destructive delete.
+export function DeviceActionsMenu({
+  device,
+  sectores = [],
+  sectoresError = null,
+}: DeviceActionsMenuProps) {
   const [editOpen, setEditOpen] = useState(false)
-  const [nombre, setNombre] = useState(device.nombre)
-  const [ubicacion, setUbicacion] = useState(device.ubicacion)
+  const [sectorId, setSectorId] = useState(device.sectorId ?? "")
   const [whepUrl, setWhepUrl] = useState(device.whepUrl ?? "")
-  const [nombreError, setNombreError] = useState<string | null>(null)
   const [whepError, setWhepError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
+  // Confirmación de borrado.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const deletingRef = useRef(false)
+
   const openEditDialog = () => {
-    setNombre(device.nombre)
-    setUbicacion(device.ubicacion)
+    setSectorId(device.sectorId ?? "")
     setWhepUrl(device.whepUrl ?? "")
-    setNombreError(null)
     setWhepError(null)
     setEditOpen(true)
   }
@@ -60,24 +71,17 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
   const handleEditSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    const trimmedNombre = nombre.trim()
-    if (!trimmedNombre) {
-      setNombreError("El nombre es obligatorio.")
-      return
-    }
     const trimmedWhepUrl = whepUrl.trim()
     if (!isWhepUrl(trimmedWhepUrl)) {
       setWhepError("Ingresá una URL http(s):// que termine en /whep.")
       return
     }
-    setNombreError(null)
     setWhepError(null)
 
     startTransition(async () => {
       const result = await updateDispositivo({
         dispositivoId: device.dispositivoId,
-        nombre: trimmedNombre,
-        ubicacion: ubicacion.trim(),
+        sectorId: sectorId === "" ? null : sectorId,
         whepUrl: trimmedWhepUrl || undefined,
       })
 
@@ -91,6 +95,31 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
         })
       }
     })
+  }
+
+  const handleDelete = async () => {
+    if (deletingRef.current) return
+    deletingRef.current = true
+    setIsDeleting(true)
+    try {
+      const result = await deleteDispositivo(device.dispositivoId)
+      if (result.ok) {
+        toast.success("Dispositivo dado de baja.")
+        setDeleteOpen(false)
+        router.refresh()
+      } else {
+        toast.error("No se pudo dar de baja el dispositivo", {
+          description: result.errors.join(" · "),
+        })
+      }
+    } catch (error) {
+      toast.error("No se pudo dar de baja el dispositivo", {
+        description: error instanceof Error ? error.message : "No se pudo dar de baja el dispositivo.",
+      })
+    } finally {
+      deletingRef.current = false
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -111,6 +140,22 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
         <Pencil className="size-4" aria-hidden="true" />
       </Button>
 
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-destructive/15 hover:text-destructive"
+        aria-label="Eliminar dispositivo"
+        title="Eliminar dispositivo"
+        onClick={(e) => {
+          e.stopPropagation()
+          setDeleteOpen(true)
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Trash2 className="size-4" aria-hidden="true" />
+      </Button>
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
           <DialogHeader>
@@ -118,7 +163,7 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
               <Pencil className="size-5" aria-hidden="true" />
             </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
-            <DialogDescription>Actualizá el nombre, la ubicación y la cámara del nodo.</DialogDescription>
+            <DialogDescription>Actualizá el sector y la cámara del nodo.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
@@ -126,31 +171,32 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
               <Label htmlFor="editar-dispositivo-nombre">Nombre</Label>
               <Input
                 id="editar-dispositivo-nombre"
-                value={nombre}
-                placeholder="Nodo Horno 3"
-                aria-invalid={nombreError ? true : undefined}
-                aria-describedby={nombreError ? "editar-dispositivo-nombre-error" : undefined}
-                onChange={(e) => {
-                  setNombre(e.target.value)
-                  if (nombreError) setNombreError(null)
-                }}
+                value={device.nombre}
+                readOnly
+                aria-describedby="editar-dispositivo-nombre-hint"
+                className="cursor-default bg-muted"
               />
-              {nombreError && (
-                <p id="editar-dispositivo-nombre-error" className="mt-1 text-xs text-destructive">
-                  {nombreError}
-                </p>
-              )}
+              <p id="editar-dispositivo-nombre-hint" className="mt-1 text-xs text-muted-foreground">
+                El nombre solo se puede cambiar desde la propia Raspberry.
+              </p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="editar-dispositivo-ubicacion">Ubicación</Label>
-              <Input
-                id="editar-dispositivo-ubicacion"
-                value={ubicacion}
-                placeholder="Línea A — Sector Horneado"
-                onChange={(e) => setUbicacion(e.target.value)}
-              />
-            </div>
+            <SectorSelect
+              id="editar-dispositivo-sector"
+              label="Sector"
+              value={sectorId}
+              onChange={setSectorId}
+              sectores={sectores}
+              allowEmpty
+              emptyOptionLabel="Sin sector"
+              disabled={Boolean(sectoresError)}
+              error={sectoresError ? "No se pudieron cargar los sectores." : null}
+              hint={
+                !sectoresError && sectores.length === 0
+                  ? "Todavía no hay sectores definidos."
+                  : undefined
+              }
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="editar-dispositivo-whep">URL WHEP (cámara)</Label>
@@ -191,6 +237,52 @@ export function DeviceActionsMenu({ device }: DeviceActionsMenuProps) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de borrado */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !deletingRef.current) setDeleteOpen(false)
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          onClick={stopPropagation}
+          onKeyDown={stopPropagation}
+          onKeyUp={stopPropagation}
+        >
+          <DialogHeader>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+              <TriangleAlert className="size-5" aria-hidden="true" />
+            </span>
+            <DialogTitle>Eliminar dispositivo</DialogTitle>
+            <DialogDescription>
+              {`¿Confirmás que querés eliminar el dispositivo "${device.nombre}" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El nodo deberá registrarse de nuevo.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" disabled={isDeleting} />}>
+              Cancelar
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Eliminando…
+                </>
+              ) : (
+                "Eliminar dispositivo"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -8,15 +8,28 @@ import LiveCamera from "@/components/supervision/live-camera"
 import { Button } from "@/components/ui/button"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { cameraNodesFromDevices } from "@/lib/camera-sources"
+import type { Sector } from "@/lib/production-data"
 
 // The provider's own node request has an 8s timeout; after that we surface a
 // retry instead of an endless spinner if the API never answered.
 const LOAD_TIMEOUT_MS = 8_000
 
-export default function SupervisionView() {
+interface SupervisionViewProps {
+  /** Sectores para resolver el nombre del sector de cada nodo (sectorId→nombre). */
+  sectores?: Sector[]
+}
+
+export default function SupervisionView({ sectores = [] }: SupervisionViewProps) {
   const devices = useMonitoringNodes()
   const { refreshNodes } = useMonitoringActions()
-  const cameraNodes = useMemo(() => cameraNodesFromDevices(devices), [devices])
+  const sectorNamesById = useMemo(
+    () => new Map(sectores.map((sector) => [sector.id, sector.nombre])),
+    [sectores],
+  )
+  const cameraNodes = useMemo(
+    () => cameraNodesFromDevices(devices, sectorNamesById),
+    [devices, sectorNamesById],
+  )
   const [selectedNodeId, setSelectedNodeId] = useState("")
   const [loadTimedOut, setLoadTimedOut] = useState(false)
   const node = cameraNodes.find((item) => item.id === selectedNodeId) ?? cameraNodes[0] ?? null
@@ -43,7 +56,7 @@ export default function SupervisionView() {
             <LiveCamera
               whepUrl={node.whepUrl}
               title={node.nombre}
-              subtitle={node.ubicacion || "Nodo de supervisión"}
+              subtitle={node.sector || "Nodo de supervisión"}
               videoAriaLabel={`Transmisión en vivo de la cámara de ${node.nombre}`}
             />
           </>
@@ -63,8 +76,8 @@ export default function SupervisionView() {
               <dd className="mt-0.5 break-words text-sm text-foreground">{node?.nombre ?? "Sin definir"}</dd>
             </div>
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Ubicación</dt>
-              <dd className="mt-0.5 break-words text-sm text-foreground">{node?.ubicacion || "Sin definir"}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sector</dt>
+              <dd className="mt-0.5 break-words text-sm text-foreground">{node?.sector || "Sin definir"}</dd>
             </div>
             <div>
               <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Cámara</dt>

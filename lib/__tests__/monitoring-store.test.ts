@@ -20,7 +20,6 @@ describe('monitoring store', () => {
   const device = (dispositivoId: string, estado: 'online' | 'offline') => ({
     dispositivoId,
     nombre: dispositivoId,
-    ubicacion: 'planta',
     estado,
     lastSeen: at,
   })

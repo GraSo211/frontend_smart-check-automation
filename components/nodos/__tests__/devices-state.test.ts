@@ -48,7 +48,6 @@ import DevicesState from "@/components/nodos/devices-state"
 type Device = {
   dispositivoId: string
   nombre: string
-  ubicacion: string
   estado: "online" | "offline"
   lastSeen: string
   ultimaMetrica?: { id: string; dispositivoId: string; cpuPct: number; memRamDisponibleMb: number; tempChip: number; aiProcessorPct: number; receivedAt: string }
@@ -72,7 +71,7 @@ class FakeEventSource {
 }
 
 const at = "2026-01-01T10:00:00.000Z"
-function device(id: string): Device { return { dispositivoId: id, nombre: id, ubicacion: "planta", estado: "online", lastSeen: at } }
+function device(id: string): Device { return { dispositivoId: id, nombre: id, estado: "online", lastSeen: at } }
 function sample(id: string, deviceId: string, receivedAt = at): Sample { return { id, dispositivoId: deviceId, nombre: deviceId, cpuPct: 20, memRamDisponibleMb: 100, tempChip: 40, aiProcessorPct: 10, receivedAt } }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done }); return { promise, resolve } }
 function page(items: Sample[], total = items.length, requestedPage = 1) { return { items, total, page: requestedPage, pageSize: 20 } }
@@ -212,5 +211,42 @@ describe("estado headless de historial de nodos", () => {
     const stream = FakeEventSource.instances[0]
     await act(async () => stream.open())
     expect(screen.getByText(/Nodos:/).textContent).not.toContain("Conectado")
+  })
+
+  it("no duplica la fila del historial cuando el SSE llega sin id de métrica", async () => {
+    // El backend difunde dispositivo.metric con `ultimaMetrica.id` vacío y el
+    // historial HTTP con el id real de PostgreSQL: es la misma muestra.
+    mocks.getDeviceHistoryPage.mockResolvedValue(page([{ ...sample("metric-1", "A", "2026-01-01T10:00:00.123456Z") }], 1))
+    render(React.createElement(DevicesState, { devices: [device("A")], lastSyncAt: at }))
+    fireEvent.click(screen.getByText("A"))
+    await act(async () => undefined)
+    const stream = FakeEventSource.instances[0]
+    await act(async () => stream.emit("dispositivo.metric", {
+      ...device("A"),
+      ultimaMetrica: sample("", "A", "2026-01-01T10:00:00.123456789Z"),
+    }))
+
+    const rows = screen.getByTestId("history").textContent?.split(",").filter(Boolean) ?? []
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toContain("metric-1")
+  })
+
+  it("limpia la selección cuando el nodo seleccionado desaparece de la flota", async () => {
+    mocks.getDeviceHistoryPage.mockResolvedValue(page([sample("row", "A")], 1))
+    const { rerender } = render(React.createElement(DevicesState, { devices: [device("A"), device("B")], lastSyncAt: at }))
+    fireEvent.click(screen.getByText("A"))
+    await act(async () => undefined)
+    expect(screen.getByTestId("recent").textContent).toContain("row")
+    expect(screen.getByTestId("history-meta").textContent).toContain("1:1")
+
+    await act(async () => {
+      rerender(React.createElement(DevicesState, { devices: [device("B")], lastSyncAt: at }))
+    })
+
+    // El nodo ya no está en la flota: no debe quedar dashboard ni historial
+    // apuntando a un dispositivo inexistente.
+    expect(screen.queryByTestId("recent")).toBeNull()
+    expect(screen.getByTestId("history").textContent).toBe("")
+    expect(screen.getByTestId("history-meta").textContent).toContain("1:0:0")
   })
 })

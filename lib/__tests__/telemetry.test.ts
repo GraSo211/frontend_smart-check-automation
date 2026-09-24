@@ -32,7 +32,6 @@ function device(dispositivoId: string, receivedAt: string, cpuPct: number): Devi
   return {
     dispositivoId,
     nombre: dispositivoId,
-    ubicacion: "Planta",
     estado: "online",
     ultimaMetrica: metric,
     lastSeen: receivedAt,
@@ -91,6 +90,34 @@ describe("telemetry thresholds and fallbacks", () => {
     const distinct = { ...first, id: "metric-2", cpuPct: 40 }
 
     expect(mergeTelemetrySamples([first], [corrected, distinct])).toEqual([corrected, distinct])
+  })
+
+  it("colapsa la misma muestra cuando el SSE llega sin id y el historial HTTP con id", () => {
+    // El SSE difunde `ultimaMetrica.id` vacío y `receivedAt` con nanosegundos;
+    // PostgreSQL devuelve el id real y `receivedAt` con microsegundos.
+    const httpRow = { ...sample("n1", "2026-01-01T00:01:00.123456Z", 20), id: "metric-1" }
+    const liveRow = { ...sample("n1", "2026-01-01T00:01:00.123456789Z", 20), id: "" }
+
+    const merged = mergeTelemetrySamples([httpRow], [liveRow])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].id).toBe("metric-1")
+  })
+
+  it("colapsa el mismo reporte en cualquier orden de llegada", () => {
+    const httpRow = { ...sample("n1", "2026-01-01T00:01:00.123456Z", 20), id: "metric-1" }
+    const liveRow = { ...sample("n1", "2026-01-01T00:01:00.123456789Z", 25), id: "" }
+
+    expect(mergeTelemetrySamples([liveRow], [httpRow])).toHaveLength(1)
+  })
+
+  it("conserva reportes distintos del mismo nodo en segundos distintos", () => {
+    const liveA = { ...sample("n1", "2026-01-01T00:01:00.000Z", 20), id: "" }
+    const liveB = { ...sample("n1", "2026-01-01T00:01:10.000Z", 30), id: "" }
+    const httpB = { ...sample("n1", "2026-01-01T00:01:10.000300Z", 30), id: "metric-2" }
+
+    expect(mergeTelemetrySamples([liveA], [liveB])).toHaveLength(2)
+    expect(mergeTelemetrySamples([liveA, liveB], [httpB])).toHaveLength(2)
   })
 
   it("does not let a stale snapshot replace the current metric", () => {
