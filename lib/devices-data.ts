@@ -1,9 +1,3 @@
-export type DeviceResponse = {
-    success: boolean;
-    message: string;
-    data: Device[];
-};
-
 /**
  * Estado de la credencial del nodo. Es independiente de la conectividad
  * (`estado`): un nodo deshabilitado puede tener un heartbeat reciente pero no
@@ -99,15 +93,6 @@ export type UpdateDispositivoRequest = {
      */
     sectorId: string | null;
     whepUrl?: string;
-};
-
-export type DeviceHistoryResponse = {
-    success: boolean;
-    message: string;
-    data: SpecificDevice[];
-    total: number;
-    page: number;
-    pageSize: number;
 };
 
 export type SpecificDevice = {

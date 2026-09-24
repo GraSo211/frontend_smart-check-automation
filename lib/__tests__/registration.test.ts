@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  authStatusLabel,
-  canAuthenticate,
   isRegistrationStale,
   parseRegistrationApproval,
   parseRegistrationRejection,
@@ -58,19 +56,6 @@ describe("parseo de solicitudes de registro", () => {
       status: "REJECTED",
     })
     expect(parseRegistrationRejection({ requestId: "req-1", status: "APPROVED" })).toBeNull()
-  })
-})
-
-describe("estado de credencial", () => {
-  it("considera que sólo una credencial activa puede autenticarse", () => {
-    expect(canAuthenticate({ authStatus: "active" })).toBe(true)
-    expect(canAuthenticate({ authStatus: "disabled" })).toBe(false)
-    expect(canAuthenticate({})).toBe(false)
-  })
-
-  it("etiqueta el estado de credencial, con heredado por defecto", () => {
-    expect(authStatusLabel("revoked")).toBe("Revocado")
-    expect(authStatusLabel(undefined)).toBe("Sin enrolar")
   })
 })
 

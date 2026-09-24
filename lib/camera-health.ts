@@ -84,14 +84,6 @@ export function isCurrentCameraGeneration(generation: number, currentGeneration:
   return generation === currentGeneration
 }
 
-export function shouldPublishCameraEvidence(lastPublishedAt: number | null, evidenceAt: number, intervalMs = 1_000) {
-  return lastPublishedAt === null || evidenceAt - lastPublishedAt >= intervalMs
-}
-
-export function canRequestCameraFrame(pendingCallback: number | null) {
-  return pendingCallback === null
-}
-
 export function startCameraSessionDelete(location: string) {
   const controller = new AbortController()
   const timeout = globalThis.setTimeout(() => controller.abort(), 8_000)

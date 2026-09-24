@@ -54,7 +54,6 @@ describe("server actions de datos del backend", () => {
     inactividad_segundos: 12.5,
   }
   const sector = { id: "s-1", nombre: "Horno 1" }
-  const producto = { id: "p-1", nombre: "Tostada", activo: true }
   const registrationRequest = {
     requestId: "req-1",
     hostname: "pi-1",
@@ -77,9 +76,7 @@ describe("server actions de datos del backend", () => {
   it.each([
     ["getDevices", () => api.getDevices(), "GET", { success: true, data: [] }],
     ["getRegistrationRequests", () => api.getRegistrationRequests(), "GET", { success: true, data: [] }],
-    ["getDeviceHistory", () => api.getDeviceHistory("node/1"), "GET", { success: true, data: [] }],
     ["getSectores", () => api.getSectores(), "GET", { success: true, data: [] }],
-    ["getProductos", () => api.getProductos(), "GET", { success: true, data: [] }],
     ["getLotes", () => api.getLotes("s-1"), "GET", { success: true, data: [] }],
     ["getLoteAbierto", () => api.getLoteAbierto("s-1"), "GET", { success: true, data: { lote: null } }],
     ["updateDispositivo", () => api.updateDispositivo({ dispositivoId: "node-1", sectorId: "s-1" }), "PUT", { success: true, data: validDeviceRead }],
@@ -167,7 +164,6 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getDevices", () => api.getDevices(), "https://backend.example.test/api/v1/dispositivos"],
-    ["getDeviceHistory", () => api.getDeviceHistory("node/1", 2, 10), "https://backend.example.test/api/v1/dispositivos/metricas?dispositivoId=node%2F1&page=2&pageSize=10"],
     ["getProductosConParametros", () => api.getProductosConParametros(), "https://backend.example.test/api/v1/parametros-producto"],
   ])("obtiene datos reales y conserva la URL de paginación para %s", async (_name, action, expectedUrl) => {
     fetchMock.mockResolvedValue(json({ success: true, data: [] }))
@@ -228,7 +224,6 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getSectores", () => api.getSectores()],
-    ["getProductos", () => api.getProductos()],
     ["getLotes", () => api.getLotes("s-1")],
     ["getLoteAbierto", () => api.getLoteAbierto("s-1")],
     ["getProductosConParametros", () => api.getProductosConParametros()],
@@ -256,7 +251,6 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getSectores", (module: typeof import("../api")) => module.getSectores()],
-    ["getProductos", (module: typeof import("../api")) => module.getProductos()],
     ["getLotes", (module: typeof import("../api")) => module.getLotes("s-1")],
     ["getProductosConParametros", (module: typeof import("../api")) => module.getProductosConParametros()],
   ])("falla explícitamente si falta NEXT_PUBLIC_API_URL en %s", async (_name, action) => {
@@ -272,12 +266,10 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getSectores", () => api.getSectores(), { success: true, data: null }, "respuesta inválida para sectores"],
-    ["getProductos", () => api.getProductos(), { success: true, data: { not: "an array" } }, "respuesta inválida para productos"],
     ["getLotes", () => api.getLotes("s-1"), { success: true, data: null }, "respuesta inválida para el historial de lotes"],
     ["getLoteAbierto", () => api.getLoteAbierto("s-1"), { success: true, data: null }, "respuesta inválida para el lote abierto"],
     ["getProductosConParametros", () => api.getProductosConParametros(), { success: true, data: { not: "an array" } }, "respuesta inválida"],
     ["getDevices", () => api.getDevices(), { success: true, data: null }, "respuesta inválida"],
-    ["getDeviceHistory", () => api.getDeviceHistory("node-1"), { success: true, data: null }, "respuesta inválida"],
   ])("rechaza una respuesta malformada en %s en vez de convertirla en vacío", async (_name, action, body, message) => {
     fetchMock.mockResolvedValue(json(body))
 
@@ -453,19 +445,6 @@ describe("server actions de datos del backend", () => {
     await expect(api.getSectores()).rejects.toThrow("respuesta inválida para sectores")
   })
 
-  it("obtiene los productos y valida activo booleano", async () => {
-    fetchMock.mockResolvedValue(json({ success: true, data: [producto] }))
-
-    await expect(api.getProductos()).resolves.toEqual([producto])
-    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/productos")
-  })
-
-  it("rechaza productos con filas inválidas", async () => {
-    fetchMock.mockResolvedValue(json({ success: true, data: [{ id: "p-1", nombre: "Tostada", activo: "si" }] }))
-
-    await expect(api.getProductos()).rejects.toThrow("respuesta inválida para productos")
-  })
-
   it("construye la URL de lotes con URLSearchParams y expone el cursor", async () => {
     fetchMock.mockResolvedValue(json({
       success: true,
@@ -509,9 +488,9 @@ describe("server actions de datos del backend", () => {
     expect(result.siguienteCursor).toBeNull()
   })
 
-  it("usa ApiError 401 en getSectores, getProductos, getLotes y getLoteAbierto", async () => {
+  it("usa ApiError 401 en getSectores, getLotes y getLoteAbierto", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 401 }))
-    for (const action of [api.getSectores(), api.getProductos(), api.getLotes("s-1"), api.getLoteAbierto("s-1")]) {
+    for (const action of [api.getSectores(), api.getLotes("s-1"), api.getLoteAbierto("s-1")]) {
       await expect(action).rejects.toBeInstanceOf(ApiError)
       await expect(action).rejects.toMatchObject({ status: 401 })
     }

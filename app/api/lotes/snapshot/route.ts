@@ -1,15 +1,12 @@
 import { proxyMonitoringJson } from '@/lib/monitoring-server'
 import { parseLoteSectorPayload } from '@/lib/monitoring-runtime'
 import type { LoteSector } from '@/lib/production-data'
+import { isRecord } from '@/lib/is-record'
 
 export const dynamic = 'force-dynamic'
 
 const PAGE_SIZE = 100
 const MAX_PAGES_PER_SECTOR = 20
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
 
 function invalidResponse(message: string): Response {
   return Response.json(

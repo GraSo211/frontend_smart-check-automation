@@ -91,16 +91,6 @@ export function mergeTelemetrySamples<T extends TelemetrySample>(...groups: T[][
   }).map(({ sample }) => sample)
 }
 
-/** Keeps incoming live samples when a slower history request resolves. */
-export function mergeIncomingTelemetrySamples<T extends TelemetrySample>(
-  existing: T[],
-  incoming: T[],
-  cap?: number,
-): T[] {
-  const merged = mergeTelemetrySamples(existing, incoming)
-  return typeof cap === "number" ? merged.slice(0, cap) : merged
-}
-
 export function samplesForDevice<T extends TelemetrySample>(samples: T[], dispositivoId: string): T[] {
   return samples.filter((sample) => sample.dispositivoId === dispositivoId)
 }

@@ -1,9 +1,6 @@
 import type { Device, DeviceType } from '@/lib/devices-data'
 import type { AbiertoPor, Conteos, LoteSector } from '@/lib/production-data'
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
+import { isRecord } from '@/lib/is-record'
 
 export function isValidIso(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value))

@@ -4,7 +4,6 @@ import {
   buildDashboardSamples,
   levelFor,
   mergeDeviceUpdate,
-  mergeIncomingTelemetrySamples,
   mergeTelemetrySamples,
   percent,
   ramUsedMb,
@@ -75,13 +74,6 @@ describe("telemetry thresholds and fallbacks", () => {
 
     expect(samples.map((row) => row.cpuPct)).toEqual([10, 30])
     expect(samples.at(-2)?.cpuPct).toBe(10)
-  })
-
-  it("lets a corrected SSE sample win at the same timestamp", () => {
-    const existing = sample("n1", "2026-01-01T00:01:00.000Z", 20)
-    const corrected = sample("n1", "2026-01-01T00:01:00.000Z", 30)
-
-    expect(mergeIncomingTelemetrySamples([existing], [corrected])).toEqual([corrected])
   })
 
   it("deduplicates by id while retaining distinct ids at the same timestamp", () => {

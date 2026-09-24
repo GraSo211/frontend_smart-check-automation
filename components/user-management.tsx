@@ -18,13 +18,12 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { applyUserPatch, createUserOperationTracker, filterUsersBySearch } from '@/lib/user-management-state'
+import type { UserRole } from '@/lib/auth'
 
 interface UserManagementProps {
   initialUsers: UserDTO[]
   initialError?: string | null
 }
-
-type UserRole = 'Administrador' | 'Supervisor' | 'Operario'
 
 const roleBadgeStyles: Record<UserDTO['rol'], string> = {
   Administrador: 'border-primary/30 bg-primary/10 text-primary',

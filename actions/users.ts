@@ -2,10 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'https://backend-smart-check-automation-go.onrender.com'
+import { getBackendUrl } from '@/lib/api-client'
 
 const SESSION_COOKIE = 'session_token'
 
@@ -38,7 +35,7 @@ export async function getUsersAction(): Promise<{
 }> {
   try {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_URL}/api/v1/admin/usuarios`, {
+    const response = await fetch(`${getBackendUrl()}/api/v1/admin/usuarios`, {
       method: 'GET',
       headers,
       cache: 'no-store',
@@ -66,7 +63,7 @@ export async function createUserAction(payload: {
 }): Promise<{ ok: boolean; message?: string; user?: UserDTO }> {
   try {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_URL}/api/v1/admin/usuarios`, {
+    const response = await fetch(`${getBackendUrl()}/api/v1/admin/usuarios`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -94,7 +91,7 @@ export async function updateUserAction(
 ): Promise<{ ok: boolean; message?: string }> {
   try {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_URL}/api/v1/admin/usuarios/${id}`, {
+    const response = await fetch(`${getBackendUrl()}/api/v1/admin/usuarios/${id}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify(payload),

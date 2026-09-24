@@ -3,21 +3,15 @@
 // Kept free of React/DOM so both server actions and components can share them.
 
 import {
-  AUTH_STATUS_LABELS,
-  type AuthStatus,
-  type Device,
   type RegistrationApproval,
   type RegistrationRejection,
   type RegistrationRequest,
   type RegistrationRequestStatus,
 } from "@/lib/devices-data"
 import { APP_TIME_ZONE } from "@/lib/format"
+import { isRecord } from "@/lib/is-record"
 
 export type Remaining = { expired: boolean; ms: number; label: string }
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
 
 function isValidIso(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value))
@@ -121,14 +115,4 @@ export function registrationExpiryClock(expiresAt: string): string {
   const date = new Date(expiresAt)
   if (!Number.isFinite(date.getTime())) return "—"
   return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: APP_TIME_ZONE })
-}
-
-/** Label for the auth status, guarding against malformed values. */
-export function authStatusLabel(authStatus: AuthStatus | undefined): string {
-  return AUTH_STATUS_LABELS[authStatus ?? "unenrolled"]
-}
-
-/** Whether a node can authenticate/report with its current credential. */
-export function canAuthenticate(device: Pick<Device, "authStatus">): boolean {
-  return (device.authStatus ?? "unenrolled") === "active"
 }

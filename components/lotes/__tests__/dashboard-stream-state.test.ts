@@ -1,7 +1,4 @@
 // @vitest-environment jsdom
-//
-// Este archivo concentra la cobertura que realmente ejecuta el `include` de
-// vitest (los `.test.tsx` quedan fuera del glob actual del repo).
 
 import React from "react"
 import { act, fireEvent, render, screen } from "@testing-library/react"
@@ -230,6 +227,22 @@ describe("dashboard de lotes por sector", () => {
     expect(screen.getByText("Sin lote abierto en este sector")).toBeTruthy()
   })
 
+  it("no avisa cuando el lote fue abierto por la entrada del horno", () => {
+    const abierto = lote({
+      id: "l-abierto",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      conteos: { ok: null, crudo: null, quemado: null, total: 0 },
+      abierto_por: { device_id: "d-1", type: "ENTRADA_HORNO" },
+    })
+
+    render(React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })))
+
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByText("Lote abierto · Sector Norte")).toBeTruthy()
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3)
+  })
+
   it("conserva las filas visibles mientras informa un fallo de actualización", () => {
     const confirmado = lote({ id: "lote-confirmado", producto_nombre: "Pan" })
     mocks.runs.current = [confirmado]
@@ -240,6 +253,31 @@ describe("dashboard de lotes por sector", () => {
     expect(screen.getByRole("alert").textContent).toContain("No se pudo actualizar la producción")
     expect(screen.getByRole("alert").textContent).toContain("Se conservan los datos confirmados anteriores")
     expect(screen.getByText("Pan")).toBeTruthy()
+  })
+
+  it("muestra el error inicial sin confundirlo con un vacío válido", () => {
+    mocks.error.current = "Servicio no disponible"
+    mocks.runs.current = []
+
+    render(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+
+    expect(screen.getByRole("alert").textContent).toContain("Consulta no disponible")
+    expect(screen.getByRole("alert").textContent).toContain("Servicio no disponible")
+    expect(screen.queryByText("No hay datos de producción registrados para mostrar.")).toBeNull()
+  })
+
+  it("oculta el aviso cuando la consulta se recupera", () => {
+    mocks.error.current = "Servicio no disponible"
+    mocks.runs.current = []
+
+    const view = render(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+    expect(screen.getByRole("alert")).toBeTruthy()
+
+    mocks.error.current = null
+    view.rerender(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByText("No hay datos de producción registrados para mostrar.")).toBeTruthy()
   })
 
   it("P0: no resucita como abierto un lote que el store ya vio cerrar", () => {

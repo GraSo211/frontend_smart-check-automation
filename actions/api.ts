@@ -10,7 +10,7 @@ import type {
     SpecificDevice,
     UpdateDispositivoRequest,
 } from "@/lib/devices-data";
-import type { LoteSector, Producto, Sector, CreateSectorRequest, UpdateSectorRequest } from "@/lib/production-data";
+import type { LoteSector, Sector, CreateSectorRequest, UpdateSectorRequest } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
     parseRegistrationApproval,
@@ -23,8 +23,8 @@ import {
 } from "@/lib/parametros-producto"
 import { ApiError } from "@/lib/api-client"
 import { parseBackendPage } from "@/lib/pagination"
+import { isRecord } from "@/lib/is-record"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
 const SESSION_COOKIE = "session_token"
 
 function getApiUrl(): string {
@@ -33,6 +33,12 @@ function getApiUrl(): string {
         throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host")
     }
     return apiUrl
+}
+
+// Non-throwing base URL resolution for the mutation helpers, which translate a
+// missing configuration into an `{ ok: false }` result instead of throwing.
+function getApiUrlOrNull(): string | null {
+    return process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || null
 }
 
 /** Forward the incoming browser session to the Go API from server actions. */
@@ -44,8 +50,39 @@ async function getSessionHeaders(): Promise<HeadersInit> {
     }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
+/**
+ * Shared read scaffolding for the backend GET actions: resolves the base URL at
+ * call time, applies the 8s abort timeout and the 401 translation, then defers
+ * the endpoint-specific `!response.ok` check and payload parsing to `handle`.
+ */
+async function withBackendFetch<T>(options: {
+    path: string
+    timeoutMessage: string
+    handle: (response: Response) => Promise<T>
+}): Promise<T> {
+    const apiUrl = getApiUrl()
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`${apiUrl}${options.path}`, {
+            headers: await getSessionHeaders(),
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        if (response.status === 401) {
+            throw new ApiError(401, "Sesión expirada o no autenticado");
+        }
+        return options.handle(response)
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            throw new Error(options.timeoutMessage);
+        }
+        throw e;
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 function isSuccessfulArrayResponse<T>(
@@ -76,79 +113,22 @@ function parseSector(data: unknown): Sector | null {
     return isSector(data) ? data : null;
 }
 
-function isProducto(value: unknown): value is Producto {
-    return isRecord(value) &&
-        typeof value.id === "string" && value.id !== "" &&
-        typeof value.nombre === "string" && value.nombre !== "" &&
-        typeof value.activo === "boolean";
-}
-
 export async function getSectores(): Promise<Sector[]> {
-    const apiUrl = getApiUrl()
+    return withBackendFetch({
+        path: "/api/v1/sectores",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los sectores no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
+            }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/sectores`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-        if (!isSuccessfulArrayResponse<Sector>(result) || !result.data.every(isSector)) {
-            throw new Error("La API devolvió una respuesta inválida para sectores.");
-        }
-        return result.data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los sectores no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-export async function getProductos(): Promise<Producto[]> {
-    const apiUrl = getApiUrl()
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/productos`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-        if (!isSuccessfulArrayResponse<Producto>(result) || !result.data.every(isProducto)) {
-            throw new Error("La API devolvió una respuesta inválida para productos.");
-        }
-        return result.data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los productos no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+            const result: unknown = await response.json();
+            if (!isSuccessfulArrayResponse<Sector>(result) || !result.data.every(isSector)) {
+                throw new Error("La API devolvió una respuesta inválida para sectores.");
+            }
+            return result.data;
+        },
+    })
 }
 
 // Historial del sector con paginación por cursor. Con OAuth, `sector_id` es
@@ -157,7 +137,6 @@ export async function getLotes(
     sectorId: string,
     opts?: { productoId?: string; limite?: number; antesDe?: string },
 ): Promise<{ items: LoteSector[]; total: number; siguienteCursor: string | null }> {
-    const apiUrl = getApiUrl()
     const params = new URLSearchParams()
     params.set("sector_id", sectorId)
     if (opts?.productoId) params.set("producto_id", opts.productoId)
@@ -166,44 +145,30 @@ export async function getLotes(
     params.set("limite", String(limite))
     if (opts?.antesDe) params.set("antes_de", opts.antesDe)
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/lotes?${params.toString()}`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
+    return withBackendFetch({
+        path: `/api/v1/lotes?${params.toString()}`,
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los lotes no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
+            }
 
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const payload: unknown = await response.json();
-        if (!isRecord(payload) || payload.success !== true || !Array.isArray(payload.data)) {
-            throw new Error("La API devolvió una respuesta inválida para el historial de lotes.");
-        }
-        const items = parseLoteSectorPayload(payload);
-        if (items === null) {
-            throw new Error("La API devolvió una respuesta inválida para el historial de lotes.");
-        }
-        const total = isRecord(payload) && typeof payload.total === "number" && Number.isFinite(payload.total)
-            ? payload.total
-            : items.length;
-        const cursor = payload.siguiente_cursor;
-        const siguienteCursor = typeof cursor === "string" && cursor !== "" ? cursor : null;
-        return { items, total, siguienteCursor };
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los lotes no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+            const payload: unknown = await response.json();
+            if (!isRecord(payload) || payload.success !== true || !Array.isArray(payload.data)) {
+                throw new Error("La API devolvió una respuesta inválida para el historial de lotes.");
+            }
+            const items = parseLoteSectorPayload(payload);
+            if (items === null) {
+                throw new Error("La API devolvió una respuesta inválida para el historial de lotes.");
+            }
+            const total = isRecord(payload) && typeof payload.total === "number" && Number.isFinite(payload.total)
+                ? payload.total
+                : items.length;
+            const cursor = payload.siguiente_cursor;
+            const siguienteCursor = typeof cursor === "string" && cursor !== "" ? cursor : null;
+            return { items, total, siguienteCursor };
+        },
+    })
 }
 
 const MAX_SECTOR_PAGES = 20
@@ -240,91 +205,55 @@ export async function getAllLotes(): Promise<LoteSector[]> {
 
 // Lote abierto del sector, o null. La ausencia es 200 con `lote: null`.
 export async function getLoteAbierto(sectorId: string): Promise<LoteSector | null> {
-    const apiUrl = getApiUrl()
     const params = new URLSearchParams()
     params.set("sector_id", sectorId)
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/lotes/abierto?${params.toString()}`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
+    return withBackendFetch({
+        path: `/api/v1/lotes/abierto?${params.toString()}`,
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). El lote abierto no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
+            }
 
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const payload: unknown = await response.json();
-        if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) {
-            throw new Error("La API devolvió una respuesta inválida para el lote abierto.");
-        }
-        if (payload.data.lote === null) return null;
-        const lote = parseLoteSectorPayload([payload.data.lote])?.[0] ?? null;
-        if (lote === null) {
-            throw new Error("La API devolvió una respuesta inválida para el lote abierto.");
-        }
-        return lote;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). El lote abierto no está disponible.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+            const payload: unknown = await response.json();
+            if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) {
+                throw new Error("La API devolvió una respuesta inválida para el lote abierto.");
+            }
+            if (payload.data.lote === null) return null;
+            const lote = parseLoteSectorPayload([payload.data.lote])?.[0] ?? null;
+            if (lote === null) {
+                throw new Error("La API devolvió una respuesta inválida para el lote abierto.");
+            }
+            return lote;
+        },
+    })
 }
 
 export async function getDevices() {
-    const apiUrl = getApiUrl()
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/dispositivos`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-
-        if (!isSuccessfulArrayResponse<Device>(result)) {
-            if (isRecord(result) && result.success === false) {
-                throw new Error(getResponseMessage(result));
+    return withBackendFetch({
+        path: "/api/v1/dispositivos",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los nodos no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
             }
-            throw new Error("La API devolvió una respuesta inválida para dispositivos.");
-        }
-        const data = parseDevicesPayload(result);
-        if (data === null) {
-            throw new Error("La API devolvió una respuesta inválida para dispositivos.");
-        }
-        return data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los nodos no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
 
-export async function getDeviceHistory(dispositivoId: string, page = 1, pageSize = 20): Promise<SpecificDevice[]> {
-    return (await getDeviceHistoryPageInternal(dispositivoId, page, pageSize, true)).items
+            const result: unknown = await response.json();
+
+            if (!isSuccessfulArrayResponse<Device>(result)) {
+                if (isRecord(result) && result.success === false) {
+                    throw new Error(getResponseMessage(result));
+                }
+                throw new Error("La API devolvió una respuesta inválida para dispositivos.");
+            }
+            const data = parseDevicesPayload(result);
+            if (data === null) {
+                throw new Error("La API devolvió una respuesta inválida para dispositivos.");
+            }
+            return data;
+        },
+    })
 }
 
 async function getDeviceHistoryPageInternal(
@@ -334,57 +263,35 @@ async function getDeviceHistoryPageInternal(
     allowLegacyMetadata: boolean,
 ): Promise<{ items: SpecificDevice[]; total: number; page: number; pageSize: number }> {
     validatePageParams(page, pageSize)
-    const apiUrl = getApiUrl()
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(
-            `${apiUrl}/api/v1/dispositivos/metricas?dispositivoId=${encodeURIComponent(dispositivoId)}&page=${page}&pageSize=${pageSize}`,
-            {
-                headers: await getSessionHeaders(),
-                cache: "no-store",
-                signal: controller.signal,
-            },
-        );
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-
-        const pageResult = parseBackendPage<SpecificDevice>(result, {
-            requestedPage: page,
-            requestedPageSize: pageSize,
-            allowLegacyMetadata,
-        })
-        if (!pageResult) {
-            if (isRecord(result) && result.success === false) {
-                throw new Error(getResponseMessage(result));
+    return withBackendFetch({
+        path: `/api/v1/dispositivos/metricas?dispositivoId=${encodeURIComponent(dispositivoId)}&page=${page}&pageSize=${pageSize}`,
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Historial no disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
             }
-            throw new Error("La API devolvió una respuesta inválida para el historial del dispositivo.");
-        }
-        return {
-            items: pageResult.items,
-            total: pageResult.total ?? pageResult.items.length,
-            page: pageResult.page,
-            pageSize: pageResult.pageSize,
-        }
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            console.warn("El backend no respondió a tiempo (¿Render en cold-start?). Historial no disponible.");
-        } else {
-            console.warn("No se pudo obtener el historial. Historial no disponible.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+
+            const result: unknown = await response.json();
+
+            const pageResult = parseBackendPage<SpecificDevice>(result, {
+                requestedPage: page,
+                requestedPageSize: pageSize,
+                allowLegacyMetadata,
+            })
+            if (!pageResult) {
+                if (isRecord(result) && result.success === false) {
+                    throw new Error(getResponseMessage(result));
+                }
+                throw new Error("La API devolvió una respuesta inválida para el historial del dispositivo.");
+            }
+            return {
+                items: pageResult.items,
+                total: pageResult.total ?? pageResult.items.length,
+                page: pageResult.page,
+                pageSize: pageResult.pageSize,
+            }
+        },
+    })
 }
 
 /** Additive paginated history contract for the device detail consumer. */
@@ -398,56 +305,40 @@ export async function getDeviceHistoryPage(
 
 
 export async function getProductosConParametros(): Promise<ParametroProducto[]> {
-    const apiUrl = getApiUrl()
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/parametros-producto`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-
-        if (!isSuccessfulArrayResponse<ParametroProducto>(result)) {
-            if (isRecord(result) && result.success === false) {
-                throw new Error(getResponseMessage(result));
+    return withBackendFetch({
+        path: "/api/v1/parametros-producto",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los parámetros de producto no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
             }
-            throw new Error("La API devolvió una respuesta inválida para los parámetros de producto.");
-        }
-        return result.data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Los parámetros de producto no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+
+            const result: unknown = await response.json();
+
+            if (!isSuccessfulArrayResponse<ParametroProducto>(result)) {
+                if (isRecord(result) && result.success === false) {
+                    throw new Error(getResponseMessage(result));
+                }
+                throw new Error("La API devolvió una respuesta inválida para los parámetros de producto.");
+            }
+            return result.data;
+        },
+    })
 }
 
 // Updates the recommended parameters of an existing product (PUT).
 export async function updateParametrosProducto(
     payload: ParametroProductoRequest,
 ): Promise<{ ok: true; data: ParametroProducto } | { ok: false; errors: string[] }> {
-    if (!API_URL) {
+    const apiUrl = getApiUrlOrNull()
+    if (!apiUrl) {
         return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}/api/v1/parametros-producto`, {
+        const response = await fetch(`${apiUrl}/api/v1/parametros-producto`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
@@ -580,14 +471,15 @@ interface DeviceMutationOptions<T> {
 // revalidates the configured routes on success and translates the error
 // envelope. DELETE requests never carry a body.
 async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<DeviceActionResult<T>> {
-    if (!API_URL) {
+    const apiUrl = getApiUrlOrNull()
+    if (!apiUrl) {
         return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const response = await fetch(`${API_URL}${options.path}`, {
+        const response = await fetch(`${apiUrl}${options.path}`, {
             method: options.method,
             headers: await getSessionHeaders(),
             ...(options.method === "DELETE" ? {} : { body: JSON.stringify(options.body ?? {}) }),
@@ -622,41 +514,25 @@ async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<Dev
 // Solicitudes de registro de dispositivos (lectura: sólo Supervisor/Admin;
 // el backend responde 401/403 si el rol no alcanza).
 export async function getRegistrationRequests(): Promise<RegistrationRequest[]> {
-    const apiUrl = getApiUrl();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/registration-requests`, {
-            headers: await getSessionHeaders(),
-            cache: "no-store",
-            signal: controller.signal,
-        });
-
-        if (response.status === 401) {
-            throw new ApiError(401, "Sesión expirada o no autenticado");
-        }
-        if (!response.ok) {
-            throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
-        }
-
-        const result: unknown = await response.json();
-        const data = parseRegistrationRequests(result);
-        if (data === null) {
-            if (isRecord(result) && result.success === false) {
-                throw new Error(getResponseMessage(result));
+    return withBackendFetch({
+        path: "/api/v1/registration-requests",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Las solicitudes de registro no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
             }
-            throw new Error("La API devolvió una respuesta inválida para las solicitudes de registro.");
-        }
-        return data;
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            throw new Error("El backend no respondió a tiempo (¿Render en cold-start?). Las solicitudes de registro no están disponibles.");
-        }
-        throw e;
-    } finally {
-        clearTimeout(timeout);
-    }
+
+            const result: unknown = await response.json();
+            const data = parseRegistrationRequests(result);
+            if (data === null) {
+                if (isRecord(result) && result.success === false) {
+                    throw new Error(getResponseMessage(result));
+                }
+                throw new Error("La API devolvió una respuesta inválida para las solicitudes de registro.");
+            }
+            return data;
+        },
+    })
 }
 
 // Aprueba una solicitud de registro. El backend responde en snake_case

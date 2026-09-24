@@ -13,7 +13,8 @@ import {
 import type { MonitoringView, NodeObservation, ServiceStatus, SourceSync } from '@/lib/monitoring-types'
 import { recordSourceDataEvent, recordSourceQuery } from '@/lib/sync-store'
 import { mergeDeviceUpdate, reconcileDeviceSnapshot } from '@/lib/telemetry'
-import { isRecord, parseDeviceEventPayload, parseDevicesPayload, parseLoteSectorPayload } from '@/lib/monitoring-runtime'
+import { parseDeviceEventPayload, parseDevicesPayload, parseLoteSectorPayload } from '@/lib/monitoring-runtime'
+import { isRecord } from '@/lib/is-record'
 import { parseBackendPage, parseCompleteCollection } from '@/lib/pagination'
 
 const PROBE_INTERVAL_MS = 30_000

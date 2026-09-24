@@ -8,11 +8,6 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat("es-AR").format(value)
 }
 
-// Formats a kilogram value with one decimal (e.g. 220.5 -> "220.5 kg").
-export function formatKg(value: number): string {
-  return `${value.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`
-}
-
 // Formats an ISO date into a short readable date in Buenos Aires time (e.g. "Jun 02").
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("es-AR", {

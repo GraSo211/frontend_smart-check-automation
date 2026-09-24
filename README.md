@@ -31,7 +31,8 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Supervisión | Lista y muestra la cámara de los dispositivos que tienen una URL WHEP configurada, con reconexión automática. Por capacidad de las Raspberry, cada nodo expone una sola cámara/stream. |
 | Lotes | Consulta de lotes, búsqueda por producto, filtro por turno y rango de temperatura, KPIs y tabla histórica. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
-| Nodos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, alta/edición/baja de dispositivos y la URL WHEP de su cámara. |
+| Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de nodos asignados. La gestión requiere rol Supervisor o Administrador. |
+| Nodos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y cámara, y baja de dispositivos. El nombre lo define el propio nodo y es de solo lectura en el panel. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
 | Alertas | Página de módulo reservada para la gestión de alertas y notificaciones; actualmente muestra una sección informativa. |
 
@@ -217,6 +218,7 @@ iniciando.
 | `/usuarios` | Administración de usuarios, roles y estado activo. |
 | `/lotes` | Lotes y datos históricos con filtros locales, KPIs y tabla de supervisión. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
+| `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y nodos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Placeholder funcional del módulo de alertas. |
 | `/supervision` | Lista los dispositivos con cámara (`whepUrl`), permite cambiar de nodo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
 | `/nodos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de nodos y la URL WHEP de la cámara. |
@@ -241,19 +243,26 @@ especificación completa del backend.
 | `POST /api/v1/auth/login` | Login local. | JSON `{ email, password }`. |
 | `POST /api/v1/auth/google` | Login con Google. | JSON `{ googleToken }`. |
 | `POST /api/v1/auth/logout` | Cierre de sesión. | Sin cuerpo relevante. |
-| `GET /api/v1/lotes-productivos` | Dashboard y `/lotes`. | `page=1&pageSize=100`. |
-| `GET /api/v1/lotes-productivos` | Historial de `/configuracion`. | `productoId`, `page`, `pageSize`; la página actual solicita `page=1&pageSize=100`. |
-| `GET /api/v1/dispositivos` | Carga inicial de `/nodos` y fuentes de `/supervision`. | Sin query. Cada dispositivo puede incluir `whepUrl` (opcional). |
+| `GET /api/v1/sectores` | Dashboard, `/lotes`, `/sectores`, `/configuracion` y snapshot global. | Sin query. |
+| `GET /api/v1/lotes` | Dashboard, `/lotes`, `/configuracion` y snapshot global. Paginación por cursor. | `sector_id` (obligatorio con OAuth), `producto_id`, `limite`, `antes_de` (cursor); el backend omite `siguiente_cursor` en la última página. |
+| `GET /api/v1/lotes/abierto` | Lote abierto del sector en `/lotes`. | `sector_id`; responde `lote: null` cuando no hay ninguno. |
+| `GET /api/v1/dispositivos` | Carga inicial de `/nodos`, `/sectores` y fuentes de `/supervision`. | Sin query. Cada dispositivo puede incluir `whepUrl` (opcional). |
 | `GET /api/v1/dispositivos/metricas` | Historial del nodo seleccionado. | `dispositivoId`, `page`, `pageSize`; el valor por defecto de la action es `page=1&pageSize=20`. |
-| `POST /api/v1/dispositivos` | Alta de un nodo Raspberry Pi. | JSON del dispositivo con `nombre`, `ubicacion` y `whepUrl` opcional; el backend genera el identificador. |
-| `PUT /api/v1/dispositivos` | Actualización del nombre/ubicación y de la cámara de un nodo. | JSON con `dispositivoId`, `nombre`, `ubicacion` y `whepUrl` opcional. |
-| `DELETE /api/v1/dispositivos` | Baja de un nodo. | `dispositivoId` como query. |
+| `POST /api/v1/dispositivos` | **No se usa**: responde 405. El alta pasa por solicitudes de registro. | — |
+| `PUT /api/v1/dispositivos` | Actualiza el sector y la cámara (WHEP) de un nodo. El nombre es inmutable (el backend responde 400 si se envía). | JSON con `dispositivoId`, `sectorId` y `whepUrl` opcional; un 409 indica rol de nodo duplicado en el sector. |
+| `DELETE /api/v1/dispositivos` | Baja (soft delete) de un nodo. | `dispositivoId` como query. |
+| `GET /api/v1/registration-requests` | Solicitudes de registro pendientes en `/nodos`. | Sólo Supervisor/Admin. |
+| `POST /api/v1/registration-requests/{id}/approve` | Aprobar una solicitud de registro. | — |
+| `POST /api/v1/registration-requests/{id}/reject` | Rechazar una solicitud de registro. | — |
 | `GET /api/v1/parametros-producto` | Listado de productos y parámetros recomendados. | Sin query relevante. |
 | `PUT /api/v1/parametros-producto` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso y tolerancias. |
+| `POST /api/v1/sectores` | Alta de sector en `/sectores`. | JSON `{ nombre }`. |
+| `PUT /api/v1/sectores/{id}` | Renombrar un sector. | JSON `{ nombre }`. |
+| `DELETE /api/v1/sectores/{id}` | Baja de un sector; 409 si tiene lotes asociados. | — |
 | `GET /api/v1/admin/usuarios` | Listado de usuarios en `/usuarios`. | Sin query relevante. |
 | `POST /api/v1/admin/usuarios` | Alta de usuario corporativo. | JSON con `email`, `nombre`, `rol` y `password` opcional. |
 | `PATCH /api/v1/admin/usuarios/{id}` | Cambio de nombre, rol o estado. | JSON con `nombre`, `rol` y/o `activo`. |
-| `GET /api/v1/lotes-productivos/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
+| `GET /api/v1/lotes/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
 | `GET /api/v1/dispositivos/events` | SSE de estado y métricas de dispositivos. | `Accept: text/event-stream`. |
 
 Las server actions y los handlers envían la cookie `session_token` al backend
@@ -267,9 +276,11 @@ para conservar la cookie de sesión al abrir streams desde el navegador:
 
 | Método y ruta interna | Reenvía a |
 |---|---|
-| `GET /api/lotes/events` | `GET /api/v1/lotes-productivos/events` |
+| `GET /api/lotes/events` | `GET /api/v1/lotes/events` |
+| `GET /api/lotes/snapshot` | `GET /api/v1/sectores` + `GET /api/v1/lotes` (recorrido por cursor de cada sector) |
 | `GET /api/nodos/events` | `GET /api/v1/dispositivos/events` |
 | `GET /api/nodos/snapshot` | `GET /api/v1/dispositivos` |
+| `GET /api/system-status` | `GET /health` |
 
 ### Sesiones WHEP de MediaMTX
 
@@ -314,9 +325,9 @@ datos cuando corresponda:
 
 | Función | Comportamiento ante falta de API, timeout o error |
 |---|---|
-| `/` y `/lotes` | `getAllProductionRuns()` propaga el error; la página informa que la consulta no está disponible. |
+| `/` y `/lotes` | `getAllLotes()` propaga el error; la página informa que la consulta no está disponible. |
 | `/configuracion` listado de productos | `getProductosConParametros()` propaga el error; una respuesta `data: []` se conserva como resultado vacío válido. |
-| `/configuracion` historial por producto | `getLotesPorProducto()` propaga el error y conserva los metadatos de paginación; una lista vacía es válida. |
+| `/configuracion` historial por producto | `getLotes()` propaga el error y conserva los metadatos de paginación; una lista vacía es válida. |
 | `/nodos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
 | Historial de telemetría | `getDeviceHistory()` propaga el error e informa que el historial no está disponible. |
 | Usuarios y autenticación | Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
@@ -371,7 +382,7 @@ SSE intentan reconectarse.
 app/
 ├── (auth)/                  Login y pantalla de no autorizado
 ├── (modulos)/               Dashboard y páginas de operación/sistema
-├── api/                     Handlers internos de SSE y snapshot de nodos
+├── api/                     Handlers internos: snapshot/SSE de lotes y nodos, y health check
 ├── globals.css              Tokens y estilos Tailwind v4
 └── layout.tsx               Layout raíz, metadata, tema y Analytics
 actions/

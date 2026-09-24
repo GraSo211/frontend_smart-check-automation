@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
   formatNumber,
-  formatKg,
   formatDate,
   formatTime,
   formatWindow,
@@ -23,20 +22,6 @@ describe("formatNumber", () => {
 
   it("formats a large number", () => {
     expect(formatNumber(1_500_000)).toBe("1.500.000")
-  })
-})
-
-describe("formatKg", () => {
-  it("formats kilograms with one decimal", () => {
-    expect(formatKg(220.5)).toBe("220,5 kg")
-  })
-
-  it("formats whole number kilograms", () => {
-    expect(formatKg(100)).toBe("100,0 kg")
-  })
-
-  it("formats zero kilograms", () => {
-    expect(formatKg(0)).toBe("0,0 kg")
   })
 })
 

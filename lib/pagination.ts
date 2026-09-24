@@ -5,6 +5,8 @@
  * y páginas sin progreso en vez de publicar una colección parcial.
  */
 
+import { isRecord } from "@/lib/is-record"
+
 export type BackendPage<T> = {
   items: T[]
   total?: number
@@ -19,28 +21,11 @@ type ParsePageOptions = {
   allowLegacyMetadata?: boolean
 }
 
-type PaginationOptions<T> = {
-  pageSize: number
-  getId: (item: T) => string
-  fetchPage: (page: number) => Promise<BackendPage<T>>
-}
-
-export type PaginatedCollection<T> = {
-  items: T[]
-  total: number
-  page: 1
-  pageSize: number
-}
-
 export type CompleteCollection<T> = {
   items: T[]
   total: number
   page: 1
   pageSize: number
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
 }
 
 function isInteger(value: unknown): value is number {
@@ -115,72 +100,3 @@ export function parseCompleteCollection<T>(
   }
 }
 
-export async function collectPaginatedPages<T>({
-  pageSize,
-  getId,
-  fetchPage,
-}: PaginationOptions<T>): Promise<PaginatedCollection<T>> {
-  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
-    throw new Error('Parámetros de paginación inválidos.')
-  }
-
-  const byId = new Map<string, T>()
-  let expectedTotal: number | undefined
-  let metadataMode: boolean | undefined
-  let page = 1
-  const maxLegacyPages = 1_000
-
-  while (true) {
-    const current = await fetchPage(page)
-    if (current.page !== page || current.pageSize !== pageSize || current.items.length > pageSize) {
-      throw new Error('La API devolvió metadatos de paginación inválidos.')
-    }
-    if (metadataMode === undefined) metadataMode = current.hasMetadata
-    if (metadataMode !== current.hasMetadata) {
-      throw new Error('La API cambió el formato de paginación durante la consulta.')
-    }
-    if (current.hasMetadata) {
-      if (current.total === undefined) throw new Error('La API devolvió un total inválido.')
-      if (expectedTotal === undefined) expectedTotal = current.total
-      if (current.total !== expectedTotal) {
-        throw new Error('El total cambió durante la paginación; no se publicó una colección parcial.')
-      }
-    }
-
-    const previousSize = byId.size
-    for (const item of current.items) {
-      const id = getId(item)
-      if (typeof id !== 'string' || id.length === 0) {
-        throw new Error('La API devolvió un elemento sin identificador.')
-      }
-      byId.set(id, item)
-    }
-
-    if (expectedTotal !== undefined) {
-      if (byId.size > expectedTotal) {
-        throw new Error('La API devolvió más identificadores únicos que el total declarado.')
-      }
-      if (byId.size >= expectedTotal) {
-        return { items: [...byId.values()], total: expectedTotal, page: 1, pageSize }
-      }
-      if (current.items.length === 0 || byId.size === previousSize) {
-        throw new Error('La API no avanzó hasta completar la colección; no se publicó una colección parcial.')
-      }
-    } else if (current.items.length < pageSize || current.items.length === 0) {
-      return { items: [...byId.values()], total: byId.size, page: 1, pageSize }
-    } else if (byId.size === previousSize) {
-      throw new Error('La API no avanzó durante la paginación; no se publicó una colección parcial.')
-    }
-
-    // A stable total bounds the number of offset requests. A legacy response
-    // ends on a short page; an all-full legacy sequence is still finite once
-    // its first empty page arrives.
-    page += 1
-    if (expectedTotal !== undefined && page > Math.ceil(expectedTotal / pageSize) + 1) {
-      throw new Error('La API excedió el límite esperado de páginas; no se publicó una colección parcial.')
-    }
-    if (expectedTotal === undefined && page > maxLegacyPages) {
-      throw new Error('La respuesta legacy excedió el límite seguro de páginas; no se publicó una colección parcial.')
-    }
-  }
-}
