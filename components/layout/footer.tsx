@@ -30,7 +30,7 @@ export function Footer() {
             className="h-10 w-auto shrink-0"
           />
           <Image
-            src="/fermar/Imagotipo - Versión Principal.webp"
+            src="/fermar/imagotipo-principal.webp"
             alt="Smart-Check Automation"
             width={100}
             height={44}
