@@ -67,19 +67,23 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
 
   const metrics = useMemo(() => {
     const units = currentRuns.reduce((sum, run) => sum + run.conteos.total, 0)
-    const correctos = currentRuns.reduce((sum, run) => sum + (run.conteos.ok ?? 0), 0)
+    // `ok` is the authoritative correct bucket when the model emits it. When it
+    // does not, the correct units are derived from the authoritative total minus
+    // the recorded defects, clamped at zero.
+    const correctos = currentRuns.reduce((sum, run) => {
+      if (run.conteos.ok !== null) return sum + run.conteos.ok
+      const defects = (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0)
+      return sum + Math.max(0, run.conteos.total - defects)
+    }, 0)
     const wasteUnits = currentRuns.reduce((sum, run) => sum + (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0), 0)
     const alerts = currentRuns.filter((run) => run.conteos.total > 0 && (run.conteos.quemado ?? 0) / run.conteos.total >= 0.05).length
     const opportunityUnits = Math.round(wasteUnits * ESTIMATION.avoidableWasteRate)
     const hasData = currentRuns.length > 0
-    // A bucket the model never emits stays null. An all-null `ok` (or all-null
-    // `quemado`+`crudo`) must render "—" instead of a fabricated 0.0% rate.
-    const hasOk = currentRuns.some((run) => run.conteos.ok !== null)
+    // An all-null `quemado`+`crudo` must render "—" instead of a fabricated 0.0%
+    // waste rate.
     const hasWaste = currentRuns.some((run) => run.conteos.quemado !== null || run.conteos.crudo !== null)
-    // `quality` stays null (renders "—") until there is at least one unit to
-    // judge with at least one real `ok` bucket, so an empty or fully-absent
-    // lote never claims a 0% quality.
-    return { units, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: hasData && units && hasOk ? qualityRate(correctos, units) : null, hasData, hasOk, hasWaste }
+    // `quality` is null (renders "—") only when there is no unit to judge.
+    return { units, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: hasData && units ? qualityRate(correctos, units) : null, hasData, hasWaste }
   }, [currentRuns])
 
   const sectionMetrics = {
@@ -106,7 +110,7 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
       <section className="grid gap-5 lg:grid-cols-[1.45fr_0.75fr]">
         <div className="relative overflow-hidden rounded-xl bg-primary px-5 py-6 text-primary-foreground shadow-sm sm:p-8">
           <div className="absolute -right-20 -top-24 size-72 rounded-full border border-primary-foreground/10" />
-          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">—</p><p className="mt-2 text-sm text-primary-foreground/70">{currentError ? (metrics.hasData ? "datos confirmados anteriores" : "consulta no disponible") : metrics.hasData ? "producción registrada" : production.loading ? "consultando" : "sin datos registrados"}</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(currentRuns.length)}</strong> lotes consultados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
+          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">{metrics.hasData ? formatNumber(metrics.units) : "—"}</p><p className="mt-2 text-sm text-primary-foreground/70">{currentError ? (metrics.hasData ? "datos confirmados anteriores" : "consulta no disponible") : metrics.hasData ? "producción registrada" : production.loading ? "consultando" : "sin datos registrados"}</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(currentRuns.length)}</strong> lotes consultados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
         </div>
         <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm"><div><div className="flex items-center justify-between"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Calidad de línea</p><CheckCircle2 className="size-5 text-muted-foreground" /></div><p className="mt-8 font-mono text-4xl font-semibold tracking-tight text-foreground">{metrics.quality === null ? "—" : `${metrics.quality.toFixed(1)}%`}</p><p className="mt-2 text-sm text-muted-foreground">{metrics.hasData ? "unidades correctas" : "sin medición"}</p></div><div className="mt-8 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success" style={{ width: `${metrics.quality ?? 0}%` }} /></div></div>
       </section>

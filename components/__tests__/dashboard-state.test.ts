@@ -117,7 +117,7 @@ describe("panel principal sin base evaluable", () => {
     expect(html).not.toContain("0.0%")
   })
 
-  it("no publica calidad cuando ningún lote emite el bucket ok", () => {
+  it("deriva la calidad del total menos la merma cuando ningún lote emite el bucket ok", () => {
     const runs = [lote({ conteos: { ok: null, crudo: 4, quemado: 6, total: 100 } })]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
@@ -125,7 +125,8 @@ describe("panel principal sin base evaluable", () => {
     )
 
     expect(html).toContain(">100</strong> unidades")
-    expect(html).not.toContain("0.0%")
+    // Sin bucket `ok` los correctos se derivan del total menos los defectos.
+    expect(html).toContain("90.0%")
     // The waste-based cards still have a real bucket to work with.
     expect(html).toContain("unidades recuperables")
   })
