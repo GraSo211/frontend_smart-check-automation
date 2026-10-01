@@ -59,8 +59,84 @@ export type UpdateSectorRequest = {
   nombre: string
 }
 
+// Producto unificado: reúne la identidad del producto con sus parámetros de
+// control (antes separados en `parametros_producto` en el backend).
+// GET /api/v1/productos devuelve esta entidad completa.
 export type Producto = {
   id: string
   nombre: string
   activo: boolean
+  pesoReferenciaKg: number
+  toleranciaPesoPct: number
+  dimensionBaseCm: number
+  toleranciaDimensionCm: number
+  tempMin: number
+  tempMax: number
+  velocidadCintaMin: number
+  velocidadCintaMax: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** Body for `POST /api/v1/productos` and `PUT /api/v1/productos/{id}`. */
+export type ProductoRequest = {
+  nombre: string
+  pesoReferenciaKg: number
+  toleranciaPesoPct: number
+  dimensionBaseCm: number
+  toleranciaDimensionCm: number
+  tempMin: number
+  tempMax: number
+  velocidadCintaMin: number
+  velocidadCintaMax: number
+}
+
+/** Errores de validación por campo del formulario de producto. */
+export type ProductoErrores = Partial<Record<keyof ProductoRequest, string>>
+
+/**
+ * Replica las reglas del `ProductoRequest.Validate()` del backend para que el
+ * formulario muestre los mismos errores antes de enviar. Devuelve un mapa por
+ * campo; vacío cuando el request es válido.
+ */
+export function validateProducto(values: ProductoRequest): ProductoErrores {
+  const errors: ProductoErrores = {}
+
+  const nombre = values.nombre?.trim() ?? ""
+  if (!nombre) {
+    errors.nombre = "El nombre es obligatorio."
+  } else if (nombre.length > 100) {
+    errors.nombre = "El nombre no puede superar los 100 caracteres."
+  }
+
+  if (!(values.pesoReferenciaKg > 0)) {
+    errors.pesoReferenciaKg = "Debe ser mayor a 0."
+  }
+  if (!(values.toleranciaPesoPct >= 0)) {
+    errors.toleranciaPesoPct = "Debe ser mayor o igual a 0."
+  }
+  if (!(values.dimensionBaseCm > 0)) {
+    errors.dimensionBaseCm = "Debe ser mayor a 0."
+  }
+  if (!(values.toleranciaDimensionCm >= 0)) {
+    errors.toleranciaDimensionCm = "Debe ser mayor o igual a 0."
+  }
+  if (!Number.isFinite(values.tempMin)) {
+    errors.tempMin = "Ingresá un número."
+  }
+  if (!Number.isFinite(values.tempMax)) {
+    errors.tempMax = "Ingresá un número."
+  } else if (!(values.tempMax > values.tempMin)) {
+    errors.tempMax = "Debe ser mayor a la temperatura mínima."
+  }
+  if (!Number.isFinite(values.velocidadCintaMin)) {
+    errors.velocidadCintaMin = "Ingresá un número."
+  }
+  if (!Number.isFinite(values.velocidadCintaMax)) {
+    errors.velocidadCintaMax = "Ingresá un número."
+  } else if (!(values.velocidadCintaMax > values.velocidadCintaMin)) {
+    errors.velocidadCintaMax = "Debe ser mayor a la velocidad mínima."
+  }
+
+  return errors
 }

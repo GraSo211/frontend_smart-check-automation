@@ -10,17 +10,20 @@ import type {
     SpecificDevice,
     UpdateDispositivoRequest,
 } from "@/lib/devices-data";
-import type { LoteSector, Sector, CreateSectorRequest, UpdateSectorRequest } from "@/lib/production-data";
+import type {
+    LoteSector,
+    Sector,
+    CreateSectorRequest,
+    UpdateSectorRequest,
+    Producto,
+    ProductoRequest,
+} from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
     parseRegistrationApproval,
     parseRegistrationRejection,
     parseRegistrationRequests,
 } from "@/lib/registration";
-import {
-    type ParametroProducto,
-    type ParametroProductoRequest,
-} from "@/lib/parametros-producto"
 import { ApiError } from "@/lib/api-client"
 import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
@@ -111,6 +114,25 @@ function isSector(value: unknown): value is Sector {
 
 function parseSector(data: unknown): Sector | null {
     return isSector(data) ? data : null;
+}
+
+function isProducto(value: unknown): value is Producto {
+    return isRecord(value) &&
+        typeof value.id === "string" && value.id !== "" &&
+        typeof value.nombre === "string" && value.nombre !== "" &&
+        typeof value.activo === "boolean" &&
+        typeof value.pesoReferenciaKg === "number" &&
+        typeof value.toleranciaPesoPct === "number" &&
+        typeof value.dimensionBaseCm === "number" &&
+        typeof value.toleranciaDimensionCm === "number" &&
+        typeof value.tempMin === "number" &&
+        typeof value.tempMax === "number" &&
+        typeof value.velocidadCintaMin === "number" &&
+        typeof value.velocidadCintaMax === "number";
+}
+
+function parseProducto(data: unknown): Producto | null {
+    return isProducto(data) ? data : null;
 }
 
 export async function getSectores(): Promise<Sector[]> {
@@ -304,10 +326,25 @@ export async function getDeviceHistoryPage(
 }
 
 
-export async function getProductosConParametros(): Promise<ParametroProducto[]> {
+// ─── Catálogo de productos ───────────────────────────────────────────────────
+//
+// El backend unificó `productos` y `parametros_producto` en una sola entidad:
+// los parámetros de control viajan dentro de `Producto` y las escrituras
+// requieren rol Supervisor/Admin. La baja es un soft delete (`activo=false`).
+
+const PRODUCTO_STATUS_MESSAGES: Record<number, string> = {
+    409: "Ya existe un producto con ese nombre",
+    404: "El producto no existe",
+    403: "Se requiere rol Supervisor o Administrador",
+    401: "Sesión expirada o no autenticado",
+};
+
+const PRODUCTO_REVALIDATE_PATHS = ["/configuracion"];
+
+export async function getProductos(): Promise<Producto[]> {
     return withBackendFetch({
-        path: "/api/v1/parametros-producto",
-        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los parámetros de producto no están disponibles.",
+        path: "/api/v1/productos",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los productos no están disponibles.",
         handle: async (response) => {
             if (!response.ok) {
                 throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -315,60 +352,60 @@ export async function getProductosConParametros(): Promise<ParametroProducto[]> 
 
             const result: unknown = await response.json();
 
-            if (!isSuccessfulArrayResponse<ParametroProducto>(result)) {
+            if (!isSuccessfulArrayResponse<Producto>(result) || !result.data.every(isProducto)) {
                 if (isRecord(result) && result.success === false) {
                     throw new Error(getResponseMessage(result));
                 }
-                throw new Error("La API devolvió una respuesta inválida para los parámetros de producto.");
+                throw new Error("La API devolvió una respuesta inválida para productos.");
             }
             return result.data;
         },
     })
 }
 
-// Updates the recommended parameters of an existing product (PUT).
-export async function updateParametrosProducto(
-    payload: ParametroProductoRequest,
-): Promise<{ ok: true; data: ParametroProducto } | { ok: false; errors: string[] }> {
-    const apiUrl = getApiUrlOrNull()
-    if (!apiUrl) {
-        return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
-    }
+// Creates a product (POST /api/v1/productos).
+export async function createProducto(
+    request: ProductoRequest,
+): Promise<DeviceActionResult<Producto>> {
+    return deviceMutation<Producto>({
+        path: "/api/v1/productos",
+        method: "POST",
+        body: request,
+        parse: parseProducto,
+        invalidMessage: "La API devolvió un producto inválido.",
+        statusMessages: PRODUCTO_STATUS_MESSAGES,
+        revalidatePaths: PRODUCTO_REVALIDATE_PATHS,
+    });
+}
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const response = await fetch(`${apiUrl}/api/v1/parametros-producto`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                ...(await getSessionHeaders()),
-            },
-            body: JSON.stringify(payload),
-            cache: "no-store",
-            signal: controller.signal,
-        });
+// Full replacement of a product and its control parameters (PUT).
+export async function updateProducto(
+    id: string,
+    request: ProductoRequest,
+): Promise<DeviceActionResult<Producto>> {
+    return deviceMutation<Producto>({
+        path: `/api/v1/productos/${encodeURIComponent(id)}`,
+        method: "PUT",
+        body: request,
+        parse: parseProducto,
+        invalidMessage: "La API devolvió un producto inválido.",
+        statusMessages: PRODUCTO_STATUS_MESSAGES,
+        revalidatePaths: PRODUCTO_REVALIDATE_PATHS,
+    });
+}
 
-        const result = await response.json().catch(() => null);
-
-        if (response.ok && result?.success) {
-            revalidatePath("/configuracion");
-            return { ok: true, data: result.data as ParametroProducto };
-        }
-
-        const errors =
-            Array.isArray(result?.errors) && result.errors.length > 0
-                ? result.errors.map(String)
-                : [result?.message ?? `La API respondió con ${response.status}: ${response.statusText}`];
-        return { ok: false, errors };
-    } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-            return { ok: false, errors: ["El backend no respondió a tiempo (¿Render en cold-start?)."] };
-        }
-        return { ok: false, errors: [e instanceof Error ? e.message : "Error desconocido"] };
-    } finally {
-        clearTimeout(timeout);
-    }
+// Soft-deletes a product (DELETE /api/v1/productos/{id}); the backend flips
+// `activo` to false. The success envelope may omit `data`.
+export async function deleteProducto(id: string): Promise<DeviceActionResult<null>> {
+    return deviceMutation<null>({
+        path: `/api/v1/productos/${encodeURIComponent(id)}`,
+        method: "DELETE",
+        parse: () => null,
+        allowEmptyData: true,
+        invalidMessage: "La API devolvió una respuesta inválida al desactivar el producto.",
+        statusMessages: PRODUCTO_STATUS_MESSAGES,
+        revalidatePaths: PRODUCTO_REVALIDATE_PATHS,
+    });
 }
 
 // ─── Catálogo de nodos: metadatos y ciclo de vida de credenciales ────────────
@@ -416,6 +453,16 @@ function errorCodeOf(result: unknown): string | null {
     return null
 }
 
+// Validaciones con errores por campo (`errors` como objeto). Se excluye `code`
+// para no confundir el identificador semántico con un mensaje de campo.
+function fieldErrorsOf(result: unknown): string[] {
+    if (!isRecord(result) || !isRecord(result.errors)) return []
+    return Object.entries(result.errors)
+        .filter(([key]) => key !== "code")
+        .map(([, value]) => (typeof value === "string" ? value : String(value)))
+        .filter(Boolean)
+}
+
 // The backend error envelope carries `errors:{code}`. Legacy endpoints may send
 // an array of strings instead; both shapes are handled.
 function errorsFromResponse(
@@ -424,6 +471,9 @@ function errorsFromResponse(
     statusMessages?: Record<number, string>,
 ): { errors: string[]; code?: string } {
     const code = errorCodeOf(result)
+    // Un error de validación por campo es más útil que el código genérico.
+    const fieldErrors = fieldErrorsOf(result)
+    if (fieldErrors.length > 0) return { errors: fieldErrors, ...(code ? { code } : {}) }
     if (code && DEVICE_ERROR_MESSAGES[code]) {
         return { errors: [DEVICE_ERROR_MESSAGES[code]], code }
     }

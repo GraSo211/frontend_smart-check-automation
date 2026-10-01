@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   getSectores: vi.fn(),
   getLotes: vi.fn(),
   getLoteAbierto: vi.fn(),
-  getProductosConParametros: vi.fn(),
+  getProductos: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => mocks)
@@ -21,8 +21,9 @@ vi.mock("@/components/lotes/dashboard-content", () => ({
   DashboardContent: (props: Record<string, unknown>) =>
     React.createElement("pre", null, JSON.stringify(props)),
 }))
-vi.mock("@/components/configuracion/product-card", () => ({
-  default: (props: Record<string, unknown>) => React.createElement("pre", { id: "productos" }, JSON.stringify(props)),
+vi.mock("@/components/configuracion/product-management", () => ({
+  ProductManagement: (props: Record<string, unknown>) =>
+    React.createElement("pre", { id: "productos" }, JSON.stringify(props)),
 }))
 vi.mock("@/components/configuracion/product-parameters", () => ({
   default: (props: Record<string, unknown>) => React.createElement("pre", { id: "parametros" }, JSON.stringify(props)),
@@ -32,9 +33,9 @@ vi.mock("@/components/configuracion/parameters-history", () => ({
 }))
 
 const product = {
-  id: "param-1",
-  productoId: "prod-1",
-  productoNombre: "Producto real",
+  id: "prod-1",
+  nombre: "Producto real",
+  activo: true,
   pesoReferenciaKg: 1,
   toleranciaPesoPct: 1,
   dimensionBaseCm: 1,
@@ -43,7 +44,6 @@ const product = {
   tempMax: 2,
   velocidadCintaMin: 1,
   velocidadCintaMax: 2,
-  activo: true,
   createdAt: "2026-01-01",
   updatedAt: "2026-01-01",
 }
@@ -115,7 +115,7 @@ describe("estados sin datos de producción", () => {
 
 describe("configuración con fallos parciales", () => {
   it("expone el fallo del listado sin habilitar una configuración ficticia", async () => {
-    mocks.getProductosConParametros.mockRejectedValueOnce(new Error("productos no disponibles"))
+    mocks.getProductos.mockRejectedValueOnce(new Error("productos no disponibles"))
     mocks.getSectores.mockResolvedValueOnce([])
     const { default: Page } = await import("@/app/(modulos)/configuracion/page")
     const html = renderedProps(await Page({ searchParams: Promise.resolve({}) }))
@@ -126,12 +126,12 @@ describe("configuración con fallos parciales", () => {
   })
 
   it("mantiene parámetros reales aunque falle el historial", async () => {
-    mocks.getProductosConParametros.mockResolvedValueOnce([product])
+    mocks.getProductos.mockResolvedValueOnce([product])
     mocks.getSectores.mockResolvedValueOnce([sector])
     mocks.getLotes.mockRejectedValueOnce(new Error("historial no disponible"))
     const { default: Page } = await import("@/app/(modulos)/configuracion/page")
     const html = renderedProps(await Page({ searchParams: Promise.resolve({ productoId: "prod-1" }) }))
-    expect(html).toContain("param-1")
+    expect(html).toContain("prod-1")
     expect(html).toContain("historial no disponible")
     expect(mocks.getLotes).toHaveBeenCalledWith("s-1", {
       productoId: "prod-1",
@@ -141,7 +141,7 @@ describe("configuración con fallos parciales", () => {
   })
 
   it("sigue el cursor del backend y entrega todas las corridas al historial", async () => {
-    mocks.getProductosConParametros.mockResolvedValueOnce([product])
+    mocks.getProductos.mockResolvedValueOnce([product])
     mocks.getSectores.mockResolvedValueOnce([sector])
     mocks.getLotes
       .mockResolvedValueOnce({ items: [lote("cursor-lote-1")], total: 2, siguienteCursor: "cursor-1" })

@@ -54,6 +54,19 @@ describe("server actions de datos del backend", () => {
     inactividad_segundos: 12.5,
   }
   const sector = { id: "s-1", nombre: "Horno 1" }
+  const validProducto = {
+    id: "prod-1",
+    nombre: "Producto real",
+    activo: true,
+    pesoReferenciaKg: 1,
+    toleranciaPesoPct: 1,
+    dimensionBaseCm: 1,
+    toleranciaDimensionCm: 1,
+    tempMin: 1,
+    tempMax: 2,
+    velocidadCintaMin: 1,
+    velocidadCintaMax: 2,
+  }
   const registrationRequest = {
     requestId: "req-1",
     hostname: "pi-1",
@@ -164,7 +177,7 @@ describe("server actions de datos del backend", () => {
 
   it.each([
     ["getDevices", () => api.getDevices(), "https://backend.example.test/api/v1/dispositivos"],
-    ["getProductosConParametros", () => api.getProductosConParametros(), "https://backend.example.test/api/v1/parametros-producto"],
+    ["getProductos", () => api.getProductos(), "https://backend.example.test/api/v1/productos"],
   ])("obtiene datos reales y conserva la URL de paginación para %s", async (_name, action, expectedUrl) => {
     fetchMock.mockResolvedValue(json({ success: true, data: [] }))
 
@@ -181,20 +194,24 @@ describe("server actions de datos del backend", () => {
     expect(result).toEqual([])
   })
 
-  it("conserva un resultado vacío válido en getProductosConParametros", async () => {
+  it("conserva un resultado vacío válido en getProductos", async () => {
     fetchMock.mockResolvedValue(json({ success: true, data: [] }))
 
-    await expect(api.getProductosConParametros()).resolves.toEqual([])
+    await expect(api.getProductos()).resolves.toEqual([])
   })
 
   it("conserva las formas de éxito de productos", async () => {
-    const product = { id: "parameter-1", productoId: "product-1", productoNombre: "Producto real" }
-    fetchMock.mockResolvedValue(json({ success: true, data: [product] }))
-    await expect(api.getProductosConParametros()).resolves.toEqual([product])
+    fetchMock.mockResolvedValue(json({ success: true, data: [validProducto] }))
+    await expect(api.getProductos()).resolves.toEqual([validProducto])
+  })
+
+  it("rechaza un producto con forma inválida en getProductos", async () => {
+    fetchMock.mockResolvedValue(json({ success: true, data: [{ id: "prod-1", nombre: "Producto real" }] }))
+    await expect(api.getProductos()).rejects.toThrow("respuesta inválida para productos")
   })
 
   it.each([
-    ["getProductosConParametros", () => api.getProductosConParametros()],
+    ["getProductos", () => api.getProductos()],
   ])("propaga un error HTTP en %s", async (_name, action) => {
     fetchMock.mockResolvedValue(json("error", 500))
 
@@ -202,7 +219,7 @@ describe("server actions de datos del backend", () => {
   })
 
   it.each([
-    ["getProductosConParametros", () => api.getProductosConParametros()],
+    ["getProductos", () => api.getProductos()],
   ])("usa ApiError para una sesión no autorizada en %s", async (_name, action) => {
     fetchMock.mockResolvedValue(new Response("", { status: 401 }))
 
@@ -215,7 +232,7 @@ describe("server actions de datos del backend", () => {
   })
 
   it.each([
-    ["getProductosConParametros", () => api.getProductosConParametros()],
+    ["getProductos", () => api.getProductos()],
   ])("propaga errores de red en %s", async (_name, action) => {
     fetchMock.mockRejectedValue(new Error("network failure"))
 
@@ -226,7 +243,7 @@ describe("server actions de datos del backend", () => {
     ["getSectores", () => api.getSectores()],
     ["getLotes", () => api.getLotes("s-1")],
     ["getLoteAbierto", () => api.getLoteAbierto("s-1")],
-    ["getProductosConParametros", () => api.getProductosConParametros()],
+    ["getProductos", () => api.getProductos()],
   ])("propaga timeout sin datos de respaldo en %s", async (_name, action) => {
     vi.useFakeTimers()
     fetchMock.mockImplementation((_url: string, options: RequestInit) =>
@@ -252,7 +269,7 @@ describe("server actions de datos del backend", () => {
   it.each([
     ["getSectores", (module: typeof import("../api")) => module.getSectores()],
     ["getLotes", (module: typeof import("../api")) => module.getLotes("s-1")],
-    ["getProductosConParametros", (module: typeof import("../api")) => module.getProductosConParametros()],
+    ["getProductos", (module: typeof import("../api")) => module.getProductos()],
   ])("falla explícitamente si falta NEXT_PUBLIC_API_URL en %s", async (_name, action) => {
     const previousUrl = process.env.NEXT_PUBLIC_API_URL
     delete process.env.NEXT_PUBLIC_API_URL
@@ -268,7 +285,7 @@ describe("server actions de datos del backend", () => {
     ["getSectores", () => api.getSectores(), { success: true, data: null }, "respuesta inválida para sectores"],
     ["getLotes", () => api.getLotes("s-1"), { success: true, data: null }, "respuesta inválida para el historial de lotes"],
     ["getLoteAbierto", () => api.getLoteAbierto("s-1"), { success: true, data: null }, "respuesta inválida para el lote abierto"],
-    ["getProductosConParametros", () => api.getProductosConParametros(), { success: true, data: { not: "an array" } }, "respuesta inválida"],
+    ["getProductos", () => api.getProductos(), { success: true, data: { not: "an array" } }, "respuesta inválida"],
     ["getDevices", () => api.getDevices(), { success: true, data: null }, "respuesta inválida"],
   ])("rechaza una respuesta malformada en %s en vez de convertirla en vacío", async (_name, action, body, message) => {
     fetchMock.mockResolvedValue(json(body))
