@@ -9,6 +9,7 @@ import type { Sector } from "@/lib/production-data"
 
 const updateDispositivo = vi.fn()
 const deleteDispositivo = vi.fn()
+const renameDispositivo = vi.fn()
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -17,6 +18,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("@/actions/api", () => ({
   updateDispositivo: (...args: unknown[]) => updateDispositivo(...args),
   deleteDispositivo: (...args: unknown[]) => deleteDispositivo(...args),
+  renameDispositivo: (...args: unknown[]) => renameDispositivo(...args),
 }))
 
 const at = "2026-01-01T10:00:00.000Z"
@@ -40,7 +42,7 @@ function device(overrides: Partial<Device> = {}): Device {
 
 async function openEditDialog(deviceOverride: Partial<Device> = {}) {
   render(React.createElement(DeviceActionsMenu, { device: device(deviceOverride), sectores }))
-  fireEvent.click(screen.getByLabelText("Editar metadatos"))
+  fireEvent.click(screen.getByLabelText("Editar dispositivo"))
   await screen.findByText("Editar dispositivo")
 }
 
@@ -58,28 +60,24 @@ describe("acción de edición del nodo", () => {
   it("expone un botón directo de edición y ninguna acción de ciclo de vida", () => {
     render(React.createElement(DeviceActionsMenu, { device: device(), sectores }))
 
-    const trigger = screen.getByLabelText("Editar metadatos")
-    expect(trigger.getAttribute("title")).toBe("Editar metadatos")
+    const trigger = screen.getByLabelText("Editar dispositivo")
+    expect(trigger.getAttribute("title")).toBe("Editar dispositivo")
     expect(trigger.getAttribute("type")).toBe("button")
 
     // Sin menú desplegable: el nombre sólo vive en el aria-label, no como texto.
-    expect(screen.queryByText("Editar metadatos")).toBeNull()
+    expect(screen.queryByText("Editar dispositivo")).toBeNull()
     expect(screen.queryByText("Deshabilitar")).toBeNull()
     expect(screen.queryByText("Habilitar")).toBeNull()
     expect(screen.queryByText("Revocar credencial")).toBeNull()
     expect(screen.queryByText("Reprovisionar")).toBeNull()
   })
 
-  it("abre el diálogo de edición con el nombre en solo lectura, sector y cámara", async () => {
+  it("abre el diálogo de edición con el nombre editable, sector y cámara", async () => {
     await openEditDialog()
 
     const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
-    // El nombre se muestra pero no se puede editar desde el panel.
-    expect(nombreInput.readOnly).toBe(true)
+    expect(nombreInput.readOnly).toBe(false)
     expect(nombreInput.value).toBe("Nodo 1")
-    expect(
-      screen.getByText("El nombre solo se puede cambiar desde la propia Raspberry."),
-    ).toBeTruthy()
 
     expect(screen.getByLabelText("Sector")).toBeTruthy()
     expect(screen.getByLabelText("URL WHEP (cámara)")).toBeTruthy()
@@ -127,6 +125,56 @@ describe("acción de edición del nodo", () => {
     })
     const payload = updateDispositivo.mock.calls[0][0] as Record<string, unknown>
     expect(payload).not.toHaveProperty("nombre")
+  })
+
+  it("cuando cambia el nombre llama a renameDispositivo y luego updateDispositivo", async () => {
+    renameDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Nodo Renombrado" }) })
+    updateDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Nodo Renombrado", sectorId: "s2" }) })
+    await openEditDialog()
+
+    const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
+    fireEvent.change(nombreInput, { target: { value: "  Nodo Renombrado  " } })
+    fireEvent.change(screen.getByLabelText("Sector"), { target: { value: "s2" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
+
+    await waitFor(() => {
+      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Nodo Renombrado")
+    })
+    await waitFor(() => {
+      expect(updateDispositivo).toHaveBeenCalledTimes(1)
+    })
+    const payload = updateDispositivo.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty("nombre")
+    expect(payload).toEqual(expect.objectContaining({ dispositivoId: "node-1", sectorId: "s2" }))
+  })
+
+  it("cuando el rename falla no llama a updateDispositivo", async () => {
+    renameDispositivo.mockResolvedValue({ ok: false, errors: ["El dispositivo no existe."] })
+    await openEditDialog()
+
+    const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
+    fireEvent.change(nombreInput, { target: { value: "Nodo Renombrado" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
+
+    await waitFor(() => {
+      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Nodo Renombrado")
+    })
+    expect(updateDispositivo).not.toHaveBeenCalled()
+  })
+
+  it("cuando solo cambia el sector no llama a renameDispositivo", async () => {
+    updateDispositivo.mockResolvedValue({ ok: true, data: device({ sectorId: "s2" }) })
+    await openEditDialog()
+
+    fireEvent.change(screen.getByLabelText("Sector"), { target: { value: "s2" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
+
+    await waitFor(() => {
+      expect(updateDispositivo).toHaveBeenCalledWith(
+        expect.objectContaining({ dispositivoId: "node-1", sectorId: "s2" }),
+      )
+    })
+    expect(renameDispositivo).not.toHaveBeenCalled()
   })
 })
 

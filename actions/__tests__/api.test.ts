@@ -374,6 +374,40 @@ describe("server actions de datos del backend", () => {
     })
   })
 
+  it("renombra un nodo desde el panel y codifica el id en la ruta", async () => {
+    fetchMock.mockResolvedValue(json({
+      success: true,
+      data: { ...validDeviceRead, nombre: "Pi Renombrada" },
+    }))
+
+    const result = await api.renameDispositivo("node/1", "  Pi Renombrada  ")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/node%2F1/nombre")
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Pi Renombrada" })
+    expect(revalidatePathMock).toHaveBeenCalledWith("/nodos")
+    expect(result).toEqual({
+      ok: true,
+      data: expect.objectContaining({ nombre: "Pi Renombrada" }),
+    })
+  })
+
+  it("rechaza el rename si el nombre está vacío sin pegarle al backend", async () => {
+    const result = await api.renameDispositivo("node-1", "   ")
+
+    expect(result).toEqual({ ok: false, errors: ["El nombre es requerido."] })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("traduce el 404 de renameDispositivo a un mensaje claro", async () => {
+    fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+    await expect(api.renameDispositivo("node-1", "Pi Renombrada")).resolves.toEqual({
+      ok: false,
+      errors: ["El dispositivo no existe."],
+    })
+  })
+
   // ─── Catálogo de sectores ──────────────────────────────────────────────────
 
   it("crea un sector y revalida las vistas del catálogo", async () => {

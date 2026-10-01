@@ -1,6 +1,8 @@
 import {
   Database,
   Eye,
+  Factory,
+  FileBarChart,
   LayoutDashboard,
   MapPin,
   SlidersHorizontal,
@@ -27,7 +29,9 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/supervision", label: "Supervisión en Vivo", icon: Eye },
+      { href: "/linea-produccion", label: "Línea de Producción", icon: Factory },
       { href: "/lotes", label: "Lotes y Datos Históricos", icon: Database },
+      { href: "/reportes", label: "Reportes", icon: FileBarChart },
     ],
   },
   {

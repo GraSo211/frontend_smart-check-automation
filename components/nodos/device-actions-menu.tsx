@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SectorSelect } from "@/components/shared/sector-select"
-import { deleteDispositivo, updateDispositivo } from "@/actions/api"
+import { deleteDispositivo, renameDispositivo, updateDispositivo } from "@/actions/api"
 import type { Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
 import { isWhepUrl } from "@/lib/camera-sources"
@@ -50,6 +50,8 @@ export function DeviceActionsMenu({
   sectoresError = null,
 }: DeviceActionsMenuProps) {
   const [editOpen, setEditOpen] = useState(false)
+  const [nombre, setNombre] = useState(device.nombre)
+  const [nombreError, setNombreError] = useState<string | null>(null)
   const [sectorId, setSectorId] = useState(device.sectorId ?? "")
   const [whepUrl, setWhepUrl] = useState(device.whepUrl ?? "")
   const [whepError, setWhepError] = useState<string | null>(null)
@@ -62,6 +64,8 @@ export function DeviceActionsMenu({
   const deletingRef = useRef(false)
 
   const openEditDialog = () => {
+    setNombre(device.nombre)
+    setNombreError(null)
     setSectorId(device.sectorId ?? "")
     setWhepUrl(device.whepUrl ?? "")
     setWhepError(null)
@@ -71,6 +75,13 @@ export function DeviceActionsMenu({
   const handleEditSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
+    const trimmedNombre = nombre.trim()
+    if (!trimmedNombre) {
+      setNombreError("El nombre no puede quedar vacío.")
+      return
+    }
+    setNombreError(null)
+
     const trimmedWhepUrl = whepUrl.trim()
     if (!isWhepUrl(trimmedWhepUrl)) {
       setWhepError("Ingresá una URL http(s):// que termine en /whep.")
@@ -78,7 +89,19 @@ export function DeviceActionsMenu({
     }
     setWhepError(null)
 
+    const nombreCambio = trimmedNombre !== device.nombre
+
     startTransition(async () => {
+      if (nombreCambio) {
+        const renameResult = await renameDispositivo(device.dispositivoId, trimmedNombre)
+        if (!renameResult.ok) {
+          toast.error("No se pudo renombrar el dispositivo", {
+            description: renameResult.errors.join(" · "),
+          })
+          return
+        }
+      }
+
       const result = await updateDispositivo({
         dispositivoId: device.dispositivoId,
         sectorId: sectorId === "" ? null : sectorId,
@@ -90,7 +113,10 @@ export function DeviceActionsMenu({
         setEditOpen(false)
         router.refresh()
       } else {
-        toast.error("No se pudo actualizar el dispositivo", {
+        const mensaje = nombreCambio
+          ? "Se actualizó el nombre pero no se pudieron guardar el sector ni la cámara"
+          : "No se pudo actualizar el dispositivo"
+        toast.error(mensaje, {
           description: result.errors.join(" · "),
         })
       }
@@ -129,8 +155,8 @@ export function DeviceActionsMenu({
         variant="ghost"
         size="icon"
         className="size-8 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground"
-        aria-label="Editar metadatos"
-        title="Editar metadatos"
+        aria-label="Editar dispositivo"
+        title="Editar dispositivo"
         onClick={(e) => {
           e.stopPropagation()
           openEditDialog()
@@ -163,7 +189,7 @@ export function DeviceActionsMenu({
               <Pencil className="size-5" aria-hidden="true" />
             </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
-            <DialogDescription>Actualizá el sector y la cámara del nodo.</DialogDescription>
+            <DialogDescription>Actualizá el nombre, el sector y la cámara del nodo.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
@@ -171,14 +197,19 @@ export function DeviceActionsMenu({
               <Label htmlFor="editar-dispositivo-nombre">Nombre</Label>
               <Input
                 id="editar-dispositivo-nombre"
-                value={device.nombre}
-                readOnly
-                aria-describedby="editar-dispositivo-nombre-hint"
-                className="cursor-default bg-muted"
+                value={nombre}
+                onChange={(e) => {
+                  setNombre(e.target.value)
+                  if (nombreError) setNombreError(null)
+                }}
+                aria-invalid={nombreError ? true : undefined}
+                aria-describedby={nombreError ? "editar-dispositivo-nombre-error" : undefined}
               />
-              <p id="editar-dispositivo-nombre-hint" className="mt-1 text-xs text-muted-foreground">
-                El nombre solo se puede cambiar desde la propia Raspberry.
-              </p>
+              {nombreError && (
+                <p id="editar-dispositivo-nombre-error" className="mt-1 text-xs text-destructive">
+                  {nombreError}
+                </p>
+              )}
             </div>
 
             <SectorSelect

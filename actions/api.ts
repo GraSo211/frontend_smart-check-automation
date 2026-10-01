@@ -583,6 +583,31 @@ export async function updateDispositivo(
     });
 }
 
+// Renames a node from the operator panel
+// (PUT /api/v1/dispositivos/{id}/nombre). Requires Supervisor/Admin and a JWT
+// cookie; the path id identifies the device (no id is sent in the body). The
+// Raspberry Pi can also rename itself via its bearer-protected endpoint
+// (/api/v1/dispositivos/nombre).
+export async function renameDispositivo(
+    dispositivoId: string,
+    nombre: string,
+): Promise<DeviceActionResult<Device>> {
+    const trimmed = nombre.trim();
+    if (!trimmed) {
+        return { ok: false, errors: ["El nombre es requerido."] };
+    }
+    return deviceMutation<Device>({
+        path: `/api/v1/dispositivos/${encodeURIComponent(dispositivoId)}/nombre`,
+        method: "PUT",
+        body: { nombre: trimmed },
+        parse: parseDevice,
+        invalidMessage: "La API devolvió un dispositivo inválido al renombrar.",
+        statusMessages: {
+            404: "El dispositivo no existe.",
+        },
+    });
+}
+
 // Deletes a node from the catalog
 // (DELETE /api/v1/dispositivos?dispositivoId=...). The backend performs a soft
 // delete: it revokes the node credential, unassigns its sector and keeps the
