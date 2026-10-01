@@ -30,7 +30,12 @@ interface ProductManagementProps {
   initialError?: string | null
 }
 
-type MutationResult = { ok: boolean; errors?: string[]; code?: string }
+type MutationResult = {
+  ok: boolean
+  errors?: string[]
+  code?: string
+  fieldErrors?: Record<string, string>
+}
 
 const PRODUCT_ERROR_BY_CODE: Record<string, string> = {
   duplicate_name: "Ya existe un producto con ese nombre",
@@ -51,7 +56,7 @@ function errorMessages(result: MutationResult, fallback: string): string[] {
 
 /** Extrae los parámetros de control de un producto para el body de PUT. */
 function controlParams(producto: Producto): Omit<ProductoRequest, "nombre"> {
-  return {
+  const params: Omit<ProductoRequest, "nombre"> = {
     pesoReferenciaKg: producto.pesoReferenciaKg,
     toleranciaPesoPct: producto.toleranciaPesoPct,
     dimensionBaseCm: producto.dimensionBaseCm,
@@ -61,6 +66,12 @@ function controlParams(producto: Producto): Omit<ProductoRequest, "nombre"> {
     velocidadCintaMin: producto.velocidadCintaMin,
     velocidadCintaMax: producto.velocidadCintaMax,
   }
+  // Setpoints opcionales: se omiten cuando el producto no los tiene.
+  if (producto.tempSetpoint != null) params.tempSetpoint = producto.tempSetpoint
+  if (producto.velocidadCintaSetpoint != null) {
+    params.velocidadCintaSetpoint = producto.velocidadCintaSetpoint
+  }
+  return params
 }
 
 /**
@@ -84,6 +95,7 @@ export function ProductManagement({
 
   const [createOpen, setCreateOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [createFieldErrors, setCreateFieldErrors] = useState<Record<string, string>>({})
 
   const [editName, setEditName] = useState<Producto | null>(null)
   const [renameValue, setRenameValue] = useState("")
@@ -106,6 +118,7 @@ export function ProductManagement({
 
   const openCreate = () => {
     if (!canManage) return
+    setCreateFieldErrors({})
     setCreateOpen(true)
   }
 
@@ -123,6 +136,7 @@ export function ProductManagement({
 
   const handleCreate = async (request: ProductoRequest): Promise<ProductFormResult> => {
     setIsCreating(true)
+    setCreateFieldErrors({})
     try {
       const result = await createProducto(request)
       if (result.ok) {
@@ -131,6 +145,14 @@ export function ProductManagement({
         router.push(`/configuracion?productoId=${encodeURIComponent(result.data.id)}`)
         router.refresh()
         return { ok: true }
+      }
+      // 422 con mapa por campo: se muestra inline en el formulario.
+      if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
+        setCreateFieldErrors(result.fieldErrors)
+        toast.error("Revisá los datos del producto", {
+          description: Object.values(result.fieldErrors).join(" · "),
+        })
+        return { ok: false, errors: [] }
       }
       const messages = errorMessages(result, "No se pudo crear el producto.")
       toast.error("No se pudo crear el producto", { description: messages.join(" · ") })
@@ -169,7 +191,10 @@ export function ProductManagement({
         setEditName(null)
         router.refresh()
       } else {
-        setRenameError(errorMessages(result, "No se pudo actualizar el nombre.").join(" · "))
+        const serverNombreError = result.fieldErrors?.nombre
+        setRenameError(
+          serverNombreError ?? errorMessages(result, "No se pudo actualizar el nombre.").join(" · "),
+        )
       }
     } catch (error) {
       setRenameError(error instanceof Error ? error.message : "No se pudo actualizar el nombre.")
@@ -271,7 +296,9 @@ export function ProductManagement({
         <Dialog
           open={createOpen}
           onOpenChange={(open) => {
-            if (!isCreating) setCreateOpen(open)
+            if (isCreating) return
+            setCreateOpen(open)
+            if (!open) setCreateFieldErrors({})
           }}
         >
           <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
@@ -286,6 +313,7 @@ export function ProductManagement({
             <ProductForm
               mode="create"
               pending={isCreating}
+              serverErrors={createFieldErrors}
               onSubmit={handleCreate}
               onCancel={() => setCreateOpen(false)}
             />

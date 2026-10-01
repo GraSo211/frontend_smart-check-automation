@@ -419,7 +419,7 @@ export async function deleteProducto(id: string): Promise<DeviceActionResult<nul
 
 export type DeviceActionResult<T> =
     | { ok: true; data: T }
-    | { ok: false; errors: string[]; code?: string };
+    | { ok: false; errors: string[]; code?: string; fieldErrors?: Record<string, string> };
 
 // Códigos de error del backend traducidos a mensajes es-AR claros.
 const DEVICE_ERROR_MESSAGES: Record<string, string> = {
@@ -453,27 +453,33 @@ function errorCodeOf(result: unknown): string | null {
     return null
 }
 
-// Validaciones con errores por campo (`errors` como objeto). Se excluye `code`
-// para no confundir el identificador semántico con un mensaje de campo.
-function fieldErrorsOf(result: unknown): string[] {
-    if (!isRecord(result) || !isRecord(result.errors)) return []
-    return Object.entries(result.errors)
+// Validaciones con errores por campo (`errors` como objeto `{ campo: mensaje }`).
+// Se excluye `code` para no confundir el identificador semántico con un mensaje
+// de campo. Devuelve `undefined` cuando no hay ningún campo con error.
+function extractFieldErrors(result: unknown): Record<string, string> | undefined {
+    if (!isRecord(result) || !isRecord(result.errors)) return undefined
+    const entries = Object.entries(result.errors)
         .filter(([key]) => key !== "code")
-        .map(([, value]) => (typeof value === "string" ? value : String(value)))
-        .filter(Boolean)
+        .map(([key, value]) => [key, typeof value === "string" ? value : String(value)] as const)
+        .filter(([, message]) => message !== "")
+    if (entries.length === 0) return undefined
+    return Object.fromEntries(entries)
 }
 
 // The backend error envelope carries `errors:{code}`. Legacy endpoints may send
-// an array of strings instead; both shapes are handled.
+// an array of strings or a single string instead; all shapes are handled.
 function errorsFromResponse(
     result: unknown,
     response: Response,
     statusMessages?: Record<number, string>,
-): { errors: string[]; code?: string } {
+): { errors: string[]; code?: string; fieldErrors?: Record<string, string> } {
     const code = errorCodeOf(result)
-    // Un error de validación por campo es más útil que el código genérico.
-    const fieldErrors = fieldErrorsOf(result)
-    if (fieldErrors.length > 0) return { errors: fieldErrors, ...(code ? { code } : {}) }
+    // Errores de validación por campo (422): tienen prioridad y se exponen
+    // también como `fieldErrors` para que el formulario los muestre inline.
+    const fieldErrors = extractFieldErrors(result)
+    if (fieldErrors) {
+        return { errors: Object.values(fieldErrors), fieldErrors, ...(code ? { code } : {}) }
+    }
     if (code && DEVICE_ERROR_MESSAGES[code]) {
         return { errors: [DEVICE_ERROR_MESSAGES[code]], code }
     }
@@ -484,6 +490,11 @@ function errorsFromResponse(
     if (isRecord(result) && Array.isArray(result.errors)) {
         const list = result.errors.map(String).filter(Boolean)
         if (list.length > 0) return { errors: list, ...(code ? { code } : {}) }
+    }
+    // Fallback del handler cuando el body JSON está malformado: `errors` es un
+    // string con `err.Error()`.
+    if (isRecord(result) && typeof result.errors === "string" && result.errors) {
+        return { errors: [result.errors], ...(code ? { code } : {}) }
     }
     if (isRecord(result) && typeof result.message === "string" && result.message) {
         return { errors: [result.message], ...(code ? { code } : {}) }

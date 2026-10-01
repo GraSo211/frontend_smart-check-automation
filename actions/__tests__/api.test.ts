@@ -67,6 +67,17 @@ describe("server actions de datos del backend", () => {
     velocidadCintaMin: 1,
     velocidadCintaMax: 2,
   }
+  const validProductoRequest = {
+    nombre: "Producto real",
+    pesoReferenciaKg: 1,
+    toleranciaPesoPct: 1,
+    dimensionBaseCm: 1,
+    toleranciaDimensionCm: 1,
+    tempMin: 180,
+    tempMax: 220,
+    velocidadCintaMin: 0.5,
+    velocidadCintaMax: 1.5,
+  }
   const registrationRequest = {
     requestId: "req-1",
     hostname: "pi-1",
@@ -208,6 +219,62 @@ describe("server actions de datos del backend", () => {
   it("rechaza un producto con forma inválida en getProductos", async () => {
     fetchMock.mockResolvedValue(json({ success: true, data: [{ id: "prod-1", nombre: "Producto real" }] }))
     await expect(api.getProductos()).rejects.toThrow("respuesta inválida para productos")
+  })
+
+  it("expone fieldErrors y mensajes cuando createProducto recibe un 422 por campo", async () => {
+    fetchMock.mockResolvedValue(json({
+      success: false,
+      message: "Datos de producto inválidos",
+      data: null,
+      errors: {
+        nombre: "es requerido",
+        pesoReferenciaKg: "debe ser un valor numérico mayor a 0",
+        tempSetpoint: "debe estar entre tempMin y tempMax",
+      },
+    }, 422))
+
+    const result = await api.createProducto(validProductoRequest)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("se esperaba un resultado de error")
+    expect(result.fieldErrors).toEqual({
+      nombre: "es requerido",
+      pesoReferenciaKg: "debe ser un valor numérico mayor a 0",
+      tempSetpoint: "debe estar entre tempMin y tempMax",
+    })
+    expect(result.errors).toEqual([
+      "es requerido",
+      "debe ser un valor numérico mayor a 0",
+      "debe estar entre tempMin y tempMax",
+    ])
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+  })
+
+  it("distingue un 422 con errors string (body malformado) del mapa por campo", async () => {
+    fetchMock.mockResolvedValue(json({
+      success: false,
+      message: "Datos de producto inválidos",
+      data: null,
+      errors: "unexpected end of JSON input",
+    }, 422))
+
+    const result = await api.createProducto(validProductoRequest)
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["unexpected end of JSON input"],
+    })
+  })
+
+  it("conserva el 404 de updateProducto como producto inexistente", async () => {
+    fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+    await expect(api.updateProducto("prod/1", validProductoRequest)).resolves.toEqual({
+      ok: false,
+      errors: ["El producto no existe"],
+    })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/productos/prod%2F1")
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT")
   })
 
   it.each([

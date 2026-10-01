@@ -26,6 +26,7 @@ export default function ProductParameters({ producto, userRole = "Operario" }: P
 function ParametersForm({ producto, userRole }: { producto: Producto; userRole: UserRole }) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   // Solo Supervisores y Administradores pueden editar
   const canEdit = hasMinRole(userRole, "Supervisor")
@@ -35,12 +36,17 @@ function ParametersForm({ producto, userRole }: { producto: Producto; userRole: 
       return { ok: false, errors: ["No tenés permisos para modificar este producto."] }
     }
     setPending(true)
+    setFieldErrors({})
     try {
       const result = await updateProducto(producto.id, request)
       if (result.ok) {
         toast.success("Parámetros actualizados.")
         router.refresh()
         return { ok: true }
+      }
+      if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
+        setFieldErrors(result.fieldErrors)
+        return { ok: false, errors: [] }
       }
       return {
         ok: false,
@@ -117,6 +123,7 @@ function ParametersForm({ producto, userRole }: { producto: Producto; userRole: 
           initial={producto}
           pending={pending}
           disabled={!canEdit}
+          serverErrors={fieldErrors}
           onSubmit={handleSubmit}
           showDirtyHint
           className="mt-6"

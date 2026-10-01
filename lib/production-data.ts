@@ -74,6 +74,10 @@ export type Producto = {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  /** Valor objetivo opcional dentro de [tempMin, tempMax]; `null`/ausente si no se usa. */
+  tempSetpoint?: number | null
+  /** Valor objetivo opcional dentro de [velocidadCintaMin, velocidadCintaMax]. */
+  velocidadCintaSetpoint?: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -89,6 +93,10 @@ export type ProductoRequest = {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  /** Si se omite o es `null`, el backend no lo persiste. */
+  tempSetpoint?: number | null
+  /** Si se omite o es `null`, el backend no lo persiste. */
+  velocidadCintaSetpoint?: number | null
 }
 
 /** Errores de validación por campo del formulario de producto. */
@@ -136,6 +144,35 @@ export function validateProducto(values: ProductoRequest): ProductoErrores {
     errors.velocidadCintaMax = "Ingresá un número."
   } else if (!(values.velocidadCintaMax > values.velocidadCintaMin)) {
     errors.velocidadCintaMax = "Debe ser mayor a la velocidad mínima."
+  }
+
+  // Setpoints opcionales: sólo se validan si vienen con valor. Un setpoint sin
+  // rango válido no se puede chequear, así que se omite (el error de min/max ya
+  // se muestra por su lado).
+  if (values.tempSetpoint != null) {
+    if (!Number.isFinite(values.tempSetpoint)) {
+      errors.tempSetpoint = "Ingresá un número."
+    } else if (
+      Number.isFinite(values.tempMin) &&
+      Number.isFinite(values.tempMax) &&
+      !(values.tempSetpoint >= values.tempMin && values.tempSetpoint <= values.tempMax)
+    ) {
+      errors.tempSetpoint = "Debe estar entre tempMin y tempMax."
+    }
+  }
+  if (values.velocidadCintaSetpoint != null) {
+    if (!Number.isFinite(values.velocidadCintaSetpoint)) {
+      errors.velocidadCintaSetpoint = "Ingresá un número."
+    } else if (
+      Number.isFinite(values.velocidadCintaMin) &&
+      Number.isFinite(values.velocidadCintaMax) &&
+      !(
+        values.velocidadCintaSetpoint >= values.velocidadCintaMin &&
+        values.velocidadCintaSetpoint <= values.velocidadCintaMax
+      )
+    ) {
+      errors.velocidadCintaSetpoint = "Debe estar entre la velocidad mínima y máxima."
+    }
   }
 
   return errors

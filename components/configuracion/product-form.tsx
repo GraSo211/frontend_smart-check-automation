@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState, type FormEvent } from "react"
-import { Gauge, Loader2, Scale, Thermometer } from "lucide-react"
+import { Gauge, Loader2, Scale, Target, Thermometer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -88,8 +88,18 @@ const GROUPS: FieldGroup[] = [
   },
 ]
 
+// Setpoints opcionales: se agrupan aparte del resto de los parámetros.
+const SETPOINTS: FieldDef[] = [
+  { key: "tempSetpoint", label: "Temperatura objetivo", unidad: "°C", placeholder: "ej: 200" },
+  { key: "velocidadCintaSetpoint", label: "Velocidad objetivo", unidad: "m/s", placeholder: "ej: 1,0" },
+]
+
 // Orden de foco/validación: nombre primero, luego los grupos tal como se ven.
-const ORDERED_FIELDS: FieldKey[] = ["nombre", ...GROUPS.flatMap((g) => g.campos.map((c) => c.key))]
+const ORDERED_FIELDS: FieldKey[] = [
+  "nombre",
+  ...GROUPS.flatMap((g) => g.campos.map((c) => c.key)),
+  ...SETPOINTS.map((c) => c.key),
+]
 
 function toFormValues(initial?: Producto): FormValues {
   return {
@@ -102,12 +112,21 @@ function toFormValues(initial?: Producto): FormValues {
     tempMax: initial ? String(initial.tempMax) : "",
     velocidadCintaMin: initial ? String(initial.velocidadCintaMin) : "",
     velocidadCintaMax: initial ? String(initial.velocidadCintaMax) : "",
+    tempSetpoint: initial?.tempSetpoint != null ? String(initial.tempSetpoint) : "",
+    velocidadCintaSetpoint:
+      initial?.velocidadCintaSetpoint != null ? String(initial.velocidadCintaSetpoint) : "",
   }
 }
 
 function toRequest(values: FormValues): ProductoRequest {
   const num = (raw: string) => (raw === "" ? Number.NaN : Number(raw))
-  return {
+  // Vacío o no numérico -> se omite del body (no se manda null ni 0).
+  const optionalNum = (raw: string): number | undefined => {
+    const trimmed = raw.trim()
+    return trimmed === "" ? undefined : Number(trimmed)
+  }
+
+  const request: ProductoRequest = {
     nombre: values.nombre.trim(),
     pesoReferenciaKg: num(values.pesoReferenciaKg),
     toleranciaPesoPct: num(values.toleranciaPesoPct),
@@ -118,6 +137,13 @@ function toRequest(values: FormValues): ProductoRequest {
     velocidadCintaMin: num(values.velocidadCintaMin),
     velocidadCintaMax: num(values.velocidadCintaMax),
   }
+
+  const tempSetpoint = optionalNum(values.tempSetpoint)
+  if (tempSetpoint !== undefined) request.tempSetpoint = tempSetpoint
+  const velocidadCintaSetpoint = optionalNum(values.velocidadCintaSetpoint)
+  if (velocidadCintaSetpoint !== undefined) request.velocidadCintaSetpoint = velocidadCintaSetpoint
+
+  return request
 }
 
 export interface ProductFormResult {
@@ -137,6 +163,12 @@ export interface ProductFormProps {
   pendingLabel?: string
   /** Muestra el aviso de cambios sin guardar (modo edición con `initial`). */
   showDirtyHint?: boolean
+  /**
+   * Errores por campo devueltos por el backend (422). Tienen prioridad sobre la
+   * validación de cliente y se mantienen visibles hasta que el contenedor los
+   * limpie.
+   */
+  serverErrors?: Record<string, string>
   className?: string
 }
 
@@ -152,11 +184,12 @@ export default function ProductForm({
   submitLabel,
   pendingLabel,
   showDirtyHint = false,
+  serverErrors,
   className,
 }: ProductFormProps) {
   const [values, setValues] = useState<FormValues>(() => toFormValues(initial))
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({})
-  const [serverErrors, setServerErrors] = useState<string[]>([])
+  const [formErrors, setFormErrors] = useState<string[]>([])
   const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const request = useMemo(() => toRequest(values), [values])
@@ -167,14 +200,28 @@ export default function ProductForm({
     if (!initial) return true
     return ORDERED_FIELDS.some((key) => {
       if (key === "nombre") return values.nombre.trim() !== initial.nombre
+      if (key === "tempSetpoint" || key === "velocidadCintaSetpoint") {
+        const current = values[key].trim() === "" ? undefined : Number(values[key])
+        const base = initial[key] == null ? undefined : Number(initial[key])
+        return current !== base
+      }
       return Number(values[key]) !== Number(initial[key])
     })
   }, [initial, values])
 
+  // Prioridad del servidor: si hay un error de campo del backend, se muestra ese
+  // por encima de la validación de cliente (que además sólo aparece tras tocar
+  // el campo). Cuando el servidor ya marca el campo, se oculta el de cliente.
+  const serverError = (key: FieldKey) => serverErrors?.[key]
+  const clientError = (key: FieldKey) =>
+    serverErrors?.[key] ? undefined : touched[key] ? errors[key] : undefined
+
   const setField = (key: FieldKey, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }))
     setTouched((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
-    if (serverErrors.length > 0) setServerErrors([])
+    // Los errores del servidor NO se limpian acá (sobreviven al primer edit);
+    // los de cliente se recalculan solos. El aviso general sí se limpia.
+    if (formErrors.length > 0) setFormErrors([])
   }
 
   const focusFirstError = (fieldErrors: Partial<Record<FieldKey, string>>) => {
@@ -195,10 +242,10 @@ export default function ProductForm({
       return
     }
 
-    setServerErrors([])
+    setFormErrors([])
     const result = await onSubmit(request)
     if (!result.ok && result.errors?.length) {
-      setServerErrors(result.errors)
+      setFormErrors(result.errors)
     }
   }
 
@@ -210,16 +257,16 @@ export default function ProductForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className={cn("space-y-5", className)}>
-      {serverErrors.length > 0 && (
+      {formErrors.length > 0 && (
         <div
           role="alert"
           className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          {serverErrors.length === 1 ? (
-            <p>{serverErrors[0]}</p>
+          {formErrors.length === 1 ? (
+            <p>{formErrors[0]}</p>
           ) : (
             <ul className="list-inside list-disc space-y-0.5">
-              {serverErrors.map((message) => (
+              {formErrors.map((message) => (
                 <li key={message}>{message}</li>
               ))}
             </ul>
@@ -229,6 +276,11 @@ export default function ProductForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="producto-nombre">Nombre</Label>
+        {serverError("nombre") && (
+          <p id="producto-nombre-server-error" role="alert" className="text-xs text-destructive">
+            {serverError("nombre")}
+          </p>
+        )}
         <Input
           id="producto-nombre"
           ref={(el) => {
@@ -238,14 +290,20 @@ export default function ProductForm({
           placeholder="ej: Pan de campo"
           autoFocus={mode === "create"}
           disabled={disabled}
-          aria-invalid={touched.nombre && errors.nombre ? true : undefined}
-          aria-describedby={touched.nombre && errors.nombre ? "producto-nombre-error" : undefined}
+          aria-invalid={serverError("nombre") || clientError("nombre") ? true : undefined}
+          aria-describedby={
+            serverError("nombre")
+              ? "producto-nombre-server-error"
+              : clientError("nombre")
+                ? "producto-nombre-error"
+                : undefined
+          }
           onChange={(e) => setField("nombre", e.target.value)}
           onBlur={() => setTouched((prev) => ({ ...prev, nombre: true }))}
         />
-        {touched.nombre && errors.nombre && (
+        {clientError("nombre") && (
           <p id="producto-nombre-error" className="text-xs text-destructive">
-            {errors.nombre}
+            {clientError("nombre")}
           </p>
         )}
       </div>
@@ -273,7 +331,8 @@ export default function ProductForm({
                 placeholder={campo.placeholder}
                 helper={campo.helper}
                 value={values[campo.key]}
-                error={touched[campo.key] ? errors[campo.key] : undefined}
+                serverError={serverError(campo.key)}
+                error={clientError(campo.key)}
                 disabled={disabled}
                 inputRef={(el) => {
                   fieldRefs.current[campo.key] = el
@@ -285,6 +344,44 @@ export default function ProductForm({
           </div>
         </fieldset>
       ))}
+
+      <fieldset
+        disabled={disabled}
+        className="space-y-3 rounded-xl border border-border bg-muted/20 p-4 disabled:opacity-70"
+      >
+        <legend className="flex w-full items-center gap-2 px-1 text-sm font-semibold text-foreground">
+          <span className="flex size-6 items-center justify-center rounded-md bg-secondary/70 text-muted-foreground">
+            <Target className="size-3.5" aria-hidden="true" />
+          </span>
+          Setpoints (opcional)
+        </legend>
+        <p className="text-xs text-muted-foreground">
+          Valor objetivo dentro del rango. Sólo se usa si se reactiva el despacho automático. Dejá en
+          blanco para no usarlo.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {SETPOINTS.map((campo) => (
+            <NumberField
+              key={campo.key}
+              id={`producto-${campo.key}`}
+              label={campo.label}
+              unidad={campo.unidad}
+              min={campo.min}
+              placeholder={campo.placeholder}
+              helper={campo.helper}
+              value={values[campo.key]}
+              serverError={serverError(campo.key)}
+              error={clientError(campo.key)}
+              disabled={disabled}
+              inputRef={(el) => {
+                fieldRefs.current[campo.key] = el
+              }}
+              onChange={(value) => setField(campo.key, value)}
+              onBlur={() => setTouched((prev) => ({ ...prev, [campo.key]: true }))}
+            />
+          ))}
+        </div>
+      </fieldset>
 
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
         {showDirtyHint && !disabled ? (
@@ -328,6 +425,7 @@ function NumberField({
   placeholder,
   helper,
   value,
+  serverError,
   error,
   disabled,
   inputRef,
@@ -341,18 +439,32 @@ function NumberField({
   placeholder: string
   helper?: string
   value: string
+  serverError?: string
   error?: string
   disabled?: boolean
   inputRef?: (el: HTMLInputElement | null) => void
   onChange: (value: string) => void
   onBlur?: () => void
 }) {
+  const describedBy = serverError
+    ? `${id}-server-error`
+    : error
+      ? `${id}-error`
+      : helper
+        ? `${id}-helper`
+        : undefined
+
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <Label htmlFor={id}>{label}</Label>
         <span className="text-xs tabular-nums text-muted-foreground">{unidad}</span>
       </div>
+      {serverError && (
+        <p id={`${id}-server-error`} role="alert" className="mb-1 text-xs text-destructive">
+          {serverError}
+        </p>
+      )}
       <Input
         id={id}
         ref={inputRef}
@@ -363,8 +475,8 @@ function NumberField({
         placeholder={placeholder}
         value={value}
         disabled={disabled}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+        aria-invalid={serverError || error ? true : undefined}
+        aria-describedby={describedBy}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         className={cn(disabled && "cursor-not-allowed")}
