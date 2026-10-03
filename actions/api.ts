@@ -18,6 +18,7 @@ import type {
     Producto,
     ProductoRequest,
     DecisionControl,
+    PrediccionResumen,
     SetpointPropuesto,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
@@ -870,6 +871,7 @@ function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
         vel_propuesto: typeof raw.vel_propuesto === "number" ? raw.vel_propuesto : 0,
         temp_aplicado: num(raw.temp_aplicado),
         vel_aplicado: num(raw.vel_aplicado),
+        prediccion: parsePrediccion(raw.prediccion),
         z_observado: num(raw.z_observado),
         z_predicho: num(raw.z_predicho),
         razon_skipped: typeof raw.razon_skipped === "string" ? raw.razon_skipped : null,
@@ -878,6 +880,17 @@ function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
                 ? raw.aplicado_por
                 : "NADIE",
         created_at: String(raw.created_at ?? ""),
+    }
+}
+
+function parsePrediccion(raw: unknown): PrediccionResumen | null {
+    if (!isRecord(raw)) return null
+    return {
+        pctCrudos: typeof raw.pctCrudos === "number" ? raw.pctCrudos : 0,
+        pctOk: typeof raw.pctOk === "number" ? raw.pctOk : 0,
+        pctQuemados: typeof raw.pctQuemados === "number" ? raw.pctQuemados : 0,
+        modelVersion: typeof raw.modelVersion === "string" ? raw.modelVersion : "",
+        esPlaceholder: typeof raw.esPlaceholder === "boolean" ? raw.esPlaceholder : true,
     }
 }
 

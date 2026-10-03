@@ -64,6 +64,18 @@ export type PesosObjetivo = {
   dc: number
 }
 
+/** Subset de la salida del XGBoost que devuelve el backend por decisión.
+ * Permite distinguir si la propuesta vino del modelo entrenado o del
+ * placeholder determinístico (`esPlaceholder: true` cuando todavía no hay
+ * muestras suficientes para entrenar por producto). */
+export type PrediccionResumen = {
+  pctCrudos: number
+  pctOk: number
+  pctQuemados: number
+  modelVersion: string
+  esPlaceholder: boolean
+}
+
 /** Decisión del MPC (audit) tal como devuelve GET /api/v1/lotes/{id}/decisiones. */
 export type DecisionControl = {
   id: string
@@ -81,6 +93,7 @@ export type DecisionControl = {
   vel_propuesto: number
   temp_aplicado?: number | null
   vel_aplicado?: number | null
+  prediccion?: PrediccionResumen | null
   z_observado?: number | null
   z_predicho?: number | null
   razon_skipped?: string | null

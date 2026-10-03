@@ -50,6 +50,9 @@ export function ControlCard({ lote }: ControlCardProps) {
     const [loadingPropuesta, setLoadingPropuesta] = useState(false)
     const [aplicarError, setAplicarError] = useState<string | null>(null)
 
+    const [propuestaPendiente, setPropuestaPendiente] = useState<SetpointPropuesto | null>(null)
+    const [sseConnected, setSseConnected] = useState(false)
+
     const refresh = () => {
         startTransition(async () => {
             try {
@@ -67,6 +70,30 @@ export function ControlCard({ lote }: ControlCardProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lote.id])
 
+    // SSE: el backend emite `control.propuesta` cuando el Loop del MPC
+    // propone un nuevo setpoint. Esto actualiza la UI sin que el operario
+    // tenga que abrir el modal manualmente para descubrir si hay propuesta.
+    useEffect(() => {
+        if (modo === "MANUAL") return
+        const es = new EventSource(`/api/lotes/${encodeURIComponent(lote.id)}/control/events`)
+        es.onopen = () => setSseConnected(true)
+        es.onerror = () => setSseConnected(false)
+        es.addEventListener("control.propuesta", (ev) => {
+            try {
+                const payload = JSON.parse((ev as MessageEvent).data) as { propuesta?: SetpointPropuesto }
+                if (payload.propuesta) {
+                    setPropuestaPendiente(payload.propuesta)
+                }
+            } catch {
+                // payload mal formado, ignorar
+            }
+        })
+        return () => {
+            es.close()
+            setSseConnected(false)
+        }
+    }, [lote.id, modo])
+
     if (modo === "MANUAL") {
         return (
             <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -80,6 +107,13 @@ export function ControlCard({ lote }: ControlCardProps) {
         setPropuesta(null)
         setModalOpen(true)
         setLoadingPropuesta(true)
+        // Si el SSE ya trajo una propuesta, la usamos directamente; si no,
+        // hacemos pull al endpoint GET para sincronizar.
+        if (propuestaPendiente) {
+            setPropuesta(propuestaPendiente)
+            setLoadingPropuesta(false)
+            return
+        }
         startTransition(async () => {
             try {
                 const p = await getConsignaPropuesta(lote.id)
@@ -109,6 +143,7 @@ export function ControlCard({ lote }: ControlCardProps) {
                 }
                 setModalOpen(false)
                 setPropuesta(null)
+                setPropuestaPendiente(null)
                 refresh()
             } catch (e) {
                 setAplicarError(
@@ -172,15 +207,31 @@ export function ControlCard({ lote }: ControlCardProps) {
             </div>
 
             {modo === "SUPERVISION" && (
-                <Button
-                    variant="default"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={abrirModalAplicar}
-                    disabled={pending}
-                >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Aplicar propuesta pendiente
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button
+                        variant="default"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={abrirModalAplicar}
+                        disabled={pending}
+                    >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Aplicar propuesta pendiente
+                    </Button>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span
+                            className={cn(
+                                "inline-block size-2 rounded-full",
+                                sseConnected ? "bg-emerald-500" : "bg-muted-foreground/40",
+                            )}
+                            aria-hidden="true"
+                        />
+                        {propuestaPendiente
+                            ? "Propuesta del MPC disponible"
+                            : sseConnected
+                                ? "Esperando propuesta del MPC"
+                                : "Stream SSE desconectado"}
+                    </div>
+                </div>
             )}
 
             {errorMsg && (
@@ -364,6 +415,12 @@ function DecisionesList({ items }: { items: DecisionControl[] }) {
                                 {formatDate(d.created_at)} · {formatTime(d.created_at)}
                             </span>
                         </div>
+                        {d.prediccion && (
+                            <p className="mt-1 text-[10px] uppercase text-muted-foreground">
+                                Modelo: {d.prediccion.modelVersion}
+                                {d.prediccion.esPlaceholder && " · placeholder"}
+                            </p>
+                        )}
                         {d.razon_skipped && (
                             <p className="mt-1 text-red-600">skip: {d.razon_skipped}</p>
                         )}
