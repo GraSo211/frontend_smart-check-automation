@@ -17,6 +17,7 @@ import type {
     UpdateSectorRequest,
     Producto,
     ProductoRequest,
+    DecisionControl,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -743,4 +744,131 @@ export async function deleteSector(id: string): Promise<DeviceActionResult<null>
         statusMessages: SECTOR_STATUS_MESSAGES,
         revalidatePaths: SECTOR_REVALIDATE_PATHS,
     });
+}
+
+// SCA-400 — control automático / supervisión -----------------------
+
+/** Inicia el loop de control para un lote (modo AUTOMATICO o SUPERVISION). */
+export async function startControl(
+    loteId: string,
+): Promise<DeviceActionResult<{ lote_id: string; modo: string }>> {
+    return deviceMutation<{ lote_id: string; modo: string }>({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/control/start`,
+        method: "POST",
+        parse: (raw) => {
+            if (!isRecord(raw)) return { lote_id: loteId, modo: "" }
+            return {
+                lote_id: String(raw.lote_id ?? loteId),
+                modo: String(raw.modo ?? ""),
+            }
+        },
+        allowEmptyData: true,
+        invalidMessage: "La API devolvió una respuesta inválida al iniciar el control.",
+        statusMessages: {
+            404: "El lote no existe.",
+            409: "El lote no está abierto o está en modo MANUAL.",
+            422: "El producto del lote no existe en el catálogo.",
+        },
+        revalidatePaths: ["/lotes", "/supervision"],
+    });
+}
+
+/** Detiene el loop de control para un lote. */
+export async function stopControl(
+    loteId: string,
+): Promise<DeviceActionResult<{ lote_id: string; stopped: boolean }>> {
+    return deviceMutation<{ lote_id: string; stopped: boolean }>({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/control/stop`,
+        method: "POST",
+        parse: (raw) => {
+            if (!isRecord(raw)) return { lote_id: loteId, stopped: false }
+            return {
+                lote_id: String(raw.lote_id ?? loteId),
+                stopped: Boolean(raw.stopped ?? false),
+            }
+        },
+        allowEmptyData: true,
+        invalidMessage: "La API devolvió una respuesta inválida al detener el control.",
+        statusMessages: {
+            404: "El lote no existe.",
+        },
+        revalidatePaths: ["/lotes", "/supervision"],
+    });
+}
+
+/** Aplica (operario) la propuesta pendiente en modo SUPERVISION. */
+export async function aplicarConsigna(
+    loteId: string,
+): Promise<DeviceActionResult<{ lote_id: string; aplicado: boolean }>> {
+    return deviceMutation<{ lote_id: string; aplicado: boolean }>({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/aplicar-consigna`,
+        method: "POST",
+        parse: (raw) => {
+            if (!isRecord(raw)) return { lote_id: loteId, aplicado: false }
+            return {
+                lote_id: String(raw.lote_id ?? loteId),
+                aplicado: Boolean(raw.aplicado ?? false),
+            }
+        },
+        allowEmptyData: true,
+        invalidMessage: "La API devolvió una respuesta inválida al aplicar la consigna.",
+        statusMessages: {
+            404: "El lote no existe o no hay loop de control activo.",
+            409: "No hay propuesta pendiente de aplicar.",
+        },
+        revalidatePaths: ["/lotes", "/supervision"],
+    });
+}
+
+/** GET /api/v1/lotes/{id}/decisiones — audit del MPC. */
+export async function getDecisiones(
+    loteId: string,
+    _limite = 50,
+): Promise<DecisionControl[]> {
+    void _limite
+    return withBackendFetch({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/decisiones`,
+        timeoutMessage: "El backend no respondió a tiempo. Las decisiones no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isRecord(payload) || payload.success !== true) {
+                throw new Error("La API devolvió una respuesta inválida para las decisiones.")
+            }
+            const data = isRecord(payload.data) ? payload.data : null
+            const items = Array.isArray(data?.decisiones) ? data.decisiones : []
+            return items.filter(isRecord).map(parseDecisionControl)
+        },
+    }).catch(() => [] as DecisionControl[])
+}
+
+function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
+    const num = (v: unknown) => (typeof v === "number" ? v : null)
+    return {
+        id: String(raw.id ?? ""),
+        lote_id: String(raw.lote_id ?? ""),
+        ventana_inicio: String(raw.ventana_inicio ?? ""),
+        ventana_fin: String(raw.ventana_fin ?? ""),
+        muestras: typeof raw.muestras === "number" ? raw.muestras : 0,
+        temp_actual: typeof raw.temp_actual === "number" ? raw.temp_actual : 0,
+        vel_actual: num(raw.vel_actual),
+        pct_crudos_obs: typeof raw.pct_crudos_obs === "number" ? raw.pct_crudos_obs : 0,
+        pct_ok_obs: typeof raw.pct_ok_obs === "number" ? raw.pct_ok_obs : 0,
+        pct_quemados_obs: typeof raw.pct_quemados_obs === "number" ? raw.pct_quemados_obs : 0,
+        conf_promedio: typeof raw.conf_promedio === "number" ? raw.conf_promedio : 0,
+        temp_propuesto: typeof raw.temp_propuesto === "number" ? raw.temp_propuesto : 0,
+        vel_propuesto: typeof raw.vel_propuesto === "number" ? raw.vel_propuesto : 0,
+        temp_aplicado: num(raw.temp_aplicado),
+        vel_aplicado: num(raw.vel_aplicado),
+        z_observado: num(raw.z_observado),
+        z_predicho: num(raw.z_predicho),
+        razon_skipped: typeof raw.razon_skipped === "string" ? raw.razon_skipped : null,
+        aplicado_por:
+            raw.aplicado_por === "MPC" || raw.aplicado_por === "OPERARIO"
+                ? raw.aplicado_por
+                : "NADIE",
+        created_at: String(raw.created_at ?? ""),
+    }
 }

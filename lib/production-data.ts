@@ -41,6 +41,51 @@ export type LoteSector = {
    * "noche"). Puede faltar (`null`/ausente) en lotes legacy.
    */
   turno?: string | null
+  // SCA-400: control automático / supervisión.
+  modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
+  horno2_habilitado?: boolean
+  iniciado_manualmente?: boolean
+  ventana_evaluacion_segundos?: number
+  ventana_actualizacion_segundos?: number
+  tolerancia_temp_c?: number
+  umbral_aceptacion_crudo?: number
+  umbral_aceptacion_quemado?: number
+  temp1_objetivo?: number | null
+  temp2_objetivo?: number | null
+  vel_objetivo?: number | null
+  pesos_objetivo?: PesosObjetivo | null
+}
+
+export type PesosObjetivo = {
+  wc: number
+  wq: number
+  wo: number
+  dt: number
+  dc: number
+}
+
+/** Decisión del MPC (audit) tal como devuelve GET /api/v1/lotes/{id}/decisiones. */
+export type DecisionControl = {
+  id: string
+  lote_id: string
+  ventana_inicio: string
+  ventana_fin: string
+  muestras: number
+  temp_actual: number
+  vel_actual?: number | null
+  pct_crudos_obs: number
+  pct_ok_obs: number
+  pct_quemados_obs: number
+  conf_promedio: number
+  temp_propuesto: number
+  vel_propuesto: number
+  temp_aplicado?: number | null
+  vel_aplicado?: number | null
+  z_observado?: number | null
+  z_predicho?: number | null
+  razon_skipped?: string | null
+  aplicado_por: "MPC" | "OPERARIO" | "NADIE"
+  created_at: string
 }
 
 export type Sector = {
