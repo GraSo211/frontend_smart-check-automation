@@ -18,6 +18,7 @@ import type {
     Producto,
     ProductoRequest,
     DecisionControl,
+    SetpointPropuesto,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -820,14 +821,21 @@ export async function aplicarConsigna(
     });
 }
 
-/** GET /api/v1/lotes/{id}/decisiones — audit del MPC. */
+/**
+ * GET /api/v1/lotes/{id}/decisiones — audit del MPC.
+ *
+ * El backend tiene un límite interno (100); el caller puede acotar más con
+ * `limite`. Si la fetch falla, propaga el error para que la UI pueda
+ * distinguir "sin decisiones" de "falló la consulta" (antes se silenciaba
+ * con `.catch(() => [])` y eso escondía problemas reales).
+ */
 export async function getDecisiones(
     loteId: string,
-    _limite = 50,
+    limite = 50,
 ): Promise<DecisionControl[]> {
-    void _limite
+    const safeLimite = Math.min(100, Math.max(1, Math.trunc(limite)))
     return withBackendFetch({
-        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/decisiones`,
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/decisiones?limite=${safeLimite}`,
         timeoutMessage: "El backend no respondió a tiempo. Las decisiones no están disponibles.",
         handle: async (response) => {
             if (!response.ok) {
@@ -841,7 +849,7 @@ export async function getDecisiones(
             const items = Array.isArray(data?.decisiones) ? data.decisiones : []
             return items.filter(isRecord).map(parseDecisionControl)
         },
-    }).catch(() => [] as DecisionControl[])
+    })
 }
 
 function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
@@ -870,5 +878,65 @@ function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
                 ? raw.aplicado_por
                 : "NADIE",
         created_at: String(raw.created_at ?? ""),
+    }
+}
+
+/**
+ * GET /api/v1/lotes/{id}/consigna-propuesta — devuelve la propuesta
+ * pendiente en modo SUPERVISION, o `null` cuando el backend responde 204
+ * (no hay propuesta pendiente) o la Pi ENTRADA todavía no la consumió.
+ *
+ * El Loop del MPC también emite la propuesta por SSE en `control.propuesta`,
+ * pero este endpoint existe para sincronización pull-based (la UI pide el
+ * snapshot al cargar y al reintentar después de un timeout).
+ */
+export async function getConsignaPropuesta(loteId: string): Promise<SetpointPropuesto | null> {
+    return withBackendFetch({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/consigna-propuesta`,
+        timeoutMessage: "El backend no respondió a tiempo. La propuesta no está disponible.",
+        handle: async (response) => {
+            if (response.status === 204) return null
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            let payload: unknown
+            try {
+                payload = await response.json()
+            } catch {
+                return null
+            }
+            if (!isRecord(payload) || payload.success !== true) return null
+            // El backend actualmente responde 204 sin payload; este path queda
+            // para cuando emita la propuesta también por GET (futuro).
+            const propuesta = isRecord(payload.data) ? payload.data.propuesta : null
+            if (!isRecord(propuesta)) return null
+            return parseSetpointPropuesto(propuesta)
+        },
+    }).catch(() => null)
+}
+
+function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto | null {
+    const temp1 = typeof raw.temp1 === "number" ? raw.temp1 : null
+    const velocidad = typeof raw.velocidad === "number" ? raw.velocidad : null
+    if (temp1 === null || velocidad === null) return null
+    const z = typeof raw.z === "number" ? raw.z : 0
+    const temp2 = typeof raw.temp2 === "number" ? raw.temp2 : null
+    const pred = isRecord(raw.prediccion) ? raw.prediccion : null
+    return {
+        temp1,
+        temp2,
+        velocidad,
+        z,
+        prediccion: pred
+            ? {
+                pctCrudos: typeof pred.pctCrudos === "number" ? pred.pctCrudos : undefined,
+                pctOk: typeof pred.pctOk === "number" ? pred.pctOk : undefined,
+                pctQuemados: typeof pred.pctQuemados === "number" ? pred.pctQuemados : undefined,
+                modelVersion: typeof pred.modelVersion === "string" ? pred.modelVersion : undefined,
+                esPlaceholder: typeof pred.esPlaceholder === "boolean" ? pred.esPlaceholder : undefined,
+            }
+            : null,
+        ventana_inicio: typeof raw.ventana_inicio === "string" ? raw.ventana_inicio : undefined,
+        ventana_fin: typeof raw.ventana_fin === "string" ? raw.ventana_fin : undefined,
     }
 }

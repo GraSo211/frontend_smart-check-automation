@@ -1,13 +1,24 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Play, Square, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Play, Square, CheckCircle2, AlertTriangle, XIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { formatDate, formatTime } from "@/lib/format"
-import type { DecisionControl, LoteSector } from "@/lib/production-data"
+import { formatDate, formatTime, formatTemp } from "@/lib/format"
+import type { DecisionControl, LoteSector, SetpointPropuesto } from "@/lib/production-data"
 import {
     aplicarConsigna,
+    getConsignaPropuesta,
     getDecisiones,
     startControl,
     stopControl,
@@ -22,8 +33,9 @@ interface ControlCardProps {
  *
  * Muestra el modo del lote, las ventanas de evaluación/actualización y los
  * botones Iniciar / Detener (rol Supervisor+) más Aplicar propuesta pendiente
- * (rol Operario+, sólo modo SUPERVISION). Debajo lista las últimas
- * decisiones del MPC con el aplicado_por y los Δ respecto al setpoint.
+ * (rol Operario+, sólo modo SUPERVISION). La aplicación abre un modal de
+ * confirmación con los ΔT1/ΔT2/ΔV respecto al setpoint actual antes de
+ * despachar al horno. Debajo lista las últimas decisiones del MPC.
  */
 export function ControlCard({ lote }: ControlCardProps) {
     const modo = lote.modo ?? "MANUAL"
@@ -32,6 +44,11 @@ export function ControlCard({ lote }: ControlCardProps) {
     const [decisiones, setDecisiones] = useState<DecisionControl[]>([])
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
+
+    const [modalOpen, setModalOpen] = useState(false)
+    const [propuesta, setPropuesta] = useState<SetpointPropuesto | null>(null)
+    const [loadingPropuesta, setLoadingPropuesta] = useState(false)
+    const [aplicarError, setAplicarError] = useState<string | null>(null)
 
     const refresh = () => {
         startTransition(async () => {
@@ -58,6 +75,51 @@ export function ControlCard({ lote }: ControlCardProps) {
         )
     }
 
+    const abrirModalAplicar = () => {
+        setAplicarError(null)
+        setPropuesta(null)
+        setModalOpen(true)
+        setLoadingPropuesta(true)
+        startTransition(async () => {
+            try {
+                const p = await getConsignaPropuesta(lote.id)
+                setPropuesta(p)
+                if (p === null) {
+                    setAplicarError("No hay propuesta pendiente para este lote.")
+                }
+            } catch (e) {
+                setAplicarError(
+                    e instanceof Error ? e.message : "No se pudo consultar la propuesta.",
+                )
+            } finally {
+                setLoadingPropuesta(false)
+            }
+        })
+    }
+
+    const confirmarAplicar = () => {
+        if (propuesta === null) return
+        setLoadingPropuesta(true)
+        startTransition(async () => {
+            try {
+                const result = await aplicarConsigna(lote.id)
+                if (!result.ok) {
+                    setAplicarError(result.errors.join(" · "))
+                    return
+                }
+                setModalOpen(false)
+                setPropuesta(null)
+                refresh()
+            } catch (e) {
+                setAplicarError(
+                    e instanceof Error ? e.message : "Error al aplicar la consigna.",
+                )
+            } finally {
+                setLoadingPropuesta(false)
+            }
+        })
+    }
+
     return (
         <div className="rounded-lg border bg-card p-4 space-y-4">
             <header className="flex items-start justify-between gap-2">
@@ -69,34 +131,33 @@ export function ControlCard({ lote }: ControlCardProps) {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
-                        disabled={pending}
+                    <Button
+                        size="sm"
                         onClick={() => {
                             startTransition(async () => {
                                 await startControl(lote.id)
                                 refresh()
                             })
                         }}
+                        disabled={pending}
                     >
                         <Play className="h-4 w-4" />
                         Iniciar
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm disabled:opacity-50"
-                        disabled={pending}
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => {
                             startTransition(async () => {
                                 await stopControl(lote.id)
                                 refresh()
                             })
                         }}
+                        disabled={pending}
                     >
                         <Square className="h-4 w-4" />
                         Detener
-                    </button>
+                    </Button>
                 </div>
             </header>
 
@@ -111,20 +172,15 @@ export function ControlCard({ lote }: ControlCardProps) {
             </div>
 
             {modo === "SUPERVISION" && (
-                <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+                <Button
+                    variant="default"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={abrirModalAplicar}
                     disabled={pending}
-                    onClick={() => {
-                        startTransition(async () => {
-                            await aplicarConsigna(lote.id)
-                            refresh()
-                        })
-                    }}
                 >
                     <CheckCircle2 className="h-4 w-4" />
                     Aplicar propuesta pendiente
-                </button>
+                </Button>
             )}
 
             {errorMsg && (
@@ -135,6 +191,134 @@ export function ControlCard({ lote }: ControlCardProps) {
             )}
 
             <DecisionesList items={decisiones} />
+
+            <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Aplicar propuesta del MPC</DialogTitle>
+                        <DialogDescription>
+                            Revisá los Δ respecto al setpoint actual antes de despachar al horno.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {loadingPropuesta && !propuesta ? (
+                        <p className="text-sm text-muted-foreground">Buscando propuesta…</p>
+                    ) : propuesta === null ? (
+                        <p className="text-sm text-amber-600">
+                            {aplicarError ?? "No hay propuesta pendiente."}
+                        </p>
+                    ) : (
+                        <PropuestaResumen
+                            propuesta={propuesta}
+                            horno2={horno2}
+                            tempActual={lote.temp1_objetivo ?? null}
+                            velActual={lote.vel_objetivo ?? null}
+                            temp2Actual={lote.temp2_objetivo ?? null}
+                        />
+                    )}
+
+                    {aplicarError && propuesta !== null && (
+                        <p className="text-xs text-red-600">{aplicarError}</p>
+                    )}
+
+                    <DialogFooter>
+                        <DialogClose
+                            render={<Button variant="outline" disabled={loadingPropuesta} />}
+                        >
+                            <XIcon className="h-4 w-4" />
+                            Cancelar
+                        </DialogClose>
+                        <Button
+                            disabled={loadingPropuesta || propuesta === null}
+                            onClick={confirmarAplicar}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Confirmar y aplicar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+}
+
+function PropuestaResumen({
+    propuesta,
+    horno2,
+    tempActual,
+    velActual,
+    temp2Actual,
+}: {
+    propuesta: SetpointPropuesto
+    horno2: boolean
+    tempActual: number | null
+    velActual: number | null
+    temp2Actual: number | null
+}) {
+    const dT1 = tempActual !== null ? propuesta.temp1 - tempActual : null
+    const dV = velActual !== null ? propuesta.velocidad - velActual : null
+    const dT2 =
+        horno2 && propuesta.temp2 !== null && propuesta.temp2 !== undefined && temp2Actual !== null
+            ? propuesta.temp2 - temp2Actual
+            : null
+
+    return (
+        <div className="grid grid-cols-2 gap-3 text-sm">
+            <Delta label="T1 propuesto" value={formatTemp(propuesta.temp1)} delta={dT1} unit="°C" />
+            <Delta
+                label="V propuesta"
+                value={`${propuesta.velocidad.toFixed(2)} m/s`}
+                delta={dV}
+                unit="m/s"
+                scale={2}
+            />
+            {horno2 && propuesta.temp2 !== null && propuesta.temp2 !== undefined && (
+                <Delta
+                    label="T2 propuesto"
+                    value={formatTemp(propuesta.temp2)}
+                    delta={dT2}
+                    unit="°C"
+                />
+            )}
+            <div className="rounded-md border bg-muted/40 p-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Z predicha</p>
+                <p className="font-mono text-sm">{propuesta.z.toFixed(2)}</p>
+            </div>
+        </div>
+    )
+}
+
+function Delta({
+    label,
+    value,
+    delta,
+    unit,
+    scale,
+}: {
+    label: string
+    value: string
+    delta: number | null
+    unit: string
+    scale?: number
+}) {
+    const deltaFmt =
+        delta === null
+            ? "—"
+            : `${delta > 0 ? "+" : ""}${delta.toLocaleString("es-AR", {
+                maximumFractionDigits: scale ?? 1,
+            })} ${unit}`
+    const tone =
+        delta === null
+            ? "text-muted-foreground"
+            : Math.abs(delta) < 0.001
+              ? "text-muted-foreground"
+              : "text-foreground"
+    return (
+        <div className="rounded-md border bg-muted/40 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+            <p className="font-mono text-sm">{value}</p>
+            <p className={cn("font-mono text-xs", tone)}>Δ {deltaFmt}</p>
         </div>
     )
 }

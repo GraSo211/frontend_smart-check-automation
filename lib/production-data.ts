@@ -88,6 +88,31 @@ export type DecisionControl = {
   created_at: string
 }
 
+/**
+ * Setpoint propuesto por el MPC pendiente de aprobación en modo SUPERVISION.
+ * Devuelto por GET /api/v1/lotes/{id}/consigna-propuesta (204 cuando no hay
+ * propuesta pendiente). Coincide con la propuesta que el Loop del backend
+ * publica por `control.propuesta` en SSE.
+ */
+export type SetpointPropuesto = {
+  temp1: number
+  /** T2 del horno 2. Sólo presente cuando el producto tiene horno 2 habilitado. */
+  temp2?: number | null
+  velocidad: number
+  /** Z predicha por el optimizador en el momento de proponer. */
+  z: number
+  /** Salida cruda del XGBoost que alimentó la decisión. */
+  prediccion?: {
+    pctCrudos?: number
+    pctOk?: number
+    pctQuemados?: number
+    modelVersion?: string
+    esPlaceholder?: boolean
+  } | null
+  ventana_inicio?: string
+  ventana_fin?: string
+}
+
 export type Sector = {
   id: string
   nombre: string
