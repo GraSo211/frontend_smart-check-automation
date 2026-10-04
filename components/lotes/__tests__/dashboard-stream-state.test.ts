@@ -477,3 +477,85 @@ describe("regla null-vs-cero en los KPI de lotes", () => {
     expect(screen.getByText("Tasa de merma").parentElement?.textContent).toContain("20.0%")
   })
 })
+
+describe("KpiCards · valores reales de horno y cinta (F-F3)", () => {
+  it("muestra el total real de unidades en lugar de «—»", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [
+          lote({ id: "l-1", conteos: { ok: 80, crudo: 5, quemado: 15, total: 100 } }),
+          lote({ id: "l-2", conteos: { ok: 50, crudo: 0, quemado: 0, total: 50 } }),
+        ],
+      }),
+    )
+    expect(screen.getByText("Unidades procesadas").parentElement?.textContent).toContain("150")
+  })
+
+  it("publica T1 y T2 cuando el horno 2 está habilitado y hay valores", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [
+          lote({
+            id: "l-2h",
+            horno2_habilitado: true,
+            temp1_objetivo: 200,
+            temp2_objetivo: 180,
+            vel_objetivo: 1.5,
+          }),
+        ],
+      }),
+    )
+    const tempCard = screen.getByText("Temperatura objetivo (T1 · T2)").parentElement
+    expect(tempCard?.textContent).toContain("200")
+    expect(tempCard?.textContent).toContain("180")
+    expect(screen.getByText(/Cinta objetivo 1,5/)).toBeTruthy()
+  })
+
+  it("publica sólo T1 cuando no hay lotes con horno 2", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [
+          lote({ id: "l-1h", horno2_habilitado: false, temp1_objetivo: 200, vel_objetivo: 1.2 }),
+        ],
+      }),
+    )
+    const tempCard = screen.getByText("Temperatura objetivo (T1)").parentElement
+    expect(tempCard?.textContent).toContain("200")
+    expect(tempCard?.textContent).not.toContain("· 1") // no concatena T2
+  })
+
+  it("promedia temp1_objetivo entre varios lotes", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [
+          lote({ id: "l-a", temp1_objetivo: 200 }),
+          lote({ id: "l-b", temp1_objetivo: 220 }),
+        ],
+      }),
+    )
+    const tempCard = screen.getByText("Temperatura objetivo (T1)").parentElement
+    expect(tempCard?.textContent).toContain("210")
+  })
+
+  it("mantiene «—» cuando ningún lote emite temp1_objetivo", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [lote({ id: "l-no-temp" })],
+      }),
+    )
+    expect(screen.getByText("Temperatura objetivo (T1)").parentElement?.textContent).toContain("—")
+  })
+
+  it("ignora temp_objetivo cuando el campo es null (no lo trata como 0)", () => {
+    render(
+      React.createElement(KpiCards, {
+        runs: [
+          lote({ id: "l-temp-null", temp1_objetivo: null }),
+          lote({ id: "l-temp-real", temp1_objetivo: 200 }),
+        ],
+      }),
+    )
+    // Sólo promedia con el valor real (200), no con null.
+    expect(screen.getByText("Temperatura objetivo (T1)").parentElement?.textContent).toContain("200")
+  })
+})
