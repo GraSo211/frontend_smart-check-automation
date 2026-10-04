@@ -1,5 +1,6 @@
 import { DashboardContent } from "@/components/lotes/dashboard-content"
 import { getAllLotes, getLoteAbierto, getSectores } from "@/actions/api"
+import { getSession } from "@/lib/auth"
 import type { LoteSector, Sector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
@@ -16,6 +17,12 @@ function firstParam(value: string | string[] | undefined): string | null {
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
   const requestedSectorId = firstParam(params.sector_id)
+
+  // El rol viaja desde la sesión para habilitar el acceso directo al detalle
+  // de control por lote (link en la tabla). El proxy ya exige autenticación;
+  // caemos a "Operario" si la cookie no se pudo decodificar.
+  const session = await getSession()
+  const userRole = session?.rol ?? "Operario"
 
   let sectores: Sector[] = []
   let sectoresError: string | null = null
@@ -82,6 +89,7 @@ export default async function Page({ searchParams }: PageProps) {
           sectores={sectores}
           selectedSectorId={selectedSectorId}
           initialLoteAbierto={initialLoteAbierto}
+          userRole={userRole}
         />
       </main>
     </div>

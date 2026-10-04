@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { AlertTriangle, ChevronLeft, ChevronRight, SearchX } from "lucide-react"
+import Link from "next/link"
+import { AlertTriangle, ChevronLeft, ChevronRight, SearchX, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { hasMinRole, type UserRole } from "@/lib/auth"
 import { PageButton } from "@/components/shared/page-button"
 import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import { formatBucket, formatDate, formatNumber, formatTime, formatWindow, qualityRate } from "@/lib/format"
@@ -16,6 +18,13 @@ interface SupervisionTableProps {
   runs: LoteSector[]
   /** Optional catalog to resolve `sector_id` into a human name. */
   sectores?: Sector[]
+  /**
+   * Rol del usuario autenticado. Cuando es `Supervisor` o `Administrador` se
+   * renderiza una columna "Acciones" con el link directo a la vista de control
+   * (`/lotes/{id}/control`). Por seguridad, sin rol explícito se asume Operario
+   * y no se muestra el link (el proxy ya valida el acceso real).
+   */
+  userRole?: UserRole
 }
 
 function EstadoBadge({ estado }: { estado: LoteSector["estado"] }) {
@@ -39,7 +48,8 @@ function EstadoBadge({ estado }: { estado: LoteSector["estado"] }) {
 }
 
 // Main supervision data table with client-side pagination.
-export function SupervisionTable({ runs, sectores = [] }: SupervisionTableProps) {
+export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }: SupervisionTableProps) {
+  const canControl = hasMinRole(userRole, "Supervisor")
   const [page, setPage] = useState(1)
 
   const total = runs.length
@@ -111,6 +121,7 @@ export function SupervisionTable({ runs, sectores = [] }: SupervisionTableProps)
                 <Th className="text-right">Crudas</Th>
                 <Th className="text-center">Temperaturas de horno</Th>
                 <Th className="text-right">Vel. cinta</Th>
+                {canControl && <Th className="text-right">Acciones</Th>}
               </tr>
             </thead>
 
@@ -231,6 +242,24 @@ export function SupervisionTable({ runs, sectores = [] }: SupervisionTableProps)
                     <td className="px-4 py-3.5 text-center font-mono text-muted-foreground">
                       —
                     </td>
+
+                    {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+). */}
+                    {canControl && (
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href={`/lotes/${lote.id}/control`}
+                          aria-label={`Abrir control del lote ${lote.id}`}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground",
+                            "transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          )}
+                        >
+                          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                          Control
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 )
               })}

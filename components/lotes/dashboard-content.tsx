@@ -7,6 +7,7 @@ import { KpiCards } from "@/components/lotes/kpi-cards"
 import { SupervisionTable } from "@/components/lotes/supervision-table"
 import { LoteAbiertoCard } from "@/components/lotes/lote-abierto-card"
 import { FiltersBar, DEFAULT_FILTERS, type FiltersState } from "@/components/lotes/filters-bar"
+import type { UserRole } from "@/lib/auth"
 import type { LoteSector, Sector } from "@/lib/production-data"
 import { useMonitoringActions, useProductionData } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
@@ -18,6 +19,8 @@ interface DashboardContentProps {
   sectores: Sector[]
   selectedSectorId: string | null
   initialLoteAbierto: LoteSector | null
+  /** Rol de la sesión. Habilita acciones restringidas (link directo al control por lote). */
+  userRole?: UserRole
 }
 
 // The provider store is global (all sectors). Sector scoping happens here, then
@@ -44,6 +47,7 @@ export function DashboardContent({
   sectores,
   selectedSectorId,
   initialLoteAbierto,
+  userRole = "Operario",
 }: DashboardContentProps) {
   const router = useRouter()
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS)
@@ -205,7 +209,7 @@ export function DashboardContent({
         resultsCount={filteredRuns.length}
         totalCount={sectorRuns.length}
       />
-      <SupervisionTable runs={filteredRuns} sectores={sectores} />
+      <SupervisionTable runs={filteredRuns} sectores={sectores} userRole={userRole} />
     </div>
   )
 }
