@@ -126,7 +126,7 @@ export default async function Page({ params }: PageProps) {
                     </p>
                 )}
 
-                <ControlCard lote={lote} />
+                <ControlCard lote={lote} canControl={canControl} />
 
                 {decisionesError && (
                     <p className="mt-4 text-xs text-red-600">{decisionesError}</p>

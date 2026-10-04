@@ -516,7 +516,7 @@ function errorsFromResponse(
 
 interface DeviceMutationOptions<T> {
     path: string
-    method: "POST" | "PUT" | "DELETE"
+    method: "POST" | "PUT" | "PATCH" | "DELETE"
     body?: unknown
     parse: (data: unknown) => T | null
     invalidMessage: string
@@ -819,6 +819,48 @@ export async function aplicarConsigna(
             409: "No hay propuesta pendiente de aplicar.",
         },
         revalidatePaths: ["/lotes", "/supervision"],
+    });
+}
+
+/**
+ * Cambia el modo operativo del control (MANUAL / SUPERVISION / AUTOMATICO).
+ * PATCH /api/v1/lotes/{id}/modo con body `{ modo }`. Requiere Supervisor o
+ * Administrador; el backend responde 403 cuando el rol no alcanza y 409 cuando
+ * hay un loop de control corriendo que no se puede reanudar en el modo
+ * solicitado. Tras `MANUAL` se cancela el loop automáticamente.
+ */
+export type ModoOperacion = NonNullable<LoteSector["modo"]>
+
+export async function cambiarModo(
+    loteId: string,
+    modo: ModoOperacion,
+): Promise<DeviceActionResult<{ lote_id: string; modo: ModoOperacion }>> {
+    return deviceMutation<{ lote_id: string; modo: ModoOperacion }>({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/modo`,
+        method: "PATCH",
+        body: { modo },
+        parse: (raw) => {
+            // El parser corre SIEMPRE (sin `allowEmptyData`). Si el backend
+            // responde con `data` ausente/null/record vacío, devolvemos un
+            // fallback con el modo solicitado: el SSE `control.evento` será la
+            // confirmación autoritativa.
+            if (!isRecord(raw)) return { lote_id: loteId, modo }
+            const next = raw.modo
+            const parsedModo: ModoOperacion =
+                next === "MANUAL" || next === "SUPERVISION" || next === "AUTOMATICO"
+                    ? next
+                    : modo
+            return {
+                lote_id: String(raw.lote_id ?? loteId),
+                modo: parsedModo,
+            }
+        },
+        invalidMessage: "La API devolvió una respuesta inválida al cambiar el modo.",
+        statusMessages: {
+            404: "El lote no existe.",
+            409: "Conflicto al cambiar el modo: hay un loop activo o el lote no admite el modo solicitado.",
+        },
+        revalidatePaths: ["/lotes", `/lotes/${loteId}/control`],
     });
 }
 

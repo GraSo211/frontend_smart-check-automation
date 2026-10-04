@@ -719,4 +719,104 @@ describe("server actions de datos del backend", () => {
 
     await expect(api.getLoteAbierto("s-1")).resolves.toEqual(degraded)
   })
+
+  describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("hace PATCH con body JSON y reenvía la cookie de sesión", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: { lote_id: "l-1", modo: "SUPERVISION" } }))
+
+      const result = await api.cambiarModo("l-1", "SUPERVISION")
+
+      expect(result).toEqual({ ok: true, data: { lote_id: "l-1", modo: "SUPERVISION" } })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, options] = fetchMock.mock.calls[0]
+      expect(url).toBe("https://backend.example.test/api/v1/lotes/l-1/modo")
+      expect(options.method).toBe("PATCH")
+      expect(options.headers).toMatchObject({
+        "Content-Type": "application/json",
+        Cookie: "session_token=jwt-token",
+      })
+      expect(options.body).toBe(JSON.stringify({ modo: "SUPERVISION" }))
+      expect(options.cache).toBe("no-store")
+    })
+
+    it("revalida /lotes y la ruta detalle del lote en éxito", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: { lote_id: "l-1", modo: "MANUAL" } }))
+
+      await api.cambiarModo("l-1", "MANUAL")
+
+      expect(revalidatePathMock).toHaveBeenCalledWith("/lotes")
+      expect(revalidatePathMock).toHaveBeenCalledWith("/lotes/l-1/control")
+    })
+
+    it("traduce 409 a un mensaje claro en español", async () => {
+      fetchMock.mockResolvedValue(json({
+        success: false,
+        message: "Conflicto",
+        errors: { code: "loop_active" },
+      }, 409))
+
+      const result = await api.cambiarModo("l-1", "MANUAL")
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toContain("Conflicto al cambiar el modo")
+      expect(result.errors[0]).toContain("loop activo")
+    })
+
+    it("traduce 404 a un mensaje claro en español", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "", errors: null }, 404))
+
+      const result = await api.cambiarModo("l-1", "SUPERVISION")
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toBe("El lote no existe.")
+    })
+
+    it("preserva el modo del servidor aunque difiera del solicitado", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: { lote_id: "l-1", modo: "AUTOMATICO" } }))
+
+      const result = await api.cambiarModo("l-1", "MANUAL")
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.data.modo).toBe("AUTOMATICO")
+    })
+
+    it("devuelve el modo solicitado si el backend no incluye uno en la respuesta", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: null }))
+
+      const result = await api.cambiarModo("l-1", "SUPERVISION")
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.data).toEqual({ lote_id: "l-1", modo: "SUPERVISION" })
+    })
+
+    it("traduce el timeout (8s) a un mensaje claro en español", async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, options: RequestInit) =>
+        new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () => {
+            const error = new Error("aborted")
+            error.name = "AbortError"
+            reject(error)
+          })
+        }),
+      )
+
+      const promise = api.cambiarModo("l-1", "AUTOMATICO")
+      await vi.advanceTimersByTimeAsync(8000)
+      const result = await promise
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toContain("no respondió a tiempo")
+      vi.useRealTimers()
+    })
+  })
 })
