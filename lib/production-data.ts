@@ -41,6 +41,89 @@ export type LoteSector = {
    * "noche"). Puede faltar (`null`/ausente) en lotes legacy.
    */
   turno?: string | null
+  // SCA-400: control automático / supervisión.
+  modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
+  horno2_habilitado?: boolean
+  iniciado_manualmente?: boolean
+  ventana_evaluacion_segundos?: number
+  ventana_actualizacion_segundos?: number
+  tolerancia_temp_c?: number
+  umbral_aceptacion_crudo?: number
+  umbral_aceptacion_quemado?: number
+  temp1_objetivo?: number | null
+  temp2_objetivo?: number | null
+  vel_objetivo?: number | null
+  pesos_objetivo?: PesosObjetivo | null
+}
+
+export type PesosObjetivo = {
+  wc: number
+  wq: number
+  wo: number
+  dt: number
+  dc: number
+}
+
+/** Subset de la salida del XGBoost que devuelve el backend por decisión.
+ * Permite distinguir si la propuesta vino del modelo entrenado o del
+ * placeholder determinístico (`esPlaceholder: true` cuando todavía no hay
+ * muestras suficientes para entrenar por producto). */
+export type PrediccionResumen = {
+  pctCrudos: number
+  pctOk: number
+  pctQuemados: number
+  modelVersion: string
+  esPlaceholder: boolean
+}
+
+/** Decisión del MPC (audit) tal como devuelve GET /api/v1/lotes/{id}/decisiones. */
+export type DecisionControl = {
+  id: string
+  lote_id: string
+  ventana_inicio: string
+  ventana_fin: string
+  muestras: number
+  temp_actual: number
+  vel_actual?: number | null
+  pct_crudos_obs: number
+  pct_ok_obs: number
+  pct_quemados_obs: number
+  conf_promedio: number
+  temp_propuesto: number
+  vel_propuesto: number
+  temp_aplicado?: number | null
+  vel_aplicado?: number | null
+  prediccion?: PrediccionResumen | null
+  z_observado?: number | null
+  z_predicho?: number | null
+  razon_skipped?: string | null
+  aplicado_por: "MPC" | "OPERARIO" | "NADIE"
+  created_at: string
+}
+
+/**
+ * Setpoint propuesto por el MPC pendiente de aprobación en modo SUPERVISION.
+ * Devuelto por GET /api/v1/lotes/{id}/consigna-propuesta (204 cuando no hay
+ * propuesta pendiente). Coincide con la propuesta que el Loop del backend
+ * publica por `control.propuesta` en SSE.
+ */
+export type SetpointPropuesto = {
+  temp1: number
+  /** T2 del horno 2. Sólo presente cuando el producto tiene horno 2 habilitado. */
+  temp2?: number | null
+  velocidad: number
+  /** Z predicha por el optimizador en el momento de proponer. */
+  z: number
+  /** Salida cruda del XGBoost que alimentó la decisión. */
+  prediccion?: {
+    pctCrudos?: number
+    pctOk?: number
+    pctQuemados?: number
+    modelVersion?: string
+    esPlaceholder?: boolean
+  } | null
+  ventana_inicio?: string
+  ventana_fin?: string
 }
 
 export type Sector = {
