@@ -143,7 +143,7 @@ export type ControlEstado = {
  * Confianza agregada por clase del modelo de visión, sobre las últimas N
  * detecciones de un lote. Devuelto por GET /api/v1/lotes/{id}/confianza-clases.
  * `confianza_media` es el promedio de confianza (0..1); `confianza_stddev`
- * mide dispersión (`null` cuando `muestras < 2`). Permite detectar clases con
+ * mide dispersión (`null` cuando `muestras < 2`). Permite tener
  * varianza alta aunque la media sea razonable.
  */
 export type ConfianzaClase = {
@@ -151,6 +151,33 @@ export type ConfianzaClase = {
   confianza_media: number
   confianza_stddev: number | null
   muestras: number
+}
+
+/** Estado del ciclo de vida de una alerta. */
+export type AlertaEstado = "ACTIVA" | "ACK" | "RESUELTA"
+
+/** Severidad declarada por el backend. */
+export type AlertaSeveridad = "INFO" | "WARNING" | "CRITICAL"
+
+/**
+ * Alerta operativa: umbral de calidad, desvío de temperatura, nodo offline,
+ * etc. Vinculada opcionalmente a un sector y a un lote. Una alerta ACK fue
+ * reconocida por un usuario pero todavía no se cerró; una alerta RESUELTA
+ * desapareció sola o un usuario la marcó como resuelta.
+ */
+export type Alerta = {
+  id: string
+  sector_id?: string | null
+  lote_id?: string | null
+  /** Tipo libre (`umbral_quemado`, `nodo_offline`, `temp_fuera_rango`, etc.). */
+  tipo: string
+  severidad: AlertaSeveridad
+  estado: AlertaEstado
+  mensaje: string
+  created_at: string
+  /** Acuse de recibo: quién y cuándo la reconoció. */
+  acked_por?: { email: string; nombre: string } | null
+  acked_at?: string | null
 }
 
 export type Sector = {

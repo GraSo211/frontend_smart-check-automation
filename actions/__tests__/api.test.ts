@@ -788,7 +788,185 @@ describe("server actions de datos del backend", () => {
     })
   })
 
-  describe("getConfianzaClases (GET /api/v1/lotes/{id}/confianza-clases)", () => {
+  describe("getAlertas (GET /api/v1/alertas)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("parsea la lista y normaliza estado/severidad desconocidos", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: [
+            {
+              id: "a-1",
+              sector_id: "s-1",
+              lote_id: "l-1",
+              tipo: "umbral_quemado",
+              severidad: "CRITICAL",
+              estado: "ACTIVA",
+              mensaje: "Tasa de quemados supera el 5%",
+              created_at: "2026-09-23T08:00:00.000Z",
+            },
+            {
+              id: "a-2",
+              tipo: "nodo_offline",
+              severidad: "BOGUS",
+              estado: "DESCONOCIDO",
+              mensaje: "Raspberry sin heartbeat",
+              created_at: "2026-09-23T08:05:00.000Z",
+              acked_por: { email: "sup@fermar.com", nombre: "Supervisor" },
+              acked_at: "2026-09-23T08:10:00.000Z",
+            },
+          ],
+        }),
+      )
+
+      await expect(api.getAlertas()).resolves.toEqual([
+        {
+          id: "a-1",
+          sector_id: "s-1",
+          lote_id: "l-1",
+          tipo: "umbral_quemado",
+          severidad: "CRITICAL",
+          estado: "ACTIVA",
+          mensaje: "Tasa de quemados supera el 5%",
+          created_at: "2026-09-23T08:00:00.000Z",
+          acked_por: null,
+          acked_at: null,
+        },
+        {
+          id: "a-2",
+          sector_id: null,
+          lote_id: null,
+          tipo: "nodo_offline",
+          severidad: "INFO",
+          estado: "ACTIVA",
+          mensaje: "Raspberry sin heartbeat",
+          created_at: "2026-09-23T08:05:00.000Z",
+          acked_por: { email: "sup@fermar.com", nombre: "Supervisor" },
+          acked_at: "2026-09-23T08:10:00.000Z",
+        },
+      ])
+    })
+
+    it("acepta el query param estado cuando se pasa un filtro", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: [] }))
+
+      await api.getAlertas({ estado: "ACK" })
+
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toBe("https://backend.example.test/api/v1/alertas?estado=ACK")
+    })
+
+    it("tolerancia: 404 -> [] cuando el endpoint todavía no existe", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+      await expect(api.getAlertas()).resolves.toEqual([])
+    })
+
+    it("descarta filas inválidas (id vacío o created_at no ISO)", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: [
+            {
+              id: "a-ok",
+              tipo: "t",
+              severidad: "INFO",
+              estado: "ACTIVA",
+              mensaje: "ok",
+              created_at: "2026-09-23T08:00:00.000Z",
+            },
+            { id: "", tipo: "t", severidad: "INFO", estado: "ACTIVA", mensaje: "x", created_at: "2026-09-23T08:00:00.000Z" },
+            { id: "a-mal", tipo: "t", severidad: "INFO", estado: "ACTIVA", mensaje: "x", created_at: "no-fecha" },
+          ],
+        }),
+      )
+
+      await expect(api.getAlertas()).resolves.toHaveLength(1)
+    })
+
+    it("silencia timeouts: [] cuando el fetch excede los 8s", async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, options: RequestInit) =>
+        new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () => {
+            const error = new Error("aborted")
+            error.name = "AbortError"
+            reject(error)
+          })
+        }),
+      )
+
+      const promise = api.getAlertas()
+      await vi.advanceTimersByTimeAsync(8000)
+      await expect(promise).resolves.toEqual([])
+      vi.useRealTimers()
+    })
+  })
+
+  describe("ackAlerta (POST /api/v1/alertas/{id}/ack)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("hace POST con cookie-forward y revalida /alertas", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            id: "a-1",
+            sector_id: "s-1",
+            lote_id: "l-1",
+            tipo: "umbral_quemado",
+            severidad: "CRITICAL",
+            estado: "ACK",
+            mensaje: "Tasa de quemados supera el 5%",
+            created_at: "2026-09-23T08:00:00.000Z",
+            acked_por: { email: "sup@fermar.com", nombre: "Supervisor" },
+            acked_at: "2026-09-23T08:15:00.000Z",
+          },
+        }),
+      )
+
+      const result = await api.ackAlerta("a-1")
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.data.estado).toBe("ACK")
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, options] = fetchMock.mock.calls[0]
+      expect(url).toBe("https://backend.example.test/api/v1/alertas/a-1/ack")
+      expect(options.method).toBe("POST")
+      expect(options.headers).toMatchObject({ Cookie: "session_token=jwt-token" })
+      expect(revalidatePathMock).toHaveBeenCalledWith("/alertas")
+    })
+
+    it("traduce 404 a «La alerta no existe.»", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+      const result = await api.ackAlerta("a-404")
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toBe("La alerta no existe.")
+    })
+
+    it("traduce 409 a «La alerta ya fue reconocida o resuelta.»", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 409))
+
+      const result = await api.ackAlerta("a-1")
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toBe("La alerta ya fue reconocida o resuelta.")
+    })
+  })
+
+describe("getConfianzaClases (GET /api/v1/lotes/{id}/confianza-clases)", () => {
     beforeEach(() => {
       fetchMock.mockReset()
       revalidatePathMock.mockReset()

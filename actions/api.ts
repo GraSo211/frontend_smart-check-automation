@@ -22,6 +22,7 @@ import type {
     SetpointPropuesto,
     ControlEstado,
     ConfianzaClase,
+    Alerta,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -1069,4 +1070,101 @@ function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto
         ventana_inicio: typeof raw.ventana_inicio === "string" ? raw.ventana_inicio : undefined,
         ventana_fin: typeof raw.ventana_fin === "string" ? raw.ventana_fin : undefined,
     }
+}
+
+// ─── Alertas operativas ─────────────────────────────────────────────────────
+
+const ALERTA_ESTADOS = ["ACTIVA", "ACK", "RESUELTA"] as const
+const ALERTA_SEVERIDADES = ["INFO", "WARNING", "CRITICAL"] as const
+
+function parseAlertaEstado(value: unknown): Alerta["estado"] {
+    return typeof value === "string" && (ALERTA_ESTADOS as readonly string[]).includes(value)
+        ? (value as Alerta["estado"])
+        : "ACTIVA"
+}
+
+function parseAlertaSeveridad(value: unknown): Alerta["severidad"] {
+    return typeof value === "string" && (ALERTA_SEVERIDADES as readonly string[]).includes(value)
+        ? (value as Alerta["severidad"])
+        : "INFO"
+}
+
+function parseAlerta(raw: unknown): Alerta | null {
+    if (!isRecord(raw)) return null
+    const id = typeof raw.id === "string" ? raw.id : ""
+    const tipo = typeof raw.tipo === "string" ? raw.tipo : ""
+    const mensaje = typeof raw.mensaje === "string" ? raw.mensaje : ""
+    const createdAt = typeof raw.created_at === "string" ? raw.created_at : ""
+    if (!id || !tipo || !mensaje || !Number.isFinite(Date.parse(createdAt))) return null
+    return {
+        id,
+        sector_id: typeof raw.sector_id === "string" ? raw.sector_id : null,
+        lote_id: typeof raw.lote_id === "string" ? raw.lote_id : null,
+        tipo,
+        severidad: parseAlertaSeveridad(raw.severidad),
+        estado: parseAlertaEstado(raw.estado),
+        mensaje,
+        created_at: createdAt,
+        acked_por: isRecord(raw.acked_por)
+            ? {
+                  email: typeof raw.acked_por.email === "string" ? raw.acked_por.email : "",
+                  nombre: typeof raw.acked_por.nombre === "string" ? raw.acked_por.nombre : "",
+              }
+            : null,
+        acked_at: typeof raw.acked_at === "string" ? raw.acked_at : null,
+    }
+}
+
+/**
+ * GET /api/v1/alertas?estado=ACTIVA|ACK|RESUELTA — lista las alertas
+ * operativas. La query `estado` es opcional; cuando se omite, el backend
+ * devuelve el conjunto activo (depende del backend). Tolerante: si el endpoint
+ * no existe todavía (404) o devuelve forma inválida, expone `[]` para que la
+ * UI degrade como "sin alertas".
+ */
+export async function getAlertas(opts?: {
+    estado?: Alerta["estado"]
+}): Promise<Alerta[]> {
+    const params = new URLSearchParams()
+    if (opts?.estado) params.set("estado", opts.estado)
+    const query = params.toString()
+    const path = `/api/v1/alertas${query ? `?${query}` : ""}`
+    return withBackendFetch({
+        path,
+        timeoutMessage: "El backend no respondió a tiempo. Las alertas no están disponibles.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return []
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json().catch(() => null)
+            const raw = isRecord(payload) && Array.isArray(payload.data)
+                ? payload.data
+                : []
+            const out: Alerta[] = []
+            for (const item of raw) {
+                const parsed = parseAlerta(item)
+                if (parsed) out.push(parsed)
+            }
+            return out
+        },
+    }).catch(() => [])
+}
+
+/**
+ * POST /api/v1/alertas/{id}/ack — reconoce una alerta. Devuelve la versión
+ * actualizada con `estado: "ACK"` y `acked_por`/`acked_at` populados.
+ */
+export async function ackAlerta(id: string): Promise<DeviceActionResult<Alerta>> {
+    return deviceMutation<Alerta>({
+        path: `/api/v1/alertas/${encodeURIComponent(id)}/ack`,
+        method: "POST",
+        parse: (raw) => parseAlerta(raw),
+        invalidMessage: "La API devolvió una alerta inválida al acuse de recibo.",
+        statusMessages: {
+            404: "La alerta no existe.",
+            409: "La alerta ya fue reconocida o resuelta.",
+        },
+        revalidatePaths: ["/alertas"],
+    });
 }
