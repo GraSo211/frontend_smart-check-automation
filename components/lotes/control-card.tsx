@@ -6,6 +6,7 @@ import {
     CheckCircle2,
     Play,
     Square,
+    Timer,
     XIcon,
 } from "lucide-react"
 
@@ -393,6 +394,11 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                         </div>
                     )}
 
+                    <CountdownDecisiones
+                        ventanaSegundos={lote.ventana_actualizacion_segundos ?? 300}
+                        ultimaDecisionEn={decisiones[0]?.created_at ?? null}
+                    />
+
                     {errorMsg && (
                         <div className="flex items-center gap-1 text-xs text-red-600">
                             <AlertTriangle className="h-3 w-3" />
@@ -601,6 +607,56 @@ function Stat({ label, value }: { label: string; value: string }) {
     )
 }
 
+// F-F10: countdown de la próxima decisión del MPC. Se ancla al `created_at` de
+// la decisión más reciente y suma la duración de la ventana de actualización.
+// Si no hay decisiones previas todavía, muestra "—" (el loop no emitió nada).
+function CountdownDecisiones({
+    ventanaSegundos,
+    ultimaDecisionEn,
+}: {
+    ventanaSegundos: number
+    ultimaDecisionEn: string | null | undefined
+}) {
+    const [now, setNow] = useState(() => Date.now())
+
+    useEffect(() => {
+        const interval = window.setInterval(() => setNow(Date.now()), 1000)
+        return () => window.clearInterval(interval)
+    }, [])
+
+    if (!ultimaDecisionEn) {
+        return (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Timer className="size-3.5" aria-hidden="true" />
+                Aún no hay decisiones del MPC en este lote.
+            </p>
+        )
+    }
+
+    const lastMs = Date.parse(ultimaDecisionEn)
+    if (!Number.isFinite(lastMs)) {
+        return null
+    }
+    const remainingMs = lastMs + ventanaSegundos * 1000 - now
+    const remainingSec = Math.max(0, Math.round(remainingMs / 1000))
+    const overdue = remainingMs <= 0
+
+    return (
+        <p
+            className={cn(
+                "flex items-center gap-1.5 text-xs",
+                overdue ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
+            )}
+            aria-live="polite"
+        >
+            <Timer className="size-3.5" aria-hidden="true" />
+            {overdue
+                ? `Próxima decisión inminente (${ventanaSegundos}s de ventana).`
+                : `Próxima decisión en ${remainingSec.toLocaleString("es-AR")} s.`}
+        </p>
+    )
+}
+
 function DecisionesList({ items }: { items: DecisionControl[] }) {
     if (items.length === 0) {
         return (
@@ -634,10 +690,7 @@ function DecisionesList({ items }: { items: DecisionControl[] }) {
                             </span>
                         </div>
                         {d.prediccion && (
-                            <p className="mt-1 text-[10px] uppercase text-muted-foreground">
-                                Modelo: {d.prediccion.modelVersion}
-                                {d.prediccion.esPlaceholder && " · placeholder"}
-                            </p>
+                            <PrediccionDetalle prediccion={d.prediccion} />
                         )}
                         {d.razon_skipped && (
                             <p className="mt-1 text-red-600">skip: {d.razon_skipped}</p>
@@ -645,6 +698,42 @@ function DecisionesList({ items }: { items: DecisionControl[] }) {
                     </li>
                 ))}
             </ul>
+        </div>
+    )
+}
+
+// F-F9: panel colapsable que muestra la salida cruda del XGBoost asociada a una
+// decisión (3 cabezas: ok, quemados, crudos). Por defecto colapsado porque es
+// información de auditoría y la fila ya muestra la nota resumen arriba.
+function PrediccionDetalle({ prediccion }: { prediccion: NonNullable<DecisionControl["prediccion"]> }) {
+    return (
+        <details className="mt-1 group">
+            <summary className="cursor-pointer select-none text-[10px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background">
+                Predicción XGBoost
+                {prediccion.esPlaceholder && (
+                    <span className="ml-1 rounded bg-amber-200/60 px-1 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                        placeholder
+                    </span>
+                )}
+            </summary>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                <HeadValue label="OK" value={prediccion.pctOk} tone="text-success" />
+                <HeadValue label="Quemados" value={prediccion.pctQuemados} tone="text-destructive" />
+                <HeadValue label="Crudos" value={prediccion.pctCrudos} tone="text-warning" />
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                modelo: {prediccion.modelVersion || "—"}
+            </p>
+        </details>
+    )
+}
+
+function HeadValue({ label, value, tone }: { label: string; value: number; tone: string }) {
+    const pct = `${(value * 100).toFixed(1)}%`
+    return (
+        <div className="rounded border bg-muted/40 px-2 py-1">
+            <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+            <p className={cn("font-mono tabular-nums", tone)}>{pct}</p>
         </div>
     )
 }
