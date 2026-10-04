@@ -139,6 +139,20 @@ export type ControlEstado = {
   started_at?: string | null
 }
 
+/**
+ * Confianza agregada por clase del modelo de visión, sobre las últimas N
+ * detecciones de un lote. Devuelto por GET /api/v1/lotes/{id}/confianza-clases.
+ * `confianza_media` es el promedio de confianza (0..1); `confianza_stddev`
+ * mide dispersión (`null` cuando `muestras < 2`). Permite detectar clases con
+ * varianza alta aunque la media sea razonable.
+ */
+export type ConfianzaClase = {
+  clase: string
+  confianza_media: number
+  confianza_stddev: number | null
+  muestras: number
+}
+
 export type Sector = {
   id: string
   nombre: string

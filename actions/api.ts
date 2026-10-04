@@ -21,6 +21,7 @@ import type {
     PrediccionResumen,
     SetpointPropuesto,
     ControlEstado,
+    ConfianzaClase,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -863,6 +864,44 @@ export async function cambiarModo(
         },
         revalidatePaths: ["/lotes", `/lotes/${loteId}/control`],
     });
+}
+
+/**
+ * GET /api/v1/lotes/{id}/confianza-clases — confianza agregada del modelo de
+ * visión por clase, sobre las últimas `limite` detecciones (default 200).
+ * Devuelve un array vacío cuando el backend responde con `data` ausente, mal
+ * formado, o cuando el endpoint todavía no está implementado (404 → [] para
+ * que la UI degrade en silencio a "sin muestras").
+ */
+export async function getConfianzaClases(
+    loteId: string,
+    limite = 200,
+): Promise<ConfianzaClase[]> {
+    const safeLimite = Math.min(2000, Math.max(1, Math.trunc(limite)))
+    return withBackendFetch({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/confianza-clases?limite=${safeLimite}`,
+        timeoutMessage: "El backend no respondió a tiempo. La confianza del modelo no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return []
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json().catch(() => null)
+            const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null
+            const raw = Array.isArray(data?.clases) ? data.clases : []
+            const parsed: ConfianzaClase[] = []
+            for (const item of raw) {
+                if (!isRecord(item)) continue
+                const clase = typeof item.clase === "string" ? item.clase : ""
+                const media = typeof item.confianza_media === "number" ? item.confianza_media : null
+                const muestras = typeof item.muestras === "number" ? item.muestras : null
+                if (!clase || media === null || muestras === null) continue
+                const std = typeof item.confianza_stddev === "number" ? item.confianza_stddev : null
+                parsed.push({ clase, confianza_media: media, confianza_stddev: std, muestras })
+            }
+            return parsed
+        },
+    }).catch(() => [])
 }
 
 /**

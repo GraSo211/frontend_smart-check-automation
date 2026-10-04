@@ -788,7 +788,99 @@ describe("server actions de datos del backend", () => {
     })
   })
 
-  describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
+  describe("getConfianzaClases (GET /api/v1/lotes/{id}/confianza-clases)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("parsea la lista de clases con media, stddev y muestras", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            clases: [
+              { clase: "OK", confianza_media: 0.92, confianza_stddev: 0.04, muestras: 154 },
+              { clase: "QUEMADO", confianza_media: 0.71, confianza_stddev: 0.12, muestras: 22 },
+            ],
+          },
+        }),
+      )
+
+      await expect(api.getConfianzaClases("l-1", 200)).resolves.toEqual([
+        { clase: "OK", confianza_media: 0.92, confianza_stddev: 0.04, muestras: 154 },
+        { clase: "QUEMADO", confianza_media: 0.71, confianza_stddev: 0.12, muestras: 22 },
+      ])
+    })
+
+    it("usa 200 como límite por default y clampa el valor recibido", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: { clases: [] } }))
+
+      await api.getConfianzaClases("l-1")
+
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toBe("https://backend.example.test/api/v1/lotes/l-1/confianza-clases?limite=200")
+    })
+
+    it("clampa el límite al rango [1, 2000]", async () => {
+      fetchMock.mockResolvedValue(json({ success: true, data: { clases: [] } }))
+
+      await api.getConfianzaClases("l-1", 99999)
+      expect(fetchMock.mock.calls[0][0]).toContain("limite=2000")
+
+      fetchMock.mockReset()
+      fetchMock.mockResolvedValue(json({ success: true, data: { clases: [] } }))
+
+      await api.getConfianzaClases("l-1", -3)
+      expect(fetchMock.mock.calls[0][0]).toContain("limite=1")
+    })
+
+    it("tolerancia: devuelve [] cuando el endpoint responde 404 (aún no implementado)", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+      await expect(api.getConfianzaClases("l-1")).resolves.toEqual([])
+    })
+
+    it("descarta filas inválidas (clase vacía o media no numérica)", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            clases: [
+              { clase: "OK", confianza_media: 0.9, muestras: 10 },
+              { clase: "", confianza_media: 0.5, muestras: 5 },
+              { clase: "QUEMADO", confianza_media: "nope", muestras: 1 },
+              { clase: "CRUDO", confianza_media: 0.4 },
+            ],
+          },
+        }),
+      )
+
+      await expect(api.getConfianzaClases("l-1")).resolves.toEqual([
+        { clase: "OK", confianza_media: 0.9, confianza_stddev: null, muestras: 10 },
+      ])
+    })
+
+    it("silencia timeouts: [] cuando el fetch excede los 8s", async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, options: RequestInit) =>
+        new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () => {
+            const error = new Error("aborted")
+            error.name = "AbortError"
+            reject(error)
+          })
+        }),
+      )
+
+      const promise = api.getConfianzaClases("l-1")
+      await vi.advanceTimersByTimeAsync(8000)
+      await expect(promise).resolves.toEqual([])
+      vi.useRealTimers()
+    })
+  })
+
+describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
     beforeEach(() => {
       fetchMock.mockReset()
       revalidatePathMock.mockReset()

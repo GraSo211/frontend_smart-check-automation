@@ -23,10 +23,11 @@ import {
 import SegmentedControl from "@/components/supervision/segmented-control"
 import { cn } from "@/lib/utils"
 import { formatDate, formatTime, formatTemp } from "@/lib/format"
-import type { DecisionControl, LoteSector, SetpointPropuesto } from "@/lib/production-data"
+import type { ConfianzaClase, DecisionControl, LoteSector, SetpointPropuesto } from "@/lib/production-data"
 import {
     aplicarConsigna,
     cambiarModo,
+    getConfianzaClases,
     getConsignaPropuesta,
     getDecisiones,
     startControl,
@@ -92,6 +93,11 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     const [propuestaPendiente, setPropuestaPendiente] = useState<SetpointPropuesto | null>(null)
     const [sseConnected, setSseConnected] = useState(false)
 
+    // F-F8: confianza agregada del modelo de visión por clase.
+    const [confianzaClases, setConfianzaClases] = useState<ConfianzaClase[] | null>(null)
+    const [confianzaError, setConfianzaError] = useState<string | null>(null)
+    const [confianzaLoading, setConfianzaLoading] = useState(false)
+
     // Limpia la propuesta pendiente cuando dejamos SUPERVISION: en cualquier
     // otro modo (MANUAL/AUTOMATICO) la propuesta ya no aplica al flujo de UI.
     // Se aplica inline en los handlers que cambian el modo (acción y SSE).
@@ -116,6 +122,34 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     useEffect(() => {
         refresh()
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lote.id])
+
+    // F-F8: pull inicial de la confianza agregada del modelo de visión. La UI
+    // tolera el array vacío como "sin muestras suficientes" y al backend frío
+    // como "endpoint no disponible". El `void` evita que el lint marque el
+    // `setState` inicial del effect como render cascada: lo movemos adentro
+    // del callback async (la carga arranca en microtask, no en el render).
+    useEffect(() => {
+        let disposed = false
+        void (async () => {
+            if (disposed) return
+            setConfianzaLoading(true)
+            setConfianzaError(null)
+            try {
+                const clases = await getConfianzaClases(lote.id, 200)
+                if (!disposed) setConfianzaClases(clases)
+            } catch (e) {
+                if (!disposed) {
+                    setConfianzaClases([])
+                    setConfianzaError(e instanceof Error ? e.message : null)
+                }
+            } finally {
+                if (!disposed) setConfianzaLoading(false)
+            }
+        })()
+        return () => {
+            disposed = true
+        }
     }, [lote.id])
 
     /**
@@ -399,6 +433,12 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                         ultimaDecisionEn={decisiones[0]?.created_at ?? null}
                     />
 
+                    <ConfianzaModeloVision
+                        clases={confianzaClases}
+                        loading={confianzaLoading}
+                        error={confianzaError}
+                    />
+
                     {errorMsg && (
                         <div className="flex items-center gap-1 text-xs text-red-600">
                             <AlertTriangle className="h-3 w-3" />
@@ -605,6 +645,108 @@ function Stat({ label, value }: { label: string; value: string }) {
             <p className="font-mono text-sm">{value}</p>
         </div>
     )
+}
+
+// F-F8: panel con la confianza media del modelo de visión por clase sobre las
+// últimas detecciones. Cuando el endpoint no existe o no hay muestras todavía
+// muestra un estado neutro, no un error bloqueante.
+function ConfianzaModeloVision({
+    clases,
+    loading,
+    error,
+}: {
+    clases: ConfianzaClase[] | null
+    loading: boolean
+    error: string | null
+}) {
+    if (loading && clases === null) {
+        return (
+            <p className="text-xs text-muted-foreground">Consultando confianza del modelo…</p>
+        )
+    }
+    if (error) {
+        return (
+            <p className="text-xs text-destructive" role="status">
+                No se pudo cargar la confianza del modelo: {error}
+            </p>
+        )
+    }
+    if (!clases || clases.length === 0) {
+        return (
+            <p className="text-xs text-muted-foreground">
+                Sin muestras suficientes para calcular la confianza del modelo.
+            </p>
+        )
+    }
+
+    // Orden estable: alfabético por nombre de clase. El backend no garantiza
+    // orden, así que normalizamos acá.
+    const ordenadas = [...clases].sort((a, b) => a.clase.localeCompare(b.clase))
+
+    return (
+        <section aria-label="Confianza del modelo de visión" className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                Confianza del modelo de visión
+            </h4>
+            <ul className="space-y-1.5 text-xs">
+                {ordenadas.map((c) => (
+                    <ConfianzaBarra key={c.clase} clase={c} />
+                ))}
+            </ul>
+        </section>
+    )
+}
+
+function ConfianzaBarra({ clase }: { clase: ConfianzaClase }) {
+    const mediaPct = Math.max(0, Math.min(1, clase.confianza_media))
+    const tone = classTone(clase.clase)
+    const stddevPct = clase.confianza_stddev === null ? null : clase.confianza_stddev
+    const stddevLabel =
+        stddevPct === null
+            ? "1 muestra"
+            : `±${(stddevPct * 100).toLocaleString("es-AR", {
+                  maximumFractionDigits: 1,
+              })}%`
+
+    return (
+        <li className="rounded-md border bg-muted/30 p-2">
+            <div className="flex items-center justify-between gap-2">
+                <span className={cn("font-mono text-[11px] font-semibold uppercase", tone.label)}>
+                    {clase.clase}
+                </span>
+                <span className="font-mono tabular-nums text-foreground">
+                    {(mediaPct * 100).toFixed(1)}%
+                </span>
+            </div>
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-background/80">
+                <div
+                    className={cn("h-full rounded-full transition-[width]", tone.bar)}
+                    style={{ width: `${(mediaPct * 100).toFixed(2)}%` }}
+                    aria-hidden="true"
+                />
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                <span>
+                    {clase.muestras.toLocaleString("es-AR")} muestras · σ {stddevLabel}
+                </span>
+            </div>
+        </li>
+    )
+}
+
+// Tonos consistentes con la convención existente (ok/ quemado/ crudo).
+function classTone(clase: string): { bar: string; label: string } {
+    const upper = clase.toUpperCase()
+    if (upper === "OK" || upper === "CORRECTO") {
+        return { bar: "bg-success", label: "text-success" }
+    }
+    if (upper === "QUEMADO" || upper === "QUEMADOS") {
+        return { bar: "bg-destructive", label: "text-destructive" }
+    }
+    if (upper === "CRUDO" || upper === "CRUDOS") {
+        return { bar: "bg-warning", label: "text-warning" }
+    }
+    return { bar: "bg-primary", label: "text-primary" }
 }
 
 // F-F10: countdown de la próxima decisión del MPC. Se ancla al `created_at` de

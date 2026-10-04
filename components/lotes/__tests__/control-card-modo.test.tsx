@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     aplicarConsigna: vi.fn(),
     getConsignaPropuesta: vi.fn(),
     getDecisiones: vi.fn(),
+    getConfianzaClases: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/actions/api", () => ({
     aplicarConsigna: mocks.aplicarConsigna,
     getConsignaPropuesta: mocks.getConsignaPropuesta,
     getDecisiones: mocks.getDecisiones,
+    getConfianzaClases: mocks.getConfianzaClases,
 }))
 
 class FakeEventSource {
@@ -93,6 +95,7 @@ beforeEach(() => {
         ok: true,
         data: { lote_id: "l-1", modo: "AUTOMATICO" },
     })
+    mocks.getConfianzaClases.mockResolvedValue([])
 })
 
 describe("ControlCard · selector de modo", () => {
@@ -230,5 +233,65 @@ describe("ModoOperacion export type", () => {
     it("acepta MANUAL, SUPERVISION y AUTOMATICO", () => {
         const modes: ModoOperacion[] = ["MANUAL", "SUPERVISION", "AUTOMATICO"]
         expect(modes).toHaveLength(3)
+    })
+})
+
+describe("ControlCard · confianza del modelo de visión (F-F8)", () => {
+    it("consulta getConfianzaClases al montar con el id del lote y el límite 200", async () => {
+        mocks.getConfianzaClases.mockResolvedValue([])
+
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        await waitFor(() => {
+            expect(mocks.getConfianzaClases).toHaveBeenCalledWith("l-1", 200)
+        })
+    })
+
+    it("muestra «sin muestras» cuando el endpoint devuelve un array vacío", async () => {
+        mocks.getConfianzaClases.mockResolvedValue([])
+
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        await waitFor(() => {
+            expect(screen.getByText(/Sin muestras suficientes/)).toBeTruthy()
+        })
+    })
+
+    it("renderiza una barra por clase con su porcentaje, σ y conteo", async () => {
+        mocks.getConfianzaClases.mockResolvedValue([
+            { clase: "OK", confianza_media: 0.92, confianza_stddev: 0.04, muestras: 154 },
+            { clase: "QUEMADO", confianza_media: 0.71, confianza_stddev: 0.12, muestras: 22 },
+            { clase: "CRUDO", confianza_media: 0.45, confianza_stddev: null, muestras: 1 },
+        ])
+
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        await waitFor(() => {
+            expect(screen.getByText("92.0%")).toBeTruthy()
+        })
+
+        // Las 3 clases aparecen ordenadas alfabéticamente
+        const section = screen.getByRole("region", { name: /Confianza del modelo de visión/i })
+        const items = section.querySelectorAll("li")
+        expect(items).toHaveLength(3)
+        // La primera es CRUDO (45%), la segunda OK (92%), la tercera QUEMADO (71%).
+        expect(items[0]!.textContent).toContain("CRUDO")
+        expect(items[1]!.textContent).toContain("OK")
+        expect(items[2]!.textContent).toContain("QUEMADO")
+
+        // QUEMADO: σ 12% (confianza_stddev 0.12 -> 12)
+        expect(screen.getByText(/σ ±12%/)).toBeTruthy()
+        // CRUDO: σ null -> "1 muestra"
+        expect(screen.getByText(/σ 1 muestra/)).toBeTruthy()
+    })
+
+    it("muestra el mensaje de error cuando el endpoint falla", async () => {
+        mocks.getConfianzaClases.mockRejectedValueOnce(new Error("boom"))
+
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        await waitFor(() => {
+            expect(screen.getByText(/No se pudo cargar la confianza del modelo: boom/)).toBeTruthy()
+        })
     })
 })
