@@ -1,11 +1,19 @@
-import { Boxes, TriangleAlert } from "lucide-react"
+import Link from "next/link"
+import { Boxes, Play, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatBucket, formatDate, formatTime } from "@/lib/format"
-import type { LoteSector } from "@/lib/production-data"
+import type { ControlEstado, LoteSector } from "@/lib/production-data"
 
 interface LoteAbiertoCardProps {
   lote: LoteSector | null
   sectorNombre?: string
+  /**
+   * Habilita el CTA "Iniciar control" cuando el modo del lote no es MANUAL
+   * pero el loop no está corriendo. Se calcula server-side en la página.
+   */
+  canControl?: boolean
+  /** Estado del loop (loop_activo, modo) que el server consultó para el lote. */
+  controlEstado?: ControlEstado | null
 }
 
 // Server-provided inactivity, rendered as-is (never recomputed from clocks).
@@ -54,7 +62,12 @@ function EstadoBadge({ estado }: { estado: LoteSector["estado"] }) {
 
 // Highlights the currently open lote of a sector with its live conteos and
 // flags degraded opens.
-export function LoteAbiertoCard({ lote, sectorNombre }: LoteAbiertoCardProps) {
+export function LoteAbiertoCard({
+  lote,
+  sectorNombre,
+  canControl = false,
+  controlEstado = null,
+}: LoteAbiertoCardProps) {
   if (!lote) {
     return (
       <section
@@ -80,6 +93,16 @@ export function LoteAbiertoCard({ lote, sectorNombre }: LoteAbiertoCardProps) {
   }
 
   const degraded = !lote.abierto_por || lote.abierto_por.type !== "ENTRADA_HORNO"
+  // F-F7: el CTA se muestra cuando el modo operativo del lote NO es MANUAL
+  // (es decir, podría estar aplicando MPC) pero el loop no está corriendo
+  // (loop_activo === false). Esto cubre los casos: lote recién abierto sin
+  // loop todavía, loop que se cayó, o el usuario pasó a AUTO/SUPERVISION sin
+  // arrancar. Sólo visible para rol Supervisor+ (canControl).
+  const mostrarCta =
+    canControl &&
+    controlEstado !== null &&
+    controlEstado.modo !== "MANUAL" &&
+    controlEstado.loop_activo === false
   const conteos = [
     { label: "Total", value: lote.conteos.total, tone: "text-foreground" },
     { label: "Correctos", value: lote.conteos.ok, tone: "text-success" },
@@ -127,6 +150,39 @@ export function LoteAbiertoCard({ lote, sectorNombre }: LoteAbiertoCardProps) {
               <span className="font-semibold text-warning">Lote degradado: </span>
               {degradedDetail(lote)}
             </p>
+          </div>
+        )}
+
+        {mostrarCta && (
+          <div
+            role="status"
+            className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-50 px-3.5 py-2.5 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between dark:bg-amber-950/30"
+          >
+            <div className="flex items-start gap-3">
+              <TriangleAlert
+                className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300"
+                aria-hidden="true"
+              />
+              <p>
+                <span className="font-semibold text-amber-900 dark:text-amber-200">
+                  MPC no está corriendo.{" "}
+                </span>
+                El modo operativo es{" "}
+                <span className="font-mono">{controlEstado?.modo}</span> pero el
+                loop no está activo. Inicialo desde el panel del lote.
+              </p>
+            </div>
+            <Link
+              href={`/lotes/${lote.id}/control`}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-500/20",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "dark:text-amber-100",
+              )}
+            >
+              <Play className="size-3.5" aria-hidden="true" />
+              Iniciar control
+            </Link>
           </div>
         )}
 

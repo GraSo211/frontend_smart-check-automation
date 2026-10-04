@@ -156,6 +156,129 @@ describe("estado de conexión del stream de lotes", () => {
   })
 })
 
+describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
+  it("muestra el banner con CTA cuando modo ≠ MANUAL y loop_activo=false (Supervisor+)", () => {
+    const abierto = lote({
+      id: "l-cta",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      modo: "AUTOMATICO",
+    })
+
+    render(
+      React.createElement(
+        DashboardContent,
+        props({
+          initialLoteAbierto: abierto,
+          canControl: true,
+          initialControlEstado: {
+            loop_activo: false,
+            modo: "AUTOMATICO",
+            started_at: null,
+          },
+        }),
+      ),
+    )
+
+    const cta = screen.getByRole("link", { name: /Iniciar control/ })
+    expect(cta.getAttribute("href")).toBe("/lotes/l-cta/control")
+    expect(screen.getByText(/MPC no está corriendo/)).toBeTruthy()
+  })
+
+  it("oculta el CTA cuando el loop sí está corriendo", () => {
+    const abierto = lote({
+      id: "l-loop-on",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      modo: "AUTOMATICO",
+    })
+
+    render(
+      React.createElement(
+        DashboardContent,
+        props({
+          initialLoteAbierto: abierto,
+          canControl: true,
+          initialControlEstado: {
+            loop_activo: true,
+            modo: "AUTOMATICO",
+            started_at: "2026-09-23T09:00:00.000Z",
+          },
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole("link", { name: /Iniciar control/ })).toBeNull()
+    expect(screen.queryByText(/MPC no está corriendo/)).toBeNull()
+  })
+
+  it("oculta el CTA cuando el modo es MANUAL (loop no aplica)", () => {
+    const abierto = lote({
+      id: "l-manual",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      modo: "MANUAL",
+    })
+
+    render(
+      React.createElement(
+        DashboardContent,
+        props({
+          initialLoteAbierto: abierto,
+          canControl: true,
+          initialControlEstado: { loop_activo: false, modo: "MANUAL", started_at: null },
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole("link", { name: /Iniciar control/ })).toBeNull()
+  })
+
+  it("oculta el CTA cuando el rol es Operario (canControl=false)", () => {
+    const abierto = lote({
+      id: "l-operario",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      modo: "AUTOMATICO",
+    })
+
+    render(
+      React.createElement(
+        DashboardContent,
+        props({
+          initialLoteAbierto: abierto,
+          canControl: false,
+          initialControlEstado: { loop_activo: false, modo: "AUTOMATICO", started_at: null },
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole("link", { name: /Iniciar control/ })).toBeNull()
+  })
+
+  it("oculta el CTA cuando initialControlEstado es null (endpoint no responde)", () => {
+    const abierto = lote({
+      id: "l-no-estado",
+      estado: "ABIERTO",
+      cerrado_en: null,
+      modo: "AUTOMATICO",
+    })
+
+    render(
+      React.createElement(
+        DashboardContent,
+        props({
+          initialLoteAbierto: abierto,
+          canControl: true,
+          initialControlEstado: null,
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole("link", { name: /Iniciar control/ })).toBeNull()
+  })
+})
+
 describe("dashboard de lotes por sector", () => {
   beforeEach(() => {
     vi.clearAllMocks()

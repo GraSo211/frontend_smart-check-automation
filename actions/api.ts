@@ -20,6 +20,7 @@ import type {
     DecisionControl,
     PrediccionResumen,
     SetpointPropuesto,
+    ControlEstado,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -862,6 +863,41 @@ export async function cambiarModo(
         },
         revalidatePaths: ["/lotes", `/lotes/${loteId}/control`],
     });
+}
+
+/**
+ * GET /api/v1/lotes/{id}/control/estado — estado runtime del loop.
+ *
+ * Devuelve si el loop del MPC está corriendo (`loop_activo`) y el modo
+ * operativo actual. El endpoint es tolerante: si el backend todavía no lo
+ * expone o responde con un shape inesperado, devuelve `null` (la UI asume
+ * "loop no activo" para no mostrar CTAs sobre información incompleta).
+ */
+export async function getControlEstado(loteId: string): Promise<ControlEstado | null> {
+    return withBackendFetch({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/control/estado`,
+        timeoutMessage: "El backend no respondió a tiempo. El estado del control no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return null
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json().catch(() => null)
+            const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null
+            if (!data) return null
+            const modo = data.modo
+            const modoParsed: ControlEstado["modo"] =
+                modo === "MANUAL" || modo === "SUPERVISION" || modo === "AUTOMATICO"
+                    ? modo
+                    : "MANUAL"
+            const started = data.started_at
+            return {
+                loop_activo: data.loop_activo === true,
+                modo: modoParsed,
+                started_at: typeof started === "string" ? started : null,
+            }
+        },
+    }).catch(() => null)
 }
 
 /**

@@ -8,7 +8,7 @@ import { SupervisionTable } from "@/components/lotes/supervision-table"
 import { LoteAbiertoCard } from "@/components/lotes/lote-abierto-card"
 import { FiltersBar, DEFAULT_FILTERS, type FiltersState } from "@/components/lotes/filters-bar"
 import type { UserRole } from "@/lib/auth"
-import type { LoteSector, Sector } from "@/lib/production-data"
+import type { ControlEstado, LoteSector, Sector } from "@/lib/production-data"
 import { useMonitoringActions, useProductionData } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
 
@@ -21,6 +21,10 @@ interface DashboardContentProps {
   initialLoteAbierto: LoteSector | null
   /** Rol de la sesión. Habilita acciones restringidas (link directo al control por lote). */
   userRole?: UserRole
+  /** Gateo server-side: habilita el CTA "Iniciar control" en lote-abierto-card. */
+  canControl?: boolean
+  /** Estado del loop del MPC para el lote abierto (si existe). */
+  initialControlEstado?: ControlEstado | null
 }
 
 // The provider store is global (all sectors). Sector scoping happens here, then
@@ -48,6 +52,8 @@ export function DashboardContent({
   selectedSectorId,
   initialLoteAbierto,
   userRole = "Operario",
+  canControl = false,
+  initialControlEstado = null,
 }: DashboardContentProps) {
   const router = useRouter()
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS)
@@ -198,7 +204,12 @@ export function DashboardContent({
         </div>
       )}
       <div className="flex justify-end"><ConnectionIndicator state={streamState} label="Lotes" onRetry={() => setStreamRetry((retry) => retry + 1)} disabled={production.loading} /></div>
-      <LoteAbiertoCard lote={openLote} sectorNombre={sectorNombre} />
+      <LoteAbiertoCard
+        lote={openLote}
+        sectorNombre={sectorNombre}
+        canControl={canControl}
+        controlEstado={initialControlEstado}
+      />
       <KpiCards runs={filteredRuns} />
       <FiltersBar
         filters={filters}

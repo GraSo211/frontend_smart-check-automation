@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/actions/api", () => mocks)
-vi.mock("@/lib/auth", () => ({ getSession: vi.fn().mockResolvedValue({ rol: "Supervisor" }) }))
+vi.mock("@/lib/auth", () => ({
+  getSession: vi.fn().mockResolvedValue({ rol: "Supervisor" }),
+  hasMinRole: vi.fn().mockReturnValue(true),
+}))
 vi.mock("@/components/dashboard-content", () => ({
   DashboardContent: (props: Record<string, unknown>) =>
     React.createElement("pre", null, JSON.stringify(props)),

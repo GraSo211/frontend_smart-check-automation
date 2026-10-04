@@ -126,6 +126,19 @@ export type SetpointPropuesto = {
   ventana_fin?: string
 }
 
+/**
+ * Estado actual del loop de control de un lote. Devuelto por GET
+ * /api/v1/lotes/{id}/control/estado. `loop_activo` distingue entre "modo
+ * operativo ≠ MANUAL" y "loop del MPC realmente corriendo" — sin esta
+ * distinción la UI no puede detectar un loop que se cayó o nunca arrancó.
+ */
+export type ControlEstado = {
+  loop_activo: boolean
+  modo: NonNullable<LoteSector["modo"]>
+  /** Cuándo arrancó el loop; ausente cuando `loop_activo === false`. */
+  started_at?: string | null
+}
+
 export type Sector = {
   id: string
   nombre: string

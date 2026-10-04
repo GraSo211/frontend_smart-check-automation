@@ -1,7 +1,7 @@
 import { DashboardContent } from "@/components/lotes/dashboard-content"
-import { getAllLotes, getLoteAbierto, getSectores } from "@/actions/api"
-import { getSession } from "@/lib/auth"
-import type { LoteSector, Sector } from "@/lib/production-data"
+import { getAllLotes, getControlEstado, getLoteAbierto, getSectores } from "@/actions/api"
+import { getSession, hasMinRole } from "@/lib/auth"
+import type { ControlEstado, LoteSector, Sector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
@@ -66,6 +66,16 @@ export default async function Page({ searchParams }: PageProps) {
     }
   }
 
+  // El estado del loop (loop_activo + modo) lo consulta sólo si hay un lote
+  // abierto. Falla de forma silenciosa: la UI asume "no activo" cuando el
+  // endpoint no existe o devuelve error, y en ese caso NO muestra el CTA.
+  let initialControlEstado: ControlEstado | null = null
+  if (initialLoteAbierto) {
+    initialControlEstado = await getControlEstado(initialLoteAbierto.id)
+  }
+
+  const canControl = hasMinRole(userRole, "Supervisor")
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
@@ -90,6 +100,8 @@ export default async function Page({ searchParams }: PageProps) {
           selectedSectorId={selectedSectorId}
           initialLoteAbierto={initialLoteAbierto}
           userRole={userRole}
+          canControl={canControl}
+          initialControlEstado={initialControlEstado}
         />
       </main>
     </div>

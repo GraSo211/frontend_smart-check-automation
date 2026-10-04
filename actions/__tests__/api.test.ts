@@ -720,6 +720,74 @@ describe("server actions de datos del backend", () => {
     await expect(api.getLoteAbierto("s-1")).resolves.toEqual(degraded)
   })
 
+  describe("getControlEstado (GET /api/v1/lotes/{id}/control/estado)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("parsea un estado con loop activo", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            loop_activo: true,
+            modo: "AUTOMATICO",
+            started_at: "2026-09-23T09:00:00.000Z",
+          },
+        }),
+      )
+
+      await expect(api.getControlEstado("l-1")).resolves.toEqual({
+        loop_activo: true,
+        modo: "AUTOMATICO",
+        started_at: "2026-09-23T09:00:00.000Z",
+      })
+    })
+
+    it("normaliza un modo desconocido a MANUAL (forward compat)", async () => {
+      fetchMock.mockResolvedValue(
+        json({ success: true, data: { loop_activo: false, modo: "DESCONOCIDO" } }),
+      )
+
+      await expect(api.getControlEstado("l-1")).resolves.toEqual({
+        loop_activo: false,
+        modo: "MANUAL",
+        started_at: null,
+      })
+    })
+
+    it("devuelve null cuando el endpoint responde 404 (aún no implementado en el backend)", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+      await expect(api.getControlEstado("l-1")).resolves.toBeNull()
+    })
+
+    it("devuelve null cuando la respuesta no tiene la forma esperada", async () => {
+      fetchMock.mockResolvedValue(json({ success: true }))
+
+      await expect(api.getControlEstado("l-1")).resolves.toBeNull()
+    })
+
+    it("silencia timeouts: no rompe la página si el endpoint está frío", async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, options: RequestInit) =>
+        new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () => {
+            const error = new Error("aborted")
+            error.name = "AbortError"
+            reject(error)
+          })
+        }),
+      )
+
+      const promise = api.getControlEstado("l-1")
+      await vi.advanceTimersByTimeAsync(8000)
+      await expect(promise).resolves.toBeNull()
+      vi.useRealTimers()
+    })
+  })
+
   describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
     beforeEach(() => {
       fetchMock.mockReset()
