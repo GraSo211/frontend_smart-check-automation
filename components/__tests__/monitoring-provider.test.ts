@@ -104,7 +104,7 @@ describe('MonitoringProvider montado', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input)
       if (path.includes('system-status')) return response({ status: 'healthy' })
-      if (path.includes('nodos')) return new Promise<Response>(() => undefined)
+      if (path.includes('dispositivos')) return new Promise<Response>(() => undefined)
       return response([])
     }))
     render(React.createElement(MonitoringProvider, null, React.createElement(Probe)))
@@ -173,12 +173,12 @@ describe('MonitoringProvider montado', () => {
     expect(screen.getByTestId('runs').textContent).toBe('newer,older')
   })
 
-  it('conserva un evento de nodo independiente tras un snapshot pendiente y más de 100 eventos', async () => {
+  it('conserva un evento de dispositivo independiente tras un snapshot pendiente y más de 100 eventos', async () => {
     vi.setSystemTime(new Date('2026-01-01T10:01:00.000Z'))
     let resolveSnapshot: ((value: Response) => void) | undefined
     const snapshot = new Promise<Response>((resolve) => { resolveSnapshot = resolve })
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      if (String(input).includes('/api/nodos/snapshot')) return snapshot
+      if (String(input).includes('/api/dispositivos/snapshot')) return snapshot
       if (String(input).includes('system-status')) return Promise.resolve(response({ status: 'healthy' }))
       return Promise.resolve(response([]))
     }))
@@ -199,13 +199,13 @@ describe('MonitoringProvider montado', () => {
     expect(screen.getByTestId('node-details').textContent).toContain('other-99:online:none')
   })
 
-  it('mantiene el journal de nodos tras un refresh fallido para el siguiente refresh', async () => {
+  it('mantiene el journal de dispositivos tras un refresh fallido para el siguiente refresh', async () => {
     vi.setSystemTime(new Date('2026-01-01T10:01:00.000Z'))
     let nodeCalls = 0
     let resolveSnapshot: ((value: Response) => void) | undefined
     const nextSnapshot = new Promise<Response>((resolve) => { resolveSnapshot = resolve })
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      if (String(input).includes('/api/nodos/snapshot')) {
+      if (String(input).includes('/api/dispositivos/snapshot')) {
         nodeCalls += 1
         return nodeCalls === 1 ? Promise.reject(new Error('fallo transitorio')) : nextSnapshot
       }
@@ -233,7 +233,7 @@ describe('MonitoringProvider montado', () => {
     let resolveSnapshot: ((value: Response) => void) | undefined
     const snapshot = new Promise<Response>((resolve) => { resolveSnapshot = resolve })
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      if (String(input).includes('/api/nodos/snapshot')) return snapshot
+      if (String(input).includes('/api/dispositivos/snapshot')) return snapshot
       if (String(input).includes('system-status')) return Promise.resolve(response({ status: 'healthy' }))
       return Promise.resolve(response([]))
     }))

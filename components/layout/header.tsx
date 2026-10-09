@@ -41,7 +41,7 @@ export function Header() {
           <MonitoringStatus label="Monitoreo" status={monitoring.overall} />
           <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[11px] text-sidebar-foreground/75" aria-label={`${monitoring.backend.detail}; ${monitoring.nodes.detail}; ${monitoring.camera.detail}`}>
             <MonitoringStatus label="API" status={monitoring.backend} />
-            <MonitoringStatus label="Nodos" status={monitoring.nodes} />
+            <MonitoringStatus label="Dispositivos" status={monitoring.nodes} />
             <MonitoringStatus label="Cámara" status={monitoring.camera} />
           </div>
 

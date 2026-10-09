@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { formatTemp } from "@/lib/format"
 import { formatNumber } from "@/lib/format"
 import { SectorSelect } from "@/components/shared/sector-select"
-import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
+import { TelemetryDashboard } from "@/components/dispositivos/telemetry-dashboard"
 import type { Device, SpecificDevice } from "@/lib/devices-data"
 import type { LoteSector, Producto, Sector } from "@/lib/production-data"
 
@@ -22,7 +22,7 @@ interface LineaProduccionViewProps {
 }
 
 /**
- * Vista de la línea de producción: combina la salud del nodo Raspberry que
+ * Vista de la línea de producción: combina la salud del dispositivo Raspberry que
  * controla el horno (reusando `TelemetryDashboard`) con un semáforo de
  * tolerancia que compara el setpoint actual del lote abierto contra el rango
  * permitido del producto.
@@ -66,15 +66,15 @@ export function LineaProduccionView({
                     />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Monitoreo del horno y la cinta transportadora. El nodo
+                    Monitoreo del horno y la cinta transportadora. El dispositivo
                     ENTRADA_HORNO del sector seleccionado maneja el control.
                 </p>
             </div>
 
             {!entradaDevice ? (
                 <EmptyState
-                    message="Este sector no tiene un nodo ENTRADA_HORNO asignado."
-                    hint="Asigná un nodo desde la página de Nodos para ver la telemetría."
+                    message="Este sector no tiene un dispositivo ENTRADA_HORNO asignado."
+                    hint="Asigná un dispositivo desde la página de Dispositivos para ver la telemetría."
                 />
             ) : (
                 <div className="grid min-w-0 gap-6 xl:grid-cols-[1.45fr_1fr]">
@@ -95,7 +95,7 @@ function EmptyState({ message, hint }: { message: string; hint?: string }) {
     return (
         <section
             role="status"
-            aria-label="Sin nodo ENTRADA_HORNO"
+            aria-label="Sin dispositivo ENTRADA_HORNO"
             className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-5 py-8 text-sm text-muted-foreground"
         >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground">

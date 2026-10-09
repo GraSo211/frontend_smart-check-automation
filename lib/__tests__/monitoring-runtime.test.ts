@@ -6,7 +6,7 @@ const metric = {
   tempChip: 3, aiProcessorPct: 4, receivedAt: '2026-01-01T10:00:00.000Z',
 }
 
-const device = { dispositivoId: 'n-1', nombre: 'Nodo 1', estado: 'offline', ultimaMetrica: undefined }
+const device = { dispositivoId: 'n-1', nombre: 'Dispositivo 1', estado: 'offline', ultimaMetrica: undefined }
 const liveDevice = {
   ...device,
   estado: 'online',
@@ -34,7 +34,7 @@ describe('monitoring runtime validation', () => {
     expect(parseDevicesPayload({ success: true, data: [device, { estado: 'online' }] })).toBeNull()
   })
 
-  it('permite un nodo offline nuevo sin lastSeen, pero exige telemetría completa', () => {
+  it('permite un dispositivo offline nuevo sin lastSeen, pero exige telemetría completa', () => {
     expect(parseDeviceEventPayload(device)?.lastSeen).toBe('')
     expect(parseDeviceEventPayload({ ...device, ultimaMetrica: { ...metric, cpuPct: 'bad' } })).toBeNull()
     expect(parseDeviceEventPayload({ ...device, lastSeen: 'not-a-date' })).toBeNull()
@@ -77,7 +77,7 @@ describe('monitoring runtime validation', () => {
     expect(parseDevicesPayload({ success: true, data: [liveDevice, malformed] })).toBeNull()
   })
 
-  it('parsea type y sectorId opcionales y los omite si son inválidos sin rechazar el nodo', () => {
+  it('parsea type y sectorId opcionales y los omite si son inválidos sin rechazar el dispositivo', () => {
     expect(parseDeviceEventPayload({ ...liveDevice, type: 'ENTRADA_HORNO', sectorId: 'horno-1' }))
       .toMatchObject({ type: 'ENTRADA_HORNO', sectorId: 'horno-1' })
     expect(parseDeviceEventPayload({ ...liveDevice, type: 'SALIDA_HORNO' })?.type).toBe('SALIDA_HORNO')

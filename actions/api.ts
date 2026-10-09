@@ -261,7 +261,7 @@ export async function getLoteAbierto(sectorId: string): Promise<LoteSector | nul
 export async function getDevices() {
     return withBackendFetch({
         path: "/api/v1/dispositivos",
-        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los nodos no están disponibles.",
+        timeoutMessage: "El backend no respondió a tiempo (¿Render en cold-start?). Los dispositivos no están disponibles.",
         handle: async (response) => {
             if (!response.ok) {
                 throw new Error(`La API respondió con ${response.status}: ${response.statusText}`);
@@ -414,14 +414,14 @@ export async function deleteProducto(id: string): Promise<DeviceActionResult<nul
     });
 }
 
-// ─── Catálogo de nodos: metadatos y ciclo de vida de credenciales ────────────
+// ─── Catálogo de dispositivos: metadatos y ciclo de vida de credenciales ────────────
 //
 // La creación directa de dispositivos no existe (POST responde 405). El alta
 // pasa por una solicitud de registro que la Raspberry envía y que un
 // Supervisor/Admin aprueba o rechaza. La baja directa del catálogo
 // (DELETE /api/v1/dispositivos) sí está disponible para Supervisor/Admin.
 // Estas acciones mantienen al backend como autoridad: sólo traducen el envelope
-// de error y revalidan la ruta /nodos.
+// de error y revalidan la ruta /dispositivos.
 
 export type DeviceActionResult<T> =
     | { ok: true; data: T }
@@ -525,7 +525,7 @@ interface DeviceMutationOptions<T> {
     invalidMessage: string
     /** Mensajes por HTTP status, específicos del endpoint (p. ej. solicitudes). */
     statusMessages?: Record<number, string>
-    /** Rutas revalidadas tras un éxito. Por defecto `/nodos`. */
+    /** Rutas revalidadas tras un éxito. Por defecto `/dispositivos`. */
     revalidatePaths?: string[]
     /**
      * Endpoints cuyo éxito no devuelve `data` (p. ej. DELETE de un sector).
@@ -558,12 +558,12 @@ async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<Dev
 
         if (response.ok && isRecord(result) && result.success === true) {
             if (options.allowEmptyData) {
-                for (const path of options.revalidatePaths ?? ["/nodos"]) revalidatePath(path);
+                for (const path of options.revalidatePaths ?? ["/dispositivos"]) revalidatePath(path);
                 return { ok: true, data: null as T };
             }
             const data = options.parse(result.data);
             if (data === null) return { ok: false, errors: [options.invalidMessage] };
-            for (const path of options.revalidatePaths ?? ["/nodos"]) revalidatePath(path);
+            for (const path of options.revalidatePaths ?? ["/dispositivos"]) revalidatePath(path);
             return { ok: true, data };
         }
 
@@ -645,7 +645,7 @@ export async function updateDispositivo(
         parse: parseDevice,
         invalidMessage: "La API devolvió un dispositivo inválido.",
         statusMessages: {
-            409: "El sector ya tiene un nodo con ese rol (entrada o salida).",
+            409: "El sector ya tiene un dispositivo con ese rol (entrada o salida).",
         },
     });
 }

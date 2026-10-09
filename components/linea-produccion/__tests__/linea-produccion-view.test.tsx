@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }))
-vi.mock("@/components/nodos/telemetry-dashboard", () => ({
+vi.mock("@/components/dispositivos/telemetry-dashboard", () => ({
     // Mock del dashboard: mantiene un anchor con el id del dispositivo para que
     // los tests puedan asegurar que se monta con la ENTRADA_HORNO correcta.
     TelemetryDashboard: ({ device }: { device: Device }) =>
@@ -125,7 +125,7 @@ describe("LineaProduccionView", () => {
         expect(mocks.push).toHaveBeenCalledWith("/linea-produccion?sector_id=s-2")
     })
 
-    it("muestra el TelemetryDashboard cuando hay nodo ENTRADA_HORNO en el sector", () => {
+    it("muestra el TelemetryDashboard cuando hay dispositivo ENTRADA_HORNO en el sector", () => {
         render(
             <LineaProduccionView
                 sectores={[sector()]}
@@ -140,7 +140,7 @@ describe("LineaProduccionView", () => {
         expect(dash.getAttribute("data-device")).toBe("node-1")
     })
 
-    it("muestra empty state cuando no hay nodo ENTRADA_HORNO en el sector", () => {
+    it("muestra empty state cuando no hay dispositivo ENTRADA_HORNO en el sector", () => {
         render(
             <LineaProduccionView
                 sectores={[sector()]}
@@ -153,7 +153,7 @@ describe("LineaProduccionView", () => {
         )
         expect(screen.queryByTestId("telemetry-dashboard")).toBeNull()
         expect(
-            screen.getByText(/Este sector no tiene un nodo ENTRADA_HORNO/),
+            screen.getByText(/Este sector no tiene un dispositivo ENTRADA_HORNO/),
         ).toBeTruthy()
     })
 

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Server } from "lucide-react"
-import { DeviceCard } from "@/components/nodos/device-card"
-import { DeviceHistory } from "@/components/nodos/device-history"
-import { PendingRegistrationRequests } from "@/components/nodos/pending-registration-requests"
-import { TelemetryDashboard } from "@/components/nodos/telemetry-dashboard"
+import { DeviceCard } from "@/components/dispositivos/device-card"
+import { DeviceHistory } from "@/components/dispositivos/device-history"
+import { PendingRegistrationRequests } from "@/components/dispositivos/pending-registration-requests"
+import { TelemetryDashboard } from "@/components/dispositivos/telemetry-dashboard"
 import { getDeviceHistoryPage } from "@/actions/api"
 import { mergeTelemetrySamples, samplesForDevice, telemetryReportKey } from "@/lib/telemetry"
 import type { Device, RegistrationRequest, SpecificDevice } from "@/lib/devices-data"
@@ -25,7 +25,7 @@ interface DevicesStateProps {
   registrationRequestsError?: string | null
   /** Supervisor/Administrador pueden gestionar; Operario es sólo lectura. */
   canManage?: boolean
-  /** Sectores disponibles para mostrar y asignar a cada nodo. */
+  /** Sectores disponibles para mostrar y asignar a cada dispositivo. */
   sectores?: Sector[]
   /** Si la carga de sectores falló, el menú deshabilita la asignación. */
   sectoresError?: string | null
@@ -258,7 +258,7 @@ export default function DevicesState({
 
     const createStream = () => {
       ++streamEpochRef.current
-      const current = new EventSource("/api/nodos/events")
+      const current = new EventSource("/api/dispositivos/events")
       eventSource = current
       eventSourceRef.current = current
 
@@ -315,7 +315,7 @@ export default function DevicesState({
         // open gets a new epoch, so an old promise cannot promote it to live.
         streamEpochRef.current += 1
         setStreamState(current.readyState === EventSource.CLOSED ? "disconnected" : "reconnecting")
-        actions.streamState("nodos", "error", "El stream de nodos no está disponible.")
+        actions.streamState("nodos", "error", "El stream de dispositivos no está disponible.")
       }
     }
 
@@ -377,7 +377,7 @@ export default function DevicesState({
     [allDevices, selectedDeviceId],
   )
 
-  // Un nodo puede desaparecer de la flota (p. ej. eliminado desde el panel) sin
+  // Un dispositivo puede desaparecer de la flota (p. ej. eliminado desde el panel) sin
   // un evento SSE de baja. La selección efectiva se deriva de `selectedDevice`:
   // si el id ya no existe, el dashboard y el historial se tratan como vacíos.
   const activeSelectedDeviceId = selectedDevice ? selectedDeviceId : null
@@ -409,21 +409,21 @@ export default function DevicesState({
         />
       )}
 
-      <section aria-labelledby="nodos-heading">
+      <section aria-labelledby="dispositivos-heading">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="nodos-heading" className="text-base font-semibold text-foreground">Nodos de la flota</h2>
+            <h2 id="dispositivos-heading" className="text-base font-semibold text-foreground">Dispositivos de la flota</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">Estado en tiempo real y última telemetría de cada dispositivo.</p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary/70 px-3 py-1 text-xs font-medium text-muted-foreground">
-            <ConnectionIndicator state={streamState} label="Nodos" detail={streamState === "connected" ? undefined : "La telemetría puede estar desactualizada."} onRetry={() => setStreamRetry((retry) => retry + 1)} disabled={loadingHistory} /> {onlineCount} online · {offlineCount} offline
+            <ConnectionIndicator state={streamState} label="Dispositivos" detail={streamState === "connected" ? undefined : "La telemetría puede estar desactualizada."} onRetry={() => setStreamRetry((retry) => retry + 1)} disabled={loadingHistory} /> {onlineCount} online · {offlineCount} offline
           </span>
         </div>
 
         {allDevices.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-12 text-center">
             <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground"><Server className="size-5" aria-hidden="true" /></span>
-            <p className="text-sm font-medium text-foreground">No hay nodos registrados</p>
+            <p className="text-sm font-medium text-foreground">No hay dispositivos registrados</p>
             <p className="max-w-xs text-xs text-muted-foreground">Cuando se registren dispositivos, vas a poder ver su estado y telemetría acá.</p>
           </div>
         ) : (

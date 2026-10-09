@@ -38,8 +38,8 @@ export type TelemetrySample = { dispositivoId: string; receivedAt: string; id?: 
  * después del broadcast), mientras que el historial HTTP sí trae el id real de
  * PostgreSQL. Además el `receivedAt` del SSE llega con nanosegundos y el de la
  * base con microsegundos, así que la comparación usa el tiempo parseado al
- * segundo: los nodos reportan cada ~10 s, por lo que dos reportes distintos del
- * mismo nodo nunca caen en el mismo segundo.
+ * segundo: los dispositivos reportan cada ~10 s, por lo que dos reportes distintos del
+ * mismo dispositivo nunca caen en el mismo segundo.
  */
 export function telemetryReportKey(sample: TelemetrySample): string | null {
   const time = Date.parse(sample.receivedAt)

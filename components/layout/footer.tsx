@@ -44,7 +44,7 @@ export function Footer() {
         <div className="grid w-full gap-1 text-xs text-sidebar-foreground/65 sm:w-auto sm:min-w-64" title="Consulta o evento válido recibido">
           <p className="font-semibold text-sidebar-foreground/80">Última actualización confirmada</p>
           <p className="inline-flex items-center gap-1.5"><Radio className="size-3.5 text-sidebar-primary" aria-hidden="true" /><span>Lotes: <span className="font-mono text-sidebar-foreground">{lotes.time}</span> · {lotes.age}</span></p>
-          <p className="inline-flex items-center gap-1.5"><Radio className="size-3.5 text-sidebar-primary" aria-hidden="true" /><span>Nodos: <span className="font-mono text-sidebar-foreground">{nodos.time}</span> · {nodos.age}</span></p>
+          <p className="inline-flex items-center gap-1.5"><Radio className="size-3.5 text-sidebar-primary" aria-hidden="true" /><span>Dispositivos: <span className="font-mono text-sidebar-foreground">{nodos.time}</span> · {nodos.age}</span></p>
           <p className="text-[10px]">Consulta o evento válido recibido</p>
         </div>
       </div>

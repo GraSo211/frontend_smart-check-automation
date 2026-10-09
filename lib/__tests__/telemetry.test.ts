@@ -103,7 +103,7 @@ describe("telemetry thresholds and fallbacks", () => {
     expect(mergeTelemetrySamples([liveRow], [httpRow])).toHaveLength(1)
   })
 
-  it("conserva reportes distintos del mismo nodo en segundos distintos", () => {
+  it("conserva reportes distintos del mismo dispositivo en segundos distintos", () => {
     const liveA = { ...sample("n1", "2026-01-01T00:01:00.000Z", 20), id: "" }
     const liveB = { ...sample("n1", "2026-01-01T00:01:10.000Z", 30), id: "" }
     const httpB = { ...sample("n1", "2026-01-01T00:01:10.000300Z", 30), id: "metric-2" }

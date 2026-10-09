@@ -38,7 +38,7 @@ const sections: Array<{
 }> = [
   { href: "/supervision", label: "Supervisión en vivo", description: "Cámaras y señales de la línea en tiempo real.", icon: Eye, tone: "bg-info/10 text-info", metric: "" },
   { href: "/lotes", label: "Lotes y datos", description: "Consultá resultados y rendimiento cuando necesites profundizar.", icon: Database, tone: "bg-primary/10 text-primary", metric: "" },
-  { href: "/nodos", label: "Estado de los nodos", description: "Salud de los dispositivos conectados a la planta.", icon: Cpu, tone: "bg-success/10 text-success", metric: "Telemetría IoT" },
+  { href: "/dispositivos", label: "Estado de los dispositivos", description: "Salud de los dispositivos conectados a la planta.", icon: Cpu, tone: "bg-success/10 text-success", metric: "Telemetría IoT" },
   { href: "/configuracion", label: "Configuración", description: "Parámetros de producto y reglas operativas.", icon: Settings2, tone: "bg-warning/10 text-warning", metric: "Parámetros de línea" },
   { href: "/alertas", label: "Manejo de alertas", description: "Priorizá desvíos y mantené el equipo al tanto.", icon: BellRing, tone: "bg-destructive/10 text-destructive", metric: "Centro de atención" },
   { href: "/usuarios", label: "Usuarios y roles", description: "Accesos, permisos y responsables del sistema.", icon: Users, tone: "bg-accent/10 text-accent", metric: "Gestión de equipo" },
@@ -89,7 +89,7 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
   const sectionMetrics = {
     "/supervision": availabilityLabel(monitoring.camera.availability),
     "/lotes": freshnessLabel(monitoring.sync.lotes.freshness),
-    "/nodos": availabilityLabel(monitoring.nodes.availability),
+    "/dispositivos": availabilityLabel(monitoring.nodes.availability),
   }
 
   return (

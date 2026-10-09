@@ -160,7 +160,7 @@ export type AlertaEstado = "ACTIVA" | "ACK" | "RESUELTA"
 export type AlertaSeveridad = "INFO" | "WARNING" | "CRITICAL"
 
 /**
- * Alerta operativa: umbral de calidad, desvío de temperatura, nodo offline,
+ * Alerta operativa: umbral de calidad, desvío de temperatura, dispositivo offline,
  * etc. Vinculada opcionalmente a un sector y a un lote. Una alerta ACK fue
  * reconocida por un usuario pero todavía no se cerró; una alerta RESUELTA
  * desapareció sola o un usuario la marcó como resuelta.

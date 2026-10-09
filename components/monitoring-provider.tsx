@@ -230,22 +230,22 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
     let request: Promise<Device[] | null> | null = null
     request = (async () => {
       try {
-        const { response, payload } = await fetchJson('/api/nodos/snapshot', controller.signal)
+        const { response, payload } = await fetchJson('/api/dispositivos/snapshot', controller.signal)
         if (!active(generation)) return null
         if (response.status === 401 || response.status === 403) {
           inventoryObservedAtRef.current = null
-          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'Sesión no autorizada para consultar nodos.') }))
+          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'Sesión no autorizada para consultar dispositivos.') }))
           return null
         }
         if (!response.ok) {
           inventoryObservedAtRef.current = null
-          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'La respuesta de nodos no es válida.') }))
+          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'La respuesta de dispositivos no es válida.') }))
           return null
         }
         const snapshot = parseDevicesPayload(payload)
         if (!snapshot) {
           inventoryObservedAtRef.current = null
-          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'La respuesta de nodos no es válida.') }))
+          setState((current) => ({ ...current, nodeObservations: undefined, inventoryObservedAt: null, nodes: asUnknownNodeObservation(current.nodes, 'La respuesta de dispositivos no es válida.') }))
           return null
         }
         if (nodeSnapshotAtRef.current && Date.parse(requestedSnapshotAt) <= Date.parse(nodeSnapshotAtRef.current)) return null

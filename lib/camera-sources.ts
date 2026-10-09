@@ -2,7 +2,7 @@ import type { Device } from "@/lib/devices-data"
 
 // Fuentes de video para la supervisión en vivo.
 //
-// La URL WHEP es un dato del dispositivo: cada nodo (Raspberry) publica a lo
+// La URL WHEP es un dato del dispositivo: cada dispositivo (Raspberry) publica a lo
 // sumo una cámara. La lista de fuentes se deriva de los dispositivos que
 // tienen `whepUrl` configurado, sin variables de entorno de cámaras.
 

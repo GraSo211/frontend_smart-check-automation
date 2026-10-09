@@ -8,7 +8,7 @@ import { SectorManagement } from "@/components/sectores/sector-management"
 
 export const metadata: Metadata = {
   title: "Sectores | Smart-Check Automation",
-  description: "Administración de los sectores productivos y su relación con los nodos.",
+  description: "Administración de los sectores productivos y su relación con los dispositivos.",
 }
 
 export const dynamic = "force-dynamic"
@@ -49,7 +49,7 @@ export default async function Page() {
                 Gestión de Sectores
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Administrá los sectores productivos y consultá cuántos nodos tiene asignado cada uno.
+                Administrá los sectores productivos y consultá cuántos dispositivos tiene asignado cada uno.
               </p>
             </div>
             {!canManage && (

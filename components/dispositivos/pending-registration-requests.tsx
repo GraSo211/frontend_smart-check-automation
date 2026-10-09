@@ -37,7 +37,7 @@ const requestedAtFormatter = new Intl.DateTimeFormat("es-AR", {
   timeZone: APP_TIME_ZONE,
 })
 
-// La solicitud de registro la origina la propia Raspberry: el nodo pide
+// La solicitud de registro la origina la propia Raspberry: el dispositivo pide
 // identidad y un Supervisor/Admin la aprueba o rechaza desde acá. Hasta que se
 // aprueba, no existe ningún dispositivo en el catálogo.
 export function PendingRegistrationRequests({
@@ -70,7 +70,7 @@ export function PendingRegistrationRequests({
       const result = await approveRegistrationRequest(request.requestId)
       if (result.ok) {
         toast.success(`Solicitud de ${request.hostname} aprobada.`, {
-          description: `El nodo quedó registrado como ${result.data.deviceId}.`,
+          description: `El dispositivo quedó registrado como ${result.data.deviceId}.`,
         })
         router.refresh()
       } else {
@@ -109,7 +109,7 @@ export function PendingRegistrationRequests({
               Solicitudes de registro pendientes
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Nodos que pidieron darse de alta y esperan la aprobación de un Supervisor o Administrador.
+              Dispositivos que pidieron darse de alta y esperan la aprobación de un Supervisor o Administrador.
             </p>
           </div>
           {!error && pendingRequests.length > 0 && (

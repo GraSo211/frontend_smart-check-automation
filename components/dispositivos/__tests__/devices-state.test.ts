@@ -19,18 +19,18 @@ vi.mock("@/components/monitoring-provider", () => ({
   useMonitoringNodes: () => null,
   useMonitoringActions: () => mocks.actions,
 }))
-vi.mock("@/components/nodos/device-card", () => ({
+vi.mock("@/components/dispositivos/device-card", () => ({
   DeviceCard: ({ device, onSelect }: { device: Device; onSelect: (id: string) => void }) => (
     React.createElement("button", { type: "button", onClick: () => onSelect(device.dispositivoId) }, device.nombre)
   ),
 }))
-vi.mock("@/components/nodos/telemetry-dashboard", () => ({
+vi.mock("@/components/dispositivos/telemetry-dashboard", () => ({
   TelemetryDashboard: ({ history }: { history: Array<{ id: string }> }) => React.createElement("output", { "data-testid": "recent" }, history.map((item) => item.id).join(",")),
 }))
-vi.mock("@/components/nodos/pending-registration-requests", () => ({
+vi.mock("@/components/dispositivos/pending-registration-requests", () => ({
   PendingRegistrationRequests: () => null,
 }))
-vi.mock("@/components/nodos/device-history", () => ({
+vi.mock("@/components/dispositivos/device-history", () => ({
   DeviceHistory: (props: { history: Array<{ id: string }>; total: number; page: number; newSamples?: number; onPageChange?: (page: number) => void; onRetry?: () => void; onLatest?: () => void }) => (
     React.createElement("div", null,
       React.createElement("output", { "data-testid": "history" }, props.history.map((item) => item.id).join(",")),
@@ -43,7 +43,7 @@ vi.mock("@/components/nodos/device-history", () => ({
   ),
 }))
 
-import DevicesState from "@/components/nodos/devices-state"
+import DevicesState from "@/components/dispositivos/devices-state"
 
 type Device = {
   dispositivoId: string
@@ -76,7 +76,7 @@ function sample(id: string, deviceId: string, receivedAt = at): Sample { return 
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done }); return { promise, resolve } }
 function page(items: Sample[], total = items.length, requestedPage = 1) { return { items, total, page: requestedPage, pageSize: 20 } }
 
-describe("estado headless de historial de nodos", () => {
+describe("estado headless de historial de dispositivos", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     FakeEventSource.instances = []
@@ -199,7 +199,7 @@ describe("estado headless de historial de nodos", () => {
     await act(async () => first.open())
     await act(async () => first.error())
     await act(async () => { firstSnapshot.resolve([device("A")]); secondSnapshot.resolve([device("A")]) })
-    expect(screen.getByText(/Nodos:/).textContent).not.toContain("Conectado")
+    expect(screen.getByText(/Dispositivos:/).textContent).not.toContain("Conectado")
     await act(async () => first.error(true))
     fireEvent.click(screen.getByText("Reintentar"))
     expect(FakeEventSource.instances.length).toBe(2)
@@ -210,7 +210,7 @@ describe("estado headless de historial de nodos", () => {
     render(React.createElement(DevicesState, { devices: [device("A")], lastSyncAt: at }))
     const stream = FakeEventSource.instances[0]
     await act(async () => stream.open())
-    expect(screen.getByText(/Nodos:/).textContent).not.toContain("Conectado")
+    expect(screen.getByText(/Dispositivos:/).textContent).not.toContain("Conectado")
   })
 
   it("no duplica la fila del historial cuando el SSE llega sin id de métrica", async () => {
@@ -231,7 +231,7 @@ describe("estado headless de historial de nodos", () => {
     expect(rows[0]).toContain("metric-1")
   })
 
-  it("limpia la selección cuando el nodo seleccionado desaparece de la flota", async () => {
+  it("limpia la selección cuando el dispositivo seleccionado desaparece de la flota", async () => {
     mocks.getDeviceHistoryPage.mockResolvedValue(page([sample("row", "A")], 1))
     const { rerender } = render(React.createElement(DevicesState, { devices: [device("A"), device("B")], lastSyncAt: at }))
     fireEvent.click(screen.getByText("A"))
@@ -243,7 +243,7 @@ describe("estado headless de historial de nodos", () => {
       rerender(React.createElement(DevicesState, { devices: [device("B")], lastSyncAt: at }))
     })
 
-    // El nodo ya no está en la flota: no debe quedar dashboard ni historial
+    // El dispositivo ya no está en la flota: no debe quedar dashboard ni historial
     // apuntando a un dispositivo inexistente.
     expect(screen.queryByTestId("recent")).toBeNull()
     expect(screen.getByTestId("history").textContent).toBe("")

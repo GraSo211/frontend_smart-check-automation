@@ -3,7 +3,7 @@
 import React from "react"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
+import { DeviceActionsMenu } from "@/components/dispositivos/device-actions-menu"
 import type { Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
 
@@ -31,7 +31,7 @@ const sectores: Sector[] = [
 function device(overrides: Partial<Device> = {}): Device {
   return {
     dispositivoId: "node-1",
-    nombre: "Nodo 1",
+    nombre: "Dispositivo 1",
     sectorId: "s1",
     estado: "online",
     lastSeen: at,
@@ -52,7 +52,7 @@ async function openDeleteDialog(deviceOverride: Partial<Device> = {}) {
   await screen.findByText(/Se revocará su credencial/)
 }
 
-describe("acción de edición del nodo", () => {
+describe("acción de edición del dispositivo", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -77,7 +77,7 @@ describe("acción de edición del nodo", () => {
 
     const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
     expect(nombreInput.readOnly).toBe(false)
-    expect(nombreInput.value).toBe("Nodo 1")
+    expect(nombreInput.value).toBe("Dispositivo 1")
 
     expect(screen.getByLabelText("Sector")).toBeTruthy()
     expect(screen.getByLabelText("URL WHEP (cámara)")).toBeTruthy()
@@ -85,7 +85,7 @@ describe("acción de edición del nodo", () => {
     expect((screen.getByLabelText("Sector") as HTMLSelectElement).value).toBe("s1")
   })
 
-  it("permite dejar el nodo sin sector al elegir la opción vacía", async () => {
+  it("permite dejar el dispositivo sin sector al elegir la opción vacía", async () => {
     updateDispositivo.mockResolvedValue({ ok: true, data: device({ sectorId: undefined }) })
     await openEditDialog()
 
@@ -128,17 +128,17 @@ describe("acción de edición del nodo", () => {
   })
 
   it("cuando cambia el nombre llama a renameDispositivo y luego updateDispositivo", async () => {
-    renameDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Nodo Renombrado" }) })
-    updateDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Nodo Renombrado", sectorId: "s2" }) })
+    renameDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Dispositivo Renombrado" }) })
+    updateDispositivo.mockResolvedValue({ ok: true, data: device({ nombre: "Dispositivo Renombrado", sectorId: "s2" }) })
     await openEditDialog()
 
     const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
-    fireEvent.change(nombreInput, { target: { value: "  Nodo Renombrado  " } })
+    fireEvent.change(nombreInput, { target: { value: "  Dispositivo Renombrado  " } })
     fireEvent.change(screen.getByLabelText("Sector"), { target: { value: "s2" } })
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
 
     await waitFor(() => {
-      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Nodo Renombrado")
+      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Dispositivo Renombrado")
     })
     await waitFor(() => {
       expect(updateDispositivo).toHaveBeenCalledTimes(1)
@@ -153,11 +153,11 @@ describe("acción de edición del nodo", () => {
     await openEditDialog()
 
     const nombreInput = screen.getByLabelText("Nombre") as HTMLInputElement
-    fireEvent.change(nombreInput, { target: { value: "Nodo Renombrado" } })
+    fireEvent.change(nombreInput, { target: { value: "Dispositivo Renombrado" } })
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
 
     await waitFor(() => {
-      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Nodo Renombrado")
+      expect(renameDispositivo).toHaveBeenCalledWith("node-1", "Dispositivo Renombrado")
     })
     expect(updateDispositivo).not.toHaveBeenCalled()
   })
@@ -178,7 +178,7 @@ describe("acción de edición del nodo", () => {
   })
 })
 
-describe("acción de eliminación del nodo", () => {
+describe("acción de eliminación del dispositivo", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -196,12 +196,12 @@ describe("acción de eliminación del nodo", () => {
 
     expect(
       screen.getByText(
-        '¿Confirmás que querés eliminar el dispositivo "Nodo 1" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El nodo deberá registrarse de nuevo.',
+        '¿Confirmás que querés eliminar el dispositivo "Dispositivo 1" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El dispositivo deberá registrarse de nuevo.',
       ),
     ).toBeTruthy()
   })
 
-  it("confirma la eliminación llamando a deleteDispositivo con el id del nodo", async () => {
+  it("confirma la eliminación llamando a deleteDispositivo con el id del dispositivo", async () => {
     deleteDispositivo.mockResolvedValue({ ok: true, data: null })
     await openDeleteDialog()
 

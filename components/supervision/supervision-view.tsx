@@ -15,7 +15,7 @@ import type { Sector } from "@/lib/production-data"
 const LOAD_TIMEOUT_MS = 8_000
 
 interface SupervisionViewProps {
-  /** Sectores para resolver el nombre del sector de cada nodo (sectorId→nombre). */
+  /** Sectores para resolver el nombre del sector de cada dispositivo (sectorId→nombre). */
   sectores?: Sector[]
 }
 
@@ -56,7 +56,7 @@ export default function SupervisionView({ sectores = [] }: SupervisionViewProps)
             <LiveCamera
               whepUrl={node.whepUrl}
               title={node.nombre}
-              subtitle={node.sector || "Nodo de supervisión"}
+              subtitle={node.sector || "Dispositivo de supervisión"}
               videoAriaLabel={`Transmisión en vivo de la cámara de ${node.nombre}`}
             />
           </>
@@ -72,7 +72,7 @@ export default function SupervisionView({ sectores = [] }: SupervisionViewProps)
           </div>
           <dl className="mt-4 space-y-3">
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Nodo</dt>
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Dispositivo</dt>
               <dd className="mt-0.5 break-words text-sm text-foreground">{node?.nombre ?? "Sin definir"}</dd>
             </div>
             <div>
@@ -126,9 +126,9 @@ function NoCameras() {
       </span>
       <p className="font-heading text-base font-semibold text-foreground">Sin cámaras configuradas</p>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Ningún nodo tiene una URL WHEP configurada. Definí la URL de la cámara (WHEP) en la configuración del dispositivo desde{" "}
-        <Link href="/nodos" className="font-medium text-primary underline-offset-4 hover:underline">
-          Nodos
+        Ningún dispositivo tiene una URL WHEP configurada. Definí la URL de la cámara (WHEP) en la configuración del dispositivo desde{" "}
+        <Link href="/dispositivos" className="font-medium text-primary underline-offset-4 hover:underline">
+          Dispositivos
         </Link>
         .
       </p>
@@ -142,7 +142,7 @@ function NodesError({ onRetry }: { onRetry: () => void }) {
       <span className="flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
         <VideoOff className="size-6" aria-hidden="true" />
       </span>
-      <p className="font-heading text-base font-semibold text-foreground">No se pudieron cargar los nodos</p>
+      <p className="font-heading text-base font-semibold text-foreground">No se pudieron cargar los dispositivos</p>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
         No pudimos obtener la lista de dispositivos. Revisá la conexión con la API e intentá de nuevo.
       </p>

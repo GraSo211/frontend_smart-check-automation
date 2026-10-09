@@ -24,7 +24,7 @@ vi.mock("@/lib/registration", () => ({
   registrationExpiryClock: () => "10:15",
 }))
 
-import { PendingRegistrationRequests } from "@/components/nodos/pending-registration-requests"
+import { PendingRegistrationRequests } from "@/components/dispositivos/pending-registration-requests"
 import type { RegistrationRequest } from "@/lib/devices-data"
 
 const now = Date.parse("2026-01-01T10:00:00.000Z")

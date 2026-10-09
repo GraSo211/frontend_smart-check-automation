@@ -4,7 +4,7 @@ import type { Device } from "@/lib/devices-data"
 
 function device(overrides: Partial<Device> & { dispositivoId: string }): Device {
   return {
-    nombre: "Nodo",
+    nombre: "Dispositivo",
     estado: "offline",
     lastSeen: "",
     ...overrides,
@@ -36,7 +36,7 @@ describe("cameraNodesFromDevices", () => {
     )
 
     expect(nodes).toEqual([
-      { id: "n-1", nombre: "Nodo", sector: "Horno 1", whepUrl: "https://cam.test/whep" },
+      { id: "n-1", nombre: "Dispositivo", sector: "Horno 1", whepUrl: "https://cam.test/whep" },
     ])
   })
 
@@ -47,8 +47,8 @@ describe("cameraNodesFromDevices", () => {
     ])
 
     expect(nodes).toEqual([
-      { id: "n-1", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/whep" },
-      { id: "n-2", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/otra/whep" },
+      { id: "n-1", nombre: "Dispositivo", sector: "", whepUrl: "https://cam.test/whep" },
+      { id: "n-2", nombre: "Dispositivo", sector: "", whepUrl: "https://cam.test/otra/whep" },
     ])
   })
 
@@ -65,7 +65,7 @@ describe("cameraNodesFromDevices", () => {
     ])
 
     expect(nodes).toEqual([
-      { id: "n-1", nombre: "Nodo", sector: "", whepUrl: "https://cam.test/whep" },
+      { id: "n-1", nombre: "Dispositivo", sector: "", whepUrl: "https://cam.test/whep" },
     ])
   })
 })

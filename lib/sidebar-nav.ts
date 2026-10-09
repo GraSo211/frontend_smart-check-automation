@@ -40,7 +40,7 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
       { href: "/configuracion", label: "Parámetros de Configuración", icon: SlidersHorizontal },
       { href: "/sectores", label: "Sectores", icon: MapPin },
       { href: "/alertas", label: "Manejo de Alertas", icon: TriangleAlert },
-      { href: "/nodos", label: "Estado de los Nodos", icon: Cpu },
+      { href: "/dispositivos", label: "Estado de los Dispositivos", icon: Cpu },
       { href: "/usuarios", label: "Usuarios y Roles", icon: Users },
     ],
   },

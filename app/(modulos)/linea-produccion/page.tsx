@@ -27,17 +27,17 @@ function firstParam(value: string | string[] | undefined): string | null {
 
 // Tamaño de página fijo y chico: el dashboard de telemetría renderiza un chart
 // por métrica, así que 50 muestras dan 2 pantallas completas sin saturar el
-// SVG. Si hace falta más, el usuario abre el nodo en /nodos.
+// SVG. Si hace falta más, el usuario abre el dispositivo en /dispositivos.
 const TELEMETRY_PAGE_SIZE = 50
 
 /**
- * Vista de la línea de producción: combina la salud del nodo Raspberry que
+ * Vista de la línea de producción: combina la salud del dispositivo Raspberry que
  * controla el horno con el semáforo de tolerancia del setpoint del lote
  * abierto contra el catálogo de productos.
  *
  * El sector se resuelve desde `?sector_id=...`; si no viene o no es válido,
- * se toma el primer sector disponible. Cuando no hay nodo ENTRADA_HORNO
- * asignado al sector, se renderiza un empty state con un link a /nodos.
+ * se toma el primer sector disponible. Cuando no hay dispositivo ENTRADA_HORNO
+ * asignado al sector, se renderiza un empty state con un link a /dispositivos.
  */
 export default async function Page({ searchParams }: PageProps) {
     const params = await searchParams
@@ -108,7 +108,7 @@ export default async function Page({ searchParams }: PageProps) {
                         Monitoreo del horno y la cinta
                     </h1>
                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                        Telemetría en vivo del nodo ENTRADA_HORNO del sector seleccionado
+                        Telemetría en vivo del dispositivo ENTRADA_HORNO del sector seleccionado
                         y semáforo del setpoint del lote contra el rango permitido del
                         producto.
                     </p>

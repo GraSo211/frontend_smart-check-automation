@@ -34,14 +34,14 @@ app/                      Next.js App Router
   (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → DashboardContent
   (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → lotes DashboardContent
   (modulos)/configuracion/ getProductosConParametros() + getSectores() + cursor-walked getLotes() → config panels
-  (modulos)/nodos/        Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector/WHEP, delete
+  (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector/WHEP, delete
   (modulos)/sectores/     Sector catalog: getSectores() + getDevices() → create/rename/delete (Supervisor+)
   (modulos)/usuarios/     Users + roles (Administrador only)
   (modulos)/supervision/  Live WHEP camera view (Supervisor+)
   (modulos)/alertas/      Placeholder module
   api/lotes/snapshot/     Global multi-sector lote snapshot proxy (parallel sectors, cursor walk, `truncada` flag)
   api/lotes/events/       SSE proxy to the backend /api/v1/lotes/events
-  api/nodos/*             Device snapshot/events proxies
+  api/dispositivos/*      Device snapshot/events proxies
   api/system-status/      Backend health probe (GET /health)
   globals.css             Tailwind v4 @import + @theme inline design tokens (oklch, 4 themes)
 actions/
@@ -56,7 +56,7 @@ components/
   theme-provider.tsx      next-themes provider
   lotes/                  dashboard-content, kpi-cards, supervision-table, filters-bar, lote-abierto-card
   configuracion/          product-card, product-parameters, parameters-history
-  nodos/                  device-card, devices-state, device-history, device-actions-menu, telemetry-dashboard, pending-registration-requests
+  dispositivos/           device-card, devices-state, device-history, device-actions-menu, telemetry-dashboard, pending-registration-requests
   sectores/               sector-management
   supervision/            supervision-view, live-camera, node-selector, segmented-control
   shared/                 connection-indicator, page-button, pagination-state, sector-select

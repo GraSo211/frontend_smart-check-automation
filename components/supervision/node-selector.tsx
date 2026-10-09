@@ -11,8 +11,8 @@ type NodeSelectorProps = {
 }
 
 /**
- * Selector de la fuente de video. Cada nodo (Raspberry) expone una sola
- * cámara, así que el control segmentado cambia de nodo. Con un solo nodo se
+ * Selector de la fuente de video. Cada dispositivo (Raspberry) expone una sola
+ * cámara, así que el control segmentado cambia de dispositivo. Con un solo dispositivo se
  * muestra como contexto, sin un selector de un único ítem.
  */
 export default function NodeSelector({ nodes, selectedNodeId, onSelectNode }: NodeSelectorProps) {
@@ -36,7 +36,7 @@ export default function NodeSelector({ nodes, selectedNodeId, onSelectNode }: No
         </div>
         {nodes.length > 1 && (
           <SegmentedControl
-            label="Nodo de la cámara"
+            label="Dispositivo de la cámara"
             options={nodes.map((item) => ({ id: item.id, label: item.nombre }))}
             value={node.id}
             onChange={onSelectNode}

@@ -29,7 +29,7 @@ describe("server actions de datos del backend", () => {
   }
   const validDevice = {
     dispositivoId: "node-1",
-    nombre: "Nodo 1",
+    nombre: "Dispositivo 1",
     sectorId: "s-1",
     estado: "online",
     ultimaMetrica: validMetric,
@@ -454,11 +454,11 @@ describe("server actions de datos del backend", () => {
 
     await expect(api.updateDispositivo({ dispositivoId: "node-1", sectorId: "s-1" })).resolves.toEqual({
       ok: false,
-      errors: ["El sector ya tiene un nodo con ese rol (entrada o salida)."],
+      errors: ["El sector ya tiene un dispositivo con ese rol (entrada o salida)."],
     })
   })
 
-  it("renombra un nodo desde el panel y codifica el id en la ruta", async () => {
+  it("renombra un dispositivo desde el panel y codifica el id en la ruta", async () => {
     fetchMock.mockResolvedValue(json({
       success: true,
       data: { ...validDeviceRead, nombre: "Pi Renombrada" },
@@ -469,7 +469,7 @@ describe("server actions de datos del backend", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/dispositivos/node%2F1/nombre")
     expect(fetchMock.mock.calls[0][1].method).toBe("PUT")
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Pi Renombrada" })
-    expect(revalidatePathMock).toHaveBeenCalledWith("/nodos")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/dispositivos")
     expect(result).toEqual({
       ok: true,
       data: expect.objectContaining({ nombre: "Pi Renombrada" }),

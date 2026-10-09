@@ -3,11 +3,11 @@ import { getDevices, getRegistrationRequests, getSectores } from "@/actions/api"
 import { getSession, hasMinRole } from "@/lib/auth"
 import type { Device, RegistrationRequest } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
-import DevicesState from "@/components/nodos/devices-state"
+import DevicesState from "@/components/dispositivos/devices-state"
 import { Lock } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Estado de los Nodos | Smart-Check Automation",
+  title: "Estado de los Dispositivos | Smart-Check Automation",
 }
 
 export const dynamic = "force-dynamic"
@@ -60,10 +60,10 @@ export default async function Page() {
             <div>
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
                 <span className="inline-block size-1.5 rounded-full bg-accent" aria-hidden="true" />
-                Nodos
+                Dispositivos
               </div>
               <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Estado de los Nodos
+                Estado de los Dispositivos
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 Diagnóstico de las Raspberry Pi y telemetría de cada dispositivo. La Raspberry pide el alta y un

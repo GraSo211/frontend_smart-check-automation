@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import { AUTH_STATUS_LABELS, deviceAuthStatus, type AuthStatus, type Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
-import { DeviceActionsMenu } from "@/components/nodos/device-actions-menu"
+import { DeviceActionsMenu } from "@/components/dispositivos/device-actions-menu"
 
 // Maps each connection state to an icon and color treatment.
 const STATUS_CONFIG: Record<
@@ -64,7 +64,7 @@ interface DeviceCardProps {
   canManage?: boolean
   /** Nombre del sector resuelto por el contenedor (mapa sectorId→nombre). */
   sectorName?: string | null
-  /** Sectores disponibles, reenviados al menú de edición del nodo. */
+  /** Sectores disponibles, reenviados al menú de edición del dispositivo. */
   sectores?: Sector[]
   /** Error de carga de sectores: deshabilita la asignación en el menú. */
   sectoresError?: string | null
@@ -164,7 +164,7 @@ export function DeviceCard({
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
             auth.badge,
           )}
-          title="Estado de la credencial del nodo (independiente de la conectividad)"
+          title="Estado de la credencial del dispositivo (independiente de la conectividad)"
         >
           <AuthIcon className="size-3.5" aria-hidden="true" />
           {AUTH_STATUS_LABELS[authStatus]}
@@ -198,7 +198,7 @@ export function DeviceCard({
               <SearchX className="size-5" aria-hidden="true" />
             </span>
             <p className="text-sm font-medium text-foreground">Sin telemetría</p>
-            <p className="text-xs text-muted-foreground">Este nodo todavía no reportó datos.</p>
+            <p className="text-xs text-muted-foreground">Este dispositivo todavía no reportó datos.</p>
           </div>
         )}
       </div>

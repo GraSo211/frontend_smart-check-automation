@@ -125,13 +125,13 @@ export function nodeStatusFromObservations(
   }
 
   const detail = total === 0
-    ? 'La flota no tiene nodos registrados.'
+    ? 'La flota no tiene dispositivos registrados.'
     : !inventoryFresh
-      ? 'La observación del inventario de nodos está vencida.'
+      ? 'La observación del inventario de dispositivos está vencida.'
       : availability === 'available'
-        ? `${online} nodos online.`
+        ? `${online} dispositivos online.`
         : availability === 'disconnected'
-          ? `${offline} nodos offline.`
+          ? `${offline} dispositivos offline.`
           : 'La flota tiene estados mixtos o incompletos.'
 
   return { availability, checkedAt: inventoryAt, detail, online, offline, unknown, inventoryObservedAt: inventoryAt }
@@ -153,7 +153,7 @@ function overallStatus(
     return { availability: 'disconnected', checkedAt, detail: 'El backend no está disponible para el panel.' }
   }
   if (statuses.every((status) => status.availability === 'available') && !transportDegraded) {
-    return { availability: 'available', checkedAt, detail: 'Backend, nodos y cámara disponibles.' }
+    return { availability: 'available', checkedAt, detail: 'Backend, dispositivos y cámara disponibles.' }
   }
   // Confirmed failures take precedence over an unobserved camera. A missing
   // camera observation must not hide a backend or fleet failure.

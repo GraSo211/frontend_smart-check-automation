@@ -24,7 +24,7 @@ import { isWhepUrl } from "@/lib/camera-sources"
 
 interface DeviceActionsMenuProps {
   device: Device
-  /** Sectores disponibles para asignar al nodo. */
+  /** Sectores disponibles para asignar al dispositivo. */
   sectores?: Sector[]
   /** Si la carga de sectores falló, se deshabilita la asignación para no perder la actual. */
   sectoresError?: string | null
@@ -189,7 +189,7 @@ export function DeviceActionsMenu({
               <Pencil className="size-5" aria-hidden="true" />
             </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
-            <DialogDescription>Actualizá el nombre, el sector y la cámara del nodo.</DialogDescription>
+            <DialogDescription>Actualizá el nombre, el sector y la cámara del dispositivo.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
@@ -290,7 +290,7 @@ export function DeviceActionsMenu({
             </span>
             <DialogTitle>Eliminar dispositivo</DialogTitle>
             <DialogDescription>
-              {`¿Confirmás que querés eliminar el dispositivo "${device.nombre}" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El nodo deberá registrarse de nuevo.`}
+              {`¿Confirmás que querés eliminar el dispositivo "${device.nombre}" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El dispositivo deberá registrarse de nuevo.`}
             </DialogDescription>
           </DialogHeader>
 
