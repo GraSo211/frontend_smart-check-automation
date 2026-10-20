@@ -2,44 +2,41 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Factory } from "lucide-react"
+import Link from "next/link"
+import { Factory, TriangleAlert } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { formatTemp } from "@/lib/format"
-import { formatNumber } from "@/lib/format"
+import { formatBucket, formatDate, formatNumber, formatTemp, qualityRate } from "@/lib/format"
 import { SectorSelect } from "@/components/shared/sector-select"
-import { TelemetryDashboard } from "@/components/dispositivos/telemetry-dashboard"
-import type { Device, SpecificDevice } from "@/lib/devices-data"
-import type { LoteSector, Producto, Sector } from "@/lib/production-data"
+import { ControlCard } from "@/components/lotes/control-card"
+import type { Alerta, LoteSector, Producto, Sector } from "@/lib/production-data"
 
 interface LineaProduccionViewProps {
-  sectores: Sector[]
-  selectedSectorId: string | null
-  entradaDevice: Device | null
-  history: SpecificDevice[]
-  loteAbierto: LoteSector | null
-  producto: Producto | null
+    sectores: Sector[]
+    selectedSectorId: string | null
+    loteAbierto: LoteSector | null
+    producto: Producto | null
+    alertas: Alerta[]
+    /** Habilita el cambio de modo y el start/stop del loop (Supervisor/Admin). */
+    canControl: boolean
 }
 
 /**
- * Vista de la línea de producción: combina la salud del dispositivo Raspberry que
- * controla el horno (reusando `TelemetryDashboard`) con un semáforo de
- * tolerancia que compara el setpoint actual del lote abierto contra el rango
- * permitido del producto.
+ * Vista de control de la línea: selector de sector, tarjeta de control del lote
+ * abierto (modo MANUAL / SUPERVISION / AUTOMATICO, propuesta pendiente,
+ * decisiones y ventanas), KPIs de calidad, semáforo de setpoints y alertas.
  *
- * El selector de sector navega vía `?sector_id=...` para que el server
- * resuelva el device + history + lote por params. El `key` en el contenedor
- * garantiza que la UI se remonta cuando cambia el sector desde fuera (back /
- * forward del browser), evitando un sync useEffect que dispararía renders
- * en cascada.
+ * La telemetría del hardware (CPU/RAM/SoC) no se muestra acá: ya está en
+ * /dispositivos. El selector de sector navega vía `?sector_id=...` para que el
+ * server resuelva lote, producto y alertas por params.
  */
 export function LineaProduccionView({
     sectores,
     selectedSectorId,
-    entradaDevice,
-    history,
     loteAbierto,
     producto,
+    alertas,
+    canControl,
 }: LineaProduccionViewProps) {
     const router = useRouter()
     // Estado controlado por la interacción del usuario. La URL manda vía
@@ -66,24 +63,26 @@ export function LineaProduccionView({
                     />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Monitoreo del horno y la cinta transportadora. El dispositivo
-                    ENTRADA_HORNO del sector seleccionado maneja el control.
+                    El modo se aplica al lote abierto de este sector. La telemetría
+                    del dispositivo se consulta en Dispositivos.
                 </p>
             </div>
 
-            {!entradaDevice ? (
+            {!loteAbierto ? (
                 <EmptyState
-                    message="Este sector no tiene un dispositivo ENTRADA_HORNO asignado."
-                    hint="Asigná un dispositivo desde la página de Dispositivos para ver la telemetría."
+                    message="Este sector no tiene un lote abierto."
+                    hint="El modo de operación se configura sobre un lote abierto. Esperá a que la ENTRADA_HORNO detecte el producto o abrí el lote desde Lotes."
                 />
             ) : (
                 <div className="grid min-w-0 gap-6 xl:grid-cols-[1.45fr_1fr]">
-                    <div className="min-w-0">
-                        <TelemetryDashboard device={entradaDevice} history={history} live />
+                    <div className="min-w-0 space-y-6">
+                        <ControlCard lote={loteAbierto} canControl={canControl} />
+                        <LoteKpis lote={loteAbierto} />
                     </div>
                     <aside className="min-w-0 space-y-4">
                         <SemaforoTolerancia lote={loteAbierto} producto={producto} />
                         <ProductoRangos producto={producto} />
+                        <AlertasActivas alertas={alertas} />
                     </aside>
                 </div>
             )}
@@ -95,7 +94,7 @@ function EmptyState({ message, hint }: { message: string; hint?: string }) {
     return (
         <section
             role="status"
-            aria-label="Sin dispositivo ENTRADA_HORNO"
+            aria-label="Sin lote abierto"
             className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-5 py-8 text-sm text-muted-foreground"
         >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground">
@@ -107,6 +106,114 @@ function EmptyState({ message, hint }: { message: string; hint?: string }) {
             </div>
         </section>
     )
+}
+
+/** KPIs del lote abierto: conteos, calidad e inactividad. */
+function LoteKpis({ lote }: { lote: LoteSector }) {
+    const { ok, crudo, quemado, total } = lote.conteos
+    const calidad = qualityRate(ok, total)
+    const inactividad = formatNumber(Math.max(0, Math.round(lote.inactividad_segundos)))
+
+    return (
+        <section
+            aria-label="Indicadores del lote"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+        >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                    <h3 className="text-sm font-semibold">Lote en curso</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                        {lote.producto_nombre} · abierto {formatDate(lote.abierto_en)}
+                    </p>
+                </div>
+                <Link
+                    href="/lotes"
+                    className="text-xs font-medium text-primary hover:underline"
+                >
+                    Ver historial
+                </Link>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                <Kpi label="Total" value={formatBucket(total)} />
+                <Kpi label="OK" value={formatBucket(ok)} tone="text-success" />
+                <Kpi label="Crudos" value={formatBucket(crudo)} tone="text-warning" />
+                <Kpi label="Quemados" value={formatBucket(quemado)} tone="text-destructive" />
+                <Kpi label="Calidad" value={`${calidad.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`} />
+                <Kpi label="Inactividad" value={`${inactividad} s`} />
+            </dl>
+        </section>
+    )
+}
+
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: string }) {
+    return (
+        <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+            <dt className="text-[10px] uppercase text-muted-foreground">{label}</dt>
+            <dd className={cn("font-mono tabular-nums", tone)}>{value}</dd>
+        </div>
+    )
+}
+
+function AlertasActivas({ alertas }: { alertas: Alerta[] }) {
+    return (
+        <section
+            aria-label="Alertas activas del sector"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+        >
+            <header className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
+                    <TriangleAlert className="size-5" aria-hidden="true" />
+                </span>
+                <div>
+                    <h3 className="text-sm font-semibold">Alertas activas</h3>
+                    <p className="text-xs text-muted-foreground">
+                        {alertas.length === 0
+                            ? "Sin alertas activas en este sector."
+                            : `${alertas.length} sin reconocer.`}
+                    </p>
+                </div>
+            </header>
+            {alertas.length > 0 ? (
+                <ul className="mt-4 space-y-2 text-xs">
+                    {alertas.map((alerta) => (
+                        <li
+                            key={alerta.id}
+                            className="rounded-md border bg-muted/30 px-2 py-1.5"
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span
+                                    className={cn(
+                                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                                        tonoAlerta(alerta.severidad),
+                                    )}
+                                >
+                                    {alerta.severidad}
+                                </span>
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                    {formatDate(alerta.created_at)}
+                                </span>
+                            </div>
+                            <p className="mt-1 text-foreground">{alerta.mensaje}</p>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            {alertas.length > 0 ? (
+                <Link
+                    href="/alertas"
+                    className="mt-3 inline-block text-xs font-medium text-primary hover:underline"
+                >
+                    Gestionar alertas
+                </Link>
+            ) : null}
+        </section>
+    )
+}
+
+function tonoAlerta(severidad: Alerta["severidad"]): string {
+    if (severidad === "CRITICAL") return "bg-destructive/15 text-destructive"
+    if (severidad === "WARNING") return "bg-warning/15 text-warning"
+    return "bg-muted text-muted-foreground"
 }
 
 /**

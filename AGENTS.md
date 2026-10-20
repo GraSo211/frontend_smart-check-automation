@@ -60,14 +60,13 @@ components/
   sectores/               sector-management
   supervision/            supervision-view, live-camera, node-selector, segmented-control
   shared/                 connection-indicator, page-button, pagination-state, sector-select
-  layout/                 header, footer, sidebar, sidebar-trigger, monitoring-status, placeholder-section
+  layout/                 header, footer, sidebar, sidebar-trigger, monitoring-status
   ui/                     shadcn-generated primitives (base-nova style). Add new ones with `pnpm dlx shadcn@latest add <name>`.
 lib/
   utils.ts                `cn()` helper (clsx + tailwind-merge)
   format.ts               es-AR Intl formatters used across the dashboard
   production-data.ts      LoteSector/Sector/Producto/Conteos API contract types
   devices-data.ts         Device, telemetry and registration-request types
-  parametros-producto.ts  Product parameter and batch history types + validation
   auth.ts                 Session cookie decode/expiry + role levels (proxy + server)
   auth-redirect.ts        Safe callbackUrl validation
   auth-validation.ts      Login form validation

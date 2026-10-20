@@ -32,9 +32,9 @@ const THEME_GROUPS = [
   },
 ]
 
-export const subscribeMounted = () => () => {}
-export const getMountedSnapshot = () => true
-export const getMountedServerSnapshot = () => false
+const subscribeMounted = () => () => {}
+const getMountedSnapshot = () => true
+const getMountedServerSnapshot = () => false
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme()

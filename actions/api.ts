@@ -870,9 +870,9 @@ export async function cambiarModo(
 /**
  * GET /api/v1/lotes/{id}/confianza-clases — confianza agregada del modelo de
  * visión por clase, sobre las últimas `limite` detecciones (default 200).
- * Devuelve un array vacío cuando el backend responde con `data` ausente, mal
- * formado, o cuando el endpoint todavía no está implementado (404 → [] para
- * que la UI degrade en silencio a "sin muestras").
+ * Devuelve un array vacío cuando el backend responde con `data` ausente o mal
+ * formado, y cuando el lote no existe (404 → [] para que la UI degrade en
+ * silencio a "sin muestras").
  */
 export async function getConfianzaClases(
     loteId: string,
@@ -909,9 +909,9 @@ export async function getConfianzaClases(
  * GET /api/v1/lotes/{id}/control/estado — estado runtime del loop.
  *
  * Devuelve si el loop del MPC está corriendo (`loop_activo`) y el modo
- * operativo actual. El endpoint es tolerante: si el backend todavía no lo
- * expone o responde con un shape inesperado, devuelve `null` (la UI asume
- * "loop no activo" para no mostrar CTAs sobre información incompleta).
+ * operativo actual. Es tolerante: si el lote no existe (404), el backend no
+ * responde a tiempo o devuelve un shape inesperado, devuelve `null` (la UI
+ * asume "loop no activo" para no mostrar CTAs sobre información incompleta).
  */
 export async function getControlEstado(loteId: string): Promise<ControlEstado | null> {
     return withBackendFetch({

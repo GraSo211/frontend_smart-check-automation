@@ -110,10 +110,11 @@ describe("ControlCard · selector de modo", () => {
         expect(screen.getByRole("radio", { name: "Automático" }).getAttribute("aria-checked")).toBe("true")
     })
 
-    it("oculta el selector cuando canControl es false (rol Operario)", () => {
+    it("muestra el selector deshabilitado cuando canControl es false (rol Operario)", () => {
         render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl={false} />)
 
-        expect(screen.queryByRole("radiogroup", { name: "Modo de control" })).toBeNull()
+        const manual = screen.getByRole("radio", { name: "Manual" }) as HTMLButtonElement
+        expect(manual.disabled).toBe(true)
         // El texto del modo sigue siendo visible como fallback.
         expect(screen.getByText(/AUTOMATICO/i)).toBeTruthy()
     })

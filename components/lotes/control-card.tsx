@@ -328,13 +328,11 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    {canControl && (
-                        <ModeSelector
-                            value={modoActual}
-                            onChange={onModeRequest}
-                            disabled={pendingModo}
-                        />
-                    )}
+                    <ModeSelector
+                        value={modoActual}
+                        onChange={onModeRequest}
+                        disabled={!canControl || pendingModo}
+                    />
                     <div className="flex gap-2">
                         <Button
                             size="sm"
@@ -549,7 +547,7 @@ function ModeSelector({
             options={MODE_OPTIONS}
             value={value}
             onChange={onChange}
-            className={cn(disabled && "opacity-60 pointer-events-none")}
+            disabled={disabled}
         />
     )
 }

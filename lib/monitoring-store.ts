@@ -1,7 +1,7 @@
 import type { MonitoringView, NodeObservation, ServiceStatus, SourceSync } from '@/lib/monitoring-types'
 
-export const MONITORING_TTL_MS = 75_000
-export const CAMERA_TTL_MS = 10_000
+const MONITORING_TTL_MS = 75_000
+const CAMERA_TTL_MS = 10_000
 
 export type MonitoringState = {
   backend: ServiceStatus
@@ -13,11 +13,11 @@ export type MonitoringState = {
   sync: { lotes: SourceSync; nodos: SourceSync }
 }
 
-export function unknownStatus(detail = 'Sin observación todavía.'): ServiceStatus {
+function unknownStatus(detail = 'Sin observación todavía.'): ServiceStatus {
   return { availability: 'unknown', checkedAt: null, detail }
 }
 
-export function emptySourceSync(): SourceSync {
+function emptySourceSync(): SourceSync {
   return {
     lastQueryAt: null,
     lastDataEventAt: null,

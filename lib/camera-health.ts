@@ -29,7 +29,7 @@ export function isCameraEvidenceFresh(lastEvidenceAt: number | null, now = Date.
   return lastEvidenceAt !== null && now - lastEvidenceAt <= CAMERA_EVIDENCE_TTL_MS
 }
 
-export function cameraEvidenceTimestamp(receivedAt = Date.now()) {
+function cameraEvidenceTimestamp(receivedAt = Date.now()) {
   return new Date(receivedAt).toISOString()
 }
 
