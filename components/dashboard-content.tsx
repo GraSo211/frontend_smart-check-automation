@@ -21,7 +21,7 @@ import type { LoteSector } from "@/lib/production-data"
 import { useMonitoring, useProductionData } from "@/components/monitoring-provider"
 import { availabilityLabel } from "@/components/layout/monitoring-status"
 
-interface DashboardContentProps {
+interface HomeDashboardProps {
   runs: LoteSector[]
   lastSyncAt: string | null
   userRole?: UserRole
@@ -59,7 +59,7 @@ function freshnessLabel(freshness: "fresh" | "stale" | "never") {
   return freshness === "fresh" ? "Actualizada" : freshness === "stale" ? "Desactualizada" : "Sin confirmar"
 }
 
-export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", error }: DashboardContentProps) {
+export function HomeDashboard({ runs, lastSyncAt, userRole = "Operario", error }: HomeDashboardProps) {
   const monitoring = useMonitoring()
   const production = useProductionData(runs, lastSyncAt, error)
   const currentRuns = production.runs

@@ -1,7 +1,9 @@
+import type { Availability } from "@/lib/monitoring-types"
+
 export const CAMERA_EVIDENCE_TTL_MS = 10_000
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000]
 
-export type CameraAvailability = "available" | "degraded" | "disconnected" | "unknown"
+export type CameraAvailability = Availability
 
 export function getReconnectDelay(attempt: number) {
   return RECONNECT_DELAYS[Math.min(Math.max(attempt, 0), RECONNECT_DELAYS.length - 1)]

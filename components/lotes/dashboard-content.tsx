@@ -12,7 +12,7 @@ import type { ControlEstado, LoteSector, Sector } from "@/lib/production-data"
 import { useMonitoringActions, useProductionData } from "@/components/monitoring-provider"
 import { ConnectionIndicator, type ConnectionState } from "@/components/shared/connection-indicator"
 
-interface DashboardContentProps {
+interface LotesDashboardProps {
   runs: LoteSector[]
   lastSyncAt: string | null
   initialError?: string | null
@@ -44,7 +44,7 @@ function filterRuns(
   })
 }
 
-export function DashboardContent({
+export function LotesDashboard({
   runs: initialRuns,
   lastSyncAt,
   initialError = null,
@@ -54,7 +54,7 @@ export function DashboardContent({
   userRole = "Operario",
   canControl = false,
   initialControlEstado = null,
-}: DashboardContentProps) {
+}: LotesDashboardProps) {
   const router = useRouter()
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS)
   const production = useProductionData(initialRuns, lastSyncAt, initialError)

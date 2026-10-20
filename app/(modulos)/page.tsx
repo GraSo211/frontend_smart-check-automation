@@ -1,4 +1,4 @@
-import { DashboardContent } from "@/components/dashboard-content"
+import { HomeDashboard } from "@/components/dashboard-content"
 import { getAllLotes } from "@/actions/api"
 import { getSession } from "@/lib/auth"
 import type { LoteSector } from "@/lib/production-data"
@@ -24,7 +24,7 @@ export default async function Page() {
 
   return (
     <main className="flex-1 bg-background">
-      <DashboardContent runs={runs} lastSyncAt={lastSyncAt} userRole={userRole} error={error} />
+      <HomeDashboard runs={runs} lastSyncAt={lastSyncAt} userRole={userRole} error={error} />
     </main>
   )
 }

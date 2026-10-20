@@ -17,11 +17,11 @@ vi.mock("@/lib/auth", () => ({
   hasMinRole: vi.fn().mockReturnValue(true),
 }))
 vi.mock("@/components/dashboard-content", () => ({
-  DashboardContent: (props: Record<string, unknown>) =>
+  HomeDashboard: (props: Record<string, unknown>) =>
     React.createElement("pre", null, JSON.stringify(props)),
 }))
 vi.mock("@/components/lotes/dashboard-content", () => ({
-  DashboardContent: (props: Record<string, unknown>) =>
+  LotesDashboard: (props: Record<string, unknown>) =>
     React.createElement("pre", null, JSON.stringify(props)),
 }))
 vi.mock("@/components/configuracion/product-management", () => ({

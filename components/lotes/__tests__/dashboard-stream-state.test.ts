@@ -21,7 +21,7 @@ vi.mock("@/components/monitoring-provider", () => ({
 }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.routerPush }) }))
 
-import { DashboardContent } from "@/components/lotes/dashboard-content"
+import { LotesDashboard } from "@/components/lotes/dashboard-content"
 import { KpiCards } from "@/components/lotes/kpi-cards"
 
 const sectores: Sector[] = [
@@ -47,7 +47,7 @@ function lote(overrides: Partial<LoteSector> = {}): LoteSector {
   }
 }
 
-function props(overrides: Partial<React.ComponentProps<typeof DashboardContent>> = {}): React.ComponentProps<typeof DashboardContent> {
+function props(overrides: Partial<React.ComponentProps<typeof LotesDashboard>> = {}): React.ComponentProps<typeof LotesDashboard> {
   return {
     runs: [],
     lastSyncAt: null,
@@ -96,7 +96,7 @@ describe("estado de conexión del stream de lotes", () => {
     const first = deferred<boolean>()
     const second = deferred<boolean>()
     mocks.refresh.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
     const stream = FakeEventSource.instances[0]
     await act(async () => stream.open())
     await act(async () => stream.error())
@@ -106,7 +106,7 @@ describe("estado de conexión del stream de lotes", () => {
 
   it("requiere que el segundo snapshot sea exitoso para certificar el stream", async () => {
     mocks.refresh.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
     const stream = FakeEventSource.instances[0]
     await act(async () => stream.open())
     expect(screen.getByText(/Lotes:/).textContent).not.toContain("Conectado")
@@ -114,7 +114,7 @@ describe("estado de conexión del stream de lotes", () => {
 
   it("recrea el EventSource cuando CLOSED y se pulsa reintentar", async () => {
     mocks.refresh.mockResolvedValue(true)
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
     const stream = FakeEventSource.instances[0]
     await act(async () => stream.error(true))
     fireEvent.click(screen.getByText("Reintentar"))
@@ -124,7 +124,7 @@ describe("estado de conexión del stream de lotes", () => {
 
   it("entrega los tres eventos SSE al proveedor", async () => {
     mocks.refresh.mockResolvedValue(true)
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
     const stream = FakeEventSource.instances[0]
 
     const creado = { id: "l-1", estado: "ABIERTO" }
@@ -145,7 +145,7 @@ describe("estado de conexión del stream de lotes", () => {
 
   it("ignora un evento SSE malformado sin confirmar sincronización", async () => {
     mocks.refresh.mockResolvedValue(true)
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
     const stream = FakeEventSource.instances[0]
 
     await act(async () => {
@@ -167,7 +167,7 @@ describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
 
     render(
       React.createElement(
-        DashboardContent,
+        LotesDashboard,
         props({
           initialLoteAbierto: abierto,
           canControl: true,
@@ -195,7 +195,7 @@ describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
 
     render(
       React.createElement(
-        DashboardContent,
+        LotesDashboard,
         props({
           initialLoteAbierto: abierto,
           canControl: true,
@@ -222,7 +222,7 @@ describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
 
     render(
       React.createElement(
-        DashboardContent,
+        LotesDashboard,
         props({
           initialLoteAbierto: abierto,
           canControl: true,
@@ -244,7 +244,7 @@ describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
 
     render(
       React.createElement(
-        DashboardContent,
+        LotesDashboard,
         props({
           initialLoteAbierto: abierto,
           canControl: false,
@@ -266,7 +266,7 @@ describe("lote abierto · CTA «Iniciar control» (F-F7)", () => {
 
     render(
       React.createElement(
-        DashboardContent,
+        LotesDashboard,
         props({
           initialLoteAbierto: abierto,
           canControl: true,
@@ -294,7 +294,7 @@ describe("dashboard de lotes por sector", () => {
     const sur = lote({ id: "l-sur", sector_id: "s-2", producto_nombre: "Facturas" })
     mocks.runs.current = [norte, sur]
 
-    render(React.createElement(DashboardContent, props({ runs: [norte, sur], selectedSectorId: "s-1" })))
+    render(React.createElement(LotesDashboard, props({ runs: [norte, sur], selectedSectorId: "s-1" })))
 
     expect(screen.getByText("Pan")).toBeTruthy()
     expect(screen.queryByText("Facturas")).toBeNull()
@@ -305,7 +305,7 @@ describe("dashboard de lotes por sector", () => {
     const sur = lote({ id: "l-sur", sector_id: "s-2", producto_nombre: "Facturas" })
     mocks.runs.current = [norte, sur]
 
-    render(React.createElement(DashboardContent, props({ runs: [norte, sur], selectedSectorId: null })))
+    render(React.createElement(LotesDashboard, props({ runs: [norte, sur], selectedSectorId: null })))
 
     expect(screen.getByText("Pan")).toBeTruthy()
     expect(screen.getByText("Facturas")).toBeTruthy()
@@ -315,7 +315,7 @@ describe("dashboard de lotes por sector", () => {
     const vacio = lote({ id: "l-vacio", conteos: { ok: null, crudo: null, quemado: null, total: 0 } })
     mocks.runs.current = [vacio]
 
-    render(React.createElement(DashboardContent, props({ runs: [vacio] })))
+    render(React.createElement(LotesDashboard, props({ runs: [vacio] })))
 
     // Turno, Correctos, Quemados, Crudas, Temperaturas y Vel. cinta.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(6)
@@ -329,7 +329,7 @@ describe("dashboard de lotes por sector", () => {
       abierto_por: { device_id: "d-9", type: "SALIDA_HORNO" },
     })
 
-    render(React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })))
+    render(React.createElement(LotesDashboard, props({ initialLoteAbierto: abierto })))
 
     const alert = screen.getByRole("alert")
     expect(alert.textContent).toContain("Lote degradado")
@@ -339,13 +339,13 @@ describe("dashboard de lotes por sector", () => {
   it("avisa cuando no hay dispositivo de apertura registrado", () => {
     const abierto = lote({ id: "l-abierto", estado: "ABIERTO", cerrado_en: null, abierto_por: null })
 
-    render(React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })))
+    render(React.createElement(LotesDashboard, props({ initialLoteAbierto: abierto })))
 
     expect(screen.getByRole("alert").textContent).toContain("Lote degradado")
   })
 
   it("muestra un estado vacío si no hay lote abierto", () => {
-    render(React.createElement(DashboardContent, props({ initialLoteAbierto: null })))
+    render(React.createElement(LotesDashboard, props({ initialLoteAbierto: null })))
 
     expect(screen.getByText("Sin lote abierto en este sector")).toBeTruthy()
   })
@@ -359,7 +359,7 @@ describe("dashboard de lotes por sector", () => {
       abierto_por: { device_id: "d-1", type: "ENTRADA_HORNO" },
     })
 
-    render(React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })))
+    render(React.createElement(LotesDashboard, props({ initialLoteAbierto: abierto })))
 
     expect(screen.queryByRole("alert")).toBeNull()
     expect(screen.getByText("Lote abierto · Sector Norte")).toBeTruthy()
@@ -371,7 +371,7 @@ describe("dashboard de lotes por sector", () => {
     mocks.runs.current = [confirmado]
     mocks.error.current = "API caída"
 
-    render(React.createElement(DashboardContent, props({ runs: [confirmado] })))
+    render(React.createElement(LotesDashboard, props({ runs: [confirmado] })))
 
     expect(screen.getByRole("alert").textContent).toContain("No se pudo actualizar la producción")
     expect(screen.getByRole("alert").textContent).toContain("Se conservan los datos confirmados anteriores")
@@ -382,7 +382,7 @@ describe("dashboard de lotes por sector", () => {
     mocks.error.current = "Servicio no disponible"
     mocks.runs.current = []
 
-    render(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+    render(React.createElement(LotesDashboard, props({ initialError: "Servicio no disponible" })))
 
     expect(screen.getByRole("alert").textContent).toContain("Consulta no disponible")
     expect(screen.getByRole("alert").textContent).toContain("Servicio no disponible")
@@ -393,11 +393,11 @@ describe("dashboard de lotes por sector", () => {
     mocks.error.current = "Servicio no disponible"
     mocks.runs.current = []
 
-    const view = render(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+    const view = render(React.createElement(LotesDashboard, props({ initialError: "Servicio no disponible" })))
     expect(screen.getByRole("alert")).toBeTruthy()
 
     mocks.error.current = null
-    view.rerender(React.createElement(DashboardContent, props({ initialError: "Servicio no disponible" })))
+    view.rerender(React.createElement(LotesDashboard, props({ initialError: "Servicio no disponible" })))
 
     expect(screen.queryByRole("alert")).toBeNull()
     expect(screen.getByText("No hay datos de producción registrados para mostrar.")).toBeTruthy()
@@ -410,7 +410,7 @@ describe("dashboard de lotes por sector", () => {
     // lote is a valid fallback.
     mocks.runs.current = []
     const view = render(
-      React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })),
+      React.createElement(LotesDashboard, props({ initialLoteAbierto: abierto })),
     )
     expect(screen.getByText("Lote abierto · Sector Norte")).toBeTruthy()
 
@@ -420,7 +420,7 @@ describe("dashboard de lotes por sector", () => {
       lote({ id: "l-1", estado: "CERRADO", cerrado_en: "2026-09-23T09:30:00.000Z" }),
     ]
     view.rerender(
-      React.createElement(DashboardContent, props({ initialLoteAbierto: abierto })),
+      React.createElement(LotesDashboard, props({ initialLoteAbierto: abierto })),
     )
 
     expect(screen.queryByText("Lote abierto · Sector Norte")).toBeNull()
@@ -429,7 +429,7 @@ describe("dashboard de lotes por sector", () => {
 
   it("no muestra la nota de truncado cuando el snapshot es completo", () => {
     mocks.truncated.current = false
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
 
     expect(
       screen.queryByText("Mostrando los lotes más recientes; hay historial más antiguo disponible."),
@@ -438,7 +438,7 @@ describe("dashboard de lotes por sector", () => {
 
   it("advierte cuando el snapshot global quedó truncado", () => {
     mocks.truncated.current = true
-    render(React.createElement(DashboardContent, props()))
+    render(React.createElement(LotesDashboard, props()))
 
     expect(
       screen.getByText("Mostrando los lotes más recientes; hay historial más antiguo disponible."),

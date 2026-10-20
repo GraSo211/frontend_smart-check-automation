@@ -31,8 +31,8 @@ There is no `tsc` script; run `pnpm exec tsc --noEmit` if you need a one-off typ
 app/                      Next.js App Router
   layout.tsx              Root layout, metadata, Analytics mount, theme + Header/Footer
   (auth)/                 Login / unauthorized routes
-  (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → DashboardContent
-  (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → lotes DashboardContent
+  (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → HomeDashboard
+  (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → LotesDashboard
   (modulos)/configuracion/ getProductosConParametros() + getSectores() + cursor-walked getLotes() → config panels
   (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector/WHEP, delete
   (modulos)/sectores/     Sector catalog: getSectores() + getDevices() → create/rename/delete (Supervisor+)

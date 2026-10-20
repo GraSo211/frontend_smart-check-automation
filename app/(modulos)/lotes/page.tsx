@@ -1,4 +1,4 @@
-import { DashboardContent } from "@/components/lotes/dashboard-content"
+import { LotesDashboard } from "@/components/lotes/dashboard-content"
 import { getAllLotes, getControlEstado, getLoteAbierto, getSectores } from "@/actions/api"
 import { getSession, hasMinRole } from "@/lib/auth"
 import type { ControlEstado, LoteSector, Sector } from "@/lib/production-data"
@@ -92,7 +92,7 @@ export default async function Page({ searchParams }: PageProps) {
           </p>
         </header>
 
-        <DashboardContent
+        <LotesDashboard
           runs={runs}
           lastSyncAt={lastSyncAt}
           initialError={error}

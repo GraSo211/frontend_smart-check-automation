@@ -15,7 +15,7 @@ vi.mock("next/link", () => ({
   default: ({ children }: { children: React.ReactNode }) => React.createElement("a", null, children),
 }))
 
-import { DashboardContent } from "@/components/dashboard-content"
+import { HomeDashboard } from "@/components/dashboard-content"
 
 const unknownMonitoring = {
   backend: { availability: "unknown", checkedAt: null, detail: "Sin comprobación" },
@@ -50,7 +50,7 @@ function lote(overrides: Partial<LoteSector> = {}): LoteSector {
 describe("panel principal sin base evaluable", () => {
   it("usa los datos actualizados entregados por el hook", () => {
     monitoringMocks.useProductionData.mockReturnValue({ runs: [], lastSyncAt: null, error: null, loading: false, truncated: false })
-    const html = renderToStaticMarkup(React.createElement(DashboardContent, { runs: [], lastSyncAt: null }))
+    const html = renderToStaticMarkup(React.createElement(HomeDashboard, { runs: [], lastSyncAt: null }))
     expect(html).toContain("Sincronización de lotes")
     expect(html).toContain("Sin confirmar")
   })
@@ -58,7 +58,7 @@ describe("panel principal sin base evaluable", () => {
   it("no muestra conteos ni ausencia de alertas durante un error", () => {
     monitoringMocks.useProductionData.mockReturnValue({ runs: [], lastSyncAt: null, error: "API caída", loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, {
+      React.createElement(HomeDashboard, {
         runs: [],
         lastSyncAt: null,
         error: "API caída",
@@ -75,7 +75,7 @@ describe("panel principal sin base evaluable", () => {
   it("mantiene conteos cero para un vacío válido, pero no inventa alertas", () => {
     monitoringMocks.useProductionData.mockReturnValue({ runs: [], lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, {
+      React.createElement(HomeDashboard, {
         runs: [],
         lastSyncAt: new Date().toISOString(),
       }),
@@ -91,7 +91,7 @@ describe("panel principal sin base evaluable", () => {
     const runs = [lote()]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, { runs, lastSyncAt: new Date().toISOString() }),
+      React.createElement(HomeDashboard, { runs, lastSyncAt: new Date().toISOString() }),
     )
 
     // Real metrics derived from `conteos`.
@@ -110,7 +110,7 @@ describe("panel principal sin base evaluable", () => {
     const runs = [lote({ conteos: { ok: null, crudo: null, quemado: null, total: 0 } })]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, { runs, lastSyncAt: new Date().toISOString() }),
+      React.createElement(HomeDashboard, { runs, lastSyncAt: new Date().toISOString() }),
     )
 
     expect(html).toContain(">0</strong> unidades")
@@ -121,7 +121,7 @@ describe("panel principal sin base evaluable", () => {
     const runs = [lote({ conteos: { ok: null, crudo: 4, quemado: 6, total: 100 } })]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, { runs, lastSyncAt: new Date().toISOString() }),
+      React.createElement(HomeDashboard, { runs, lastSyncAt: new Date().toISOString() }),
     )
 
     expect(html).toContain(">100</strong> unidades")
@@ -135,7 +135,7 @@ describe("panel principal sin base evaluable", () => {
     const runs = [lote({ conteos: { ok: 90, crudo: null, quemado: null, total: 100 } })]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(DashboardContent, { runs, lastSyncAt: new Date().toISOString() }),
+      React.createElement(HomeDashboard, { runs, lastSyncAt: new Date().toISOString() }),
     )
 
     expect(html).toContain("90.0%")

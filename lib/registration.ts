@@ -10,12 +10,9 @@ import {
 } from "@/lib/devices-data"
 import { APP_TIME_ZONE } from "@/lib/format"
 import { isRecord } from "@/lib/is-record"
+import { isValidIso } from "@/lib/monitoring-runtime"
 
 export type Remaining = { expired: boolean; ms: number; label: string }
-
-function isValidIso(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value))
-}
 
 const REGISTRATION_STATUSES: readonly RegistrationRequestStatus[] = [
   "PENDING",
