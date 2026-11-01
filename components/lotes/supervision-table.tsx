@@ -119,8 +119,6 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                 <Th className="text-right">Correctos</Th>
                 <Th className="text-right">Quemados</Th>
                 <Th className="text-right">Crudas</Th>
-                <Th className="text-center">Temperaturas de horno</Th>
-                <Th className="text-right">Vel. cinta</Th>
                 {canControl && <Th className="text-right">Acciones</Th>}
               </tr>
             </thead>
@@ -219,6 +217,11 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                         )}
                         {formatBucket(conteos.quemado)}
                       </span>
+                      {conteos.quemado !== null && totalUnidades > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {((conteos.quemado / totalUnidades) * 100).toFixed(1)}%
+                        </div>
+                      )}
                     </td>
 
                     {/* //? CRUDAS */}
@@ -231,16 +234,11 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                       >
                         {formatBucket(conteos.crudo)}
                       </span>
-                    </td>
-
-                    {/* //? TEMPERATURAS — fuera del contrato, se mantiene el lugar. */}
-                    <td className="px-4 py-3.5 text-center font-mono text-muted-foreground">
-                      —
-                    </td>
-
-                    {/* //? VELOCIDAD DE CINTA — fuera del contrato. */}
-                    <td className="px-4 py-3.5 text-center font-mono text-muted-foreground">
-                      —
+                      {conteos.crudo !== null && totalUnidades > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {((conteos.crudo / totalUnidades) * 100).toFixed(1)}%
+                        </div>
+                      )}
                     </td>
 
                     {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+). */}

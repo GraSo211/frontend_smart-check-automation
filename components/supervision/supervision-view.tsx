@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Camera, CircleDot, LoaderCircle, RefreshCw, VideoOff } from "lucide-react"
 import NodeSelector from "@/components/supervision/node-selector"
 import LiveCamera from "@/components/supervision/live-camera"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { cameraNodesFromDevices } from "@/lib/camera-sources"
 import type { Sector } from "@/lib/production-data"
@@ -93,9 +93,16 @@ export default function SupervisionView({ sectores = [] }: SupervisionViewProps)
               </dd>
             </div>
           </dl>
-          <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <Camera className="size-3.5" aria-hidden="true" />
-            Señal de baja latencia
+          <div className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
+            <p className="flex items-center gap-2">
+              <Camera className="size-3.5" aria-hidden="true" />
+              Señal de baja latencia
+            </p>
+            <p className="mt-2 leading-relaxed">
+              La URL se arma automáticamente con el nombre y el tipo del dispositivo
+              ({`<slug(nombre)>-entrada|salida/whep`}). Requiere la variable{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">NEXT_PUBLIC_MEDIAMTX_URL</code>.
+            </p>
           </div>
         </div>
         <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-5">
@@ -124,14 +131,16 @@ function NoCameras() {
       <span className="flex size-12 items-center justify-center rounded-2xl bg-secondary/70 text-muted-foreground">
         <VideoOff className="size-6" aria-hidden="true" />
       </span>
-      <p className="font-heading text-base font-semibold text-foreground">Sin cámaras configuradas</p>
+      <p className="font-heading text-base font-semibold text-foreground">Sin cámaras disponibles</p>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Ningún dispositivo tiene una URL WHEP configurada. Definí la URL de la cámara (WHEP) en la configuración del dispositivo desde{" "}
-        <Link href="/dispositivos" className="font-medium text-primary underline-offset-4 hover:underline">
-          Dispositivos
-        </Link>
-        .
+        Ningún dispositivo pudo derivar una URL WHEP. Revisá que los dispositivos tengan tipo
+        (entrada/salida) y que esté definida la variable{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono">NEXT_PUBLIC_MEDIAMTX_URL</code>{" "}
+        en el entorno. La URL ya no se configura desde el dispositivo.
       </p>
+      <Link href="/dispositivos" className={buttonVariants({ variant: "outline", size: "sm" })}>
+        Ir a Dispositivos
+      </Link>
     </div>
   )
 }

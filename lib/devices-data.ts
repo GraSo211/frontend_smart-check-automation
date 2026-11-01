@@ -49,8 +49,6 @@ export type DeviceType = "ENTRADA_HORNO" | "SALIDA_HORNO";
 export type Device = {
     dispositivoId: string;
     nombre: string;
-    /** URL WHEP de la cámara publicada por este dispositivo. Opcional. */
-    whepUrl?: string;
     /** Rol funcional del dispositivo en su sector. Opcional (eventos SSE pueden omitirlo). */
     type?: DeviceType;
     /** Sector al que pertenece el dispositivo. Opcional. */
@@ -84,15 +82,14 @@ export type UpdateDispositivoRequest = {
     /**
      * El nombre es inmutable desde el panel: solo la propia Raspberry lo cambia
      * vía su endpoint autenticado. La actualización del panel maneja únicamente
-     * el sector y la URL WHEP. Enviar `nombre` al backend provoca un 400.
+     * el sector. Enviar `nombre` al backend provoca un 400.
      */
     /**
      * Sector destino; `null` desasigna el dispositivo de su sector. Es obligatorio:
      * el backend interpreta la ausencia de la clave igual que `null`, así que
-     * exigirlo evita desasignaciones accidentales al editar solo sector/WHEP.
+     * exigirlo evita desasignaciones accidentales al editar solo el sector.
      */
     sectorId: string | null;
-    whepUrl?: string;
 };
 
 export type SpecificDevice = {

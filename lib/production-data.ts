@@ -43,7 +43,6 @@ export type LoteSector = {
   turno?: string | null
   // SCA-400: control automático / supervisión.
   modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
-  horno2_habilitado?: boolean
   iniciado_manualmente?: boolean
   ventana_evaluacion_segundos?: number
   ventana_actualizacion_segundos?: number
@@ -51,7 +50,6 @@ export type LoteSector = {
   umbral_aceptacion_crudo?: number
   umbral_aceptacion_quemado?: number
   temp1_objetivo?: number | null
-  temp2_objetivo?: number | null
   vel_objetivo?: number | null
   pesos_objetivo?: PesosObjetivo | null
 }
@@ -74,6 +72,8 @@ export type PrediccionResumen = {
   pctQuemados: number
   modelVersion: string
   esPlaceholder: boolean
+  /** El optimizador no encontró candidato que cumpla límites de crudos/quemados. */
+  restriccionRelajada?: boolean
 }
 
 /** Decisión del MPC (audit) tal como devuelve GET /api/v1/lotes/{id}/decisiones. */
@@ -98,7 +98,28 @@ export type DecisionControl = {
   z_predicho?: number | null
   razon_skipped?: string | null
   aplicado_por: "MPC" | "OPERARIO" | "NADIE"
+  aprobada_por?: string | null
+  aprobada_at?: string | null
   created_at: string
+}
+
+/**
+ * Heartbeat de telemetría del horno reportado por la Pi ENTRADA.
+ * Devuelto por GET /api/v1/lotes/{id}/metricas-horno.
+ */
+export type MetricaHorno = {
+  id: string
+  lote_id: string
+  temp_horno_1?: number | null
+  temp_comb_1?: number | null
+  humedad_horno?: number | null
+  temp_ambiente?: number | null
+  humedad_ambiente?: number | null
+  velocidad_cinta?: number | null
+  temp_objetivo?: number | null
+  vel_objetivo?: number | null
+  confianza_deteccion?: number | null
+  received_at: string
 }
 
 /**
@@ -109,8 +130,6 @@ export type DecisionControl = {
  */
 export type SetpointPropuesto = {
   temp1: number
-  /** T2 del horno 2. Sólo presente cuando el producto tiene horno 2 habilitado. */
-  temp2?: number | null
   velocidad: number
   /** Z predicha por el optimizador en el momento de proponer. */
   z: number
@@ -121,9 +140,14 @@ export type SetpointPropuesto = {
     pctQuemados?: number
     modelVersion?: string
     esPlaceholder?: boolean
+    restriccionRelajada?: boolean
   } | null
   ventana_inicio?: string
   ventana_fin?: string
+  /** Indica si la propuesta ya fue aprobada por un supervisor. */
+  autorizada: boolean
+  fase?: string | null
+  decision_id?: string | null
 }
 
 /**

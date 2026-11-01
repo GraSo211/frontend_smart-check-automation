@@ -90,7 +90,7 @@ beforeEach(() => {
     mocks.getConsignaPropuesta.mockResolvedValue(null)
     mocks.startControl.mockResolvedValue({ ok: true, data: { lote_id: "l-1", modo: "AUTOMATICO" } })
     mocks.stopControl.mockResolvedValue({ ok: true, data: { lote_id: "l-1", stopped: true } })
-    mocks.aplicarConsigna.mockResolvedValue({ ok: true, data: { lote_id: "l-1", aplicado: true } })
+    mocks.aplicarConsigna.mockResolvedValue({ ok: true, data: { lote_id: "l-1", aprobada: true, aplicada: false } })
     mocks.cambiarModo.mockResolvedValue({
         ok: true,
         data: { lote_id: "l-1", modo: "AUTOMATICO" },

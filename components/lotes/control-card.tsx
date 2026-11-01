@@ -23,13 +23,20 @@ import {
 import SegmentedControl from "@/components/supervision/segmented-control"
 import { cn } from "@/lib/utils"
 import { formatDate, formatTime, formatTemp } from "@/lib/format"
-import type { ConfianzaClase, DecisionControl, LoteSector, SetpointPropuesto } from "@/lib/production-data"
+import type {
+    ConfianzaClase,
+    DecisionControl,
+    LoteSector,
+    MetricaHorno,
+    SetpointPropuesto,
+} from "@/lib/production-data"
 import {
     aplicarConsigna,
     cambiarModo,
     getConfianzaClases,
     getConsignaPropuesta,
     getDecisiones,
+    getMetricasHorno,
     startControl,
     stopControl,
 } from "@/actions/api"
@@ -69,7 +76,6 @@ const MODE_OPTIONS: Array<{ id: ModoOperacion; label: string }> = [
  */
 export function ControlCard({ lote, canControl }: ControlCardProps) {
     const initialModo: ModoOperacion = lote.modo ?? "MANUAL"
-    const horno2 = lote.horno2_habilitado ?? false
 
     // Estado local del modo: separado del prop para soportar optimistic updates
     // y revertir al valor del servidor sin re-renderizar toda la página. El SSE
@@ -82,6 +88,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     const [confirmTarget, setConfirmTarget] = useState<ModoOperacion | null>(null)
 
     const [decisiones, setDecisiones] = useState<DecisionControl[]>([])
+    const [metricaActual, setMetricaActual] = useState<MetricaHorno | null>(null)
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
 
@@ -89,9 +96,12 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     const [propuesta, setPropuesta] = useState<SetpointPropuesto | null>(null)
     const [loadingPropuesta, setLoadingPropuesta] = useState(false)
     const [aplicarError, setAplicarError] = useState<string | null>(null)
+    const [aprobacionNota, setAprobacionNota] = useState<string | null>(null)
 
     const [propuestaPendiente, setPropuestaPendiente] = useState<SetpointPropuesto | null>(null)
     const [sseConnected, setSseConnected] = useState(false)
+
+    const [accionError, setAccionError] = useState<string | null>(null)
 
     // F-F8: confianza agregada del modelo de visión por clase.
     const [confianzaClases, setConfianzaClases] = useState<ConfianzaClase[] | null>(null)
@@ -121,7 +131,29 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
 
     useEffect(() => {
         refresh()
+        const interval = window.setInterval(() => refresh(), 30000)
+        return () => window.clearInterval(interval)
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lote.id])
+
+    // Telemetría del horno en vivo (la Pi publica cada 5 s). Es best-effort:
+    // si falla, el panel cae a los valores de la última decisión del MPC.
+    useEffect(() => {
+        let disposed = false
+        const cargar = async () => {
+            try {
+                const items = await getMetricasHorno(lote.id, 1)
+                if (!disposed) setMetricaActual(items[0] ?? null)
+            } catch {
+                // sin telemetría no se bloquea el control
+            }
+        }
+        void cargar()
+        const id = window.setInterval(cargar, 5000)
+        return () => {
+            disposed = true
+            window.clearInterval(id)
+        }
     }, [lote.id])
 
     // F-F8: pull inicial de la confianza agregada del modelo de visión. La UI
@@ -165,9 +197,16 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
         es.onerror = () => setSseConnected(false)
         es.addEventListener("control.propuesta", (ev) => {
             try {
-                const payload = JSON.parse((ev as MessageEvent).data) as { propuesta?: SetpointPropuesto }
+                const payload = JSON.parse((ev as MessageEvent).data) as {
+                    propuesta?: SetpointPropuesto
+                    decision_id?: string
+                }
                 if (payload.propuesta) {
-                    setPropuestaPendiente(payload.propuesta)
+                    setPropuestaPendiente({
+                        ...payload.propuesta,
+                        autorizada: payload.propuesta.autorizada === true,
+                        decision_id: payload.decision_id ?? payload.propuesta.decision_id,
+                    })
                 }
             } catch {
                 // payload mal formado, ignorar
@@ -213,6 +252,8 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
         clearPropuestaSiNoSupervision(target)
         setPendingModo(true)
         setModoError(null)
+        setAccionError(null)
+        setAprobacionNota(null)
         startTransition(async () => {
             try {
                 const result = await cambiarModo(lote.id, target)
@@ -262,6 +303,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
 
     const abrirModalAplicar = () => {
         setAplicarError(null)
+        setAprobacionNota(null)
         setPropuesta(null)
         setModalOpen(true)
         setLoadingPropuesta(true)
@@ -292,9 +334,10 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     const confirmarAplicar = () => {
         if (propuesta === null) return
         setLoadingPropuesta(true)
+        setAprobacionNota(null)
         startTransition(async () => {
             try {
-                const result = await aplicarConsigna(lote.id)
+                const result = await aplicarConsigna(lote.id, propuesta.decision_id ?? undefined)
                 if (!result.ok) {
                     setAplicarError(result.errors.join(" · "))
                     return
@@ -302,10 +345,11 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                 setModalOpen(false)
                 setPropuesta(null)
                 setPropuestaPendiente(null)
+                setAprobacionNota("Aprobada. La Pi la aplicará en el próximo ciclo.")
                 refresh()
             } catch (e) {
                 setAplicarError(
-                    e instanceof Error ? e.message : "Error al aplicar la consigna.",
+                    e instanceof Error ? e.message : "Error al aprobar la consigna.",
                 )
             } finally {
                 setLoadingPropuesta(false)
@@ -323,7 +367,6 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                         <span className="font-mono" aria-live="polite">
                             {modoActual}
                         </span>
-                        {horno2 && " · Horno 2 habilitado"}
                     </p>
                 </div>
 
@@ -337,9 +380,18 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                         <Button
                             size="sm"
                             onClick={() => {
+                                setAccionError(null)
                                 startTransition(async () => {
-                                    await startControl(lote.id)
-                                    refresh()
+                                    try {
+                                        const result = await startControl(lote.id)
+                                        if (!result.ok) {
+                                            setAccionError(result.errors.join(" · "))
+                                            return
+                                        }
+                                        refresh()
+                                    } catch (e) {
+                                        setAccionError(e instanceof Error ? e.message : "Error al iniciar el control.")
+                                    }
                                 })
                             }}
                             disabled={pending || !canControl || modoActual === "MANUAL"}
@@ -351,9 +403,18 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                             size="sm"
                             variant="outline"
                             onClick={() => {
+                                setAccionError(null)
                                 startTransition(async () => {
-                                    await stopControl(lote.id)
-                                    refresh()
+                                    try {
+                                        const result = await stopControl(lote.id)
+                                        if (!result.ok) {
+                                            setAccionError(result.errors.join(" · "))
+                                            return
+                                        }
+                                        refresh()
+                                    } catch (e) {
+                                        setAccionError(e instanceof Error ? e.message : "Error al detener el control.")
+                                    }
                                 })
                             }}
                             disabled={pending || !canControl || modoActual === "MANUAL"}
@@ -372,6 +433,16 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                 >
                     <AlertTriangle className="size-3.5" aria-hidden="true" />
                     <span>No se pudo cambiar el modo: {modoError}</span>
+                </div>
+            )}
+
+            {accionError && (
+                <div
+                    role="alert"
+                    className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+                >
+                    <AlertTriangle className="size-3.5" aria-hidden="true" />
+                    <span>{accionError}</span>
                 </div>
             )}
 
@@ -398,6 +469,12 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                         />
                     </div>
 
+                    <EstadoActual
+                        lote={lote}
+                        decision={decisiones[0] ?? null}
+                        metrica={metricaActual}
+                    />
+
                     {modoActual === "SUPERVISION" && (
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                             <Button
@@ -407,7 +484,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                                 disabled={pending}
                             >
                                 <CheckCircle2 className="h-4 w-4" />
-                                Aplicar propuesta pendiente
+                                Aprobar propuesta pendiente
                             </Button>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span
@@ -418,11 +495,20 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                                     aria-hidden="true"
                                 />
                                 {propuestaPendiente
-                                    ? "Propuesta del MPC disponible"
+                                    ? propuestaPendiente.autorizada === false
+                                        ? "Pendiente de aprobación"
+                                        : "Aprobada: esperando que la Pi la aplique"
                                     : sseConnected
                                         ? "Esperando propuesta del MPC"
                                         : "Stream SSE desconectado"}
                             </div>
+                        </div>
+                    )}
+
+                    {aprobacionNota && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                            {aprobacionNota}
                         </div>
                     )}
 
@@ -451,9 +537,9 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
             <Dialog open={modalOpen} onOpenChange={setModalOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Aplicar propuesta del MPC</DialogTitle>
+                        <DialogTitle>Aprobar propuesta del MPC</DialogTitle>
                         <DialogDescription>
-                            Revisá los Δ respecto al setpoint actual antes de despachar al horno.
+                            Al aprobar, la Raspberry Pi aplicará el setpoint y confirmará al backend. No se escribe al horno desde el panel.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -466,10 +552,8 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                     ) : (
                         <PropuestaResumen
                             propuesta={propuesta}
-                            horno2={horno2}
                             tempActual={lote.temp1_objetivo ?? null}
                             velActual={lote.vel_objetivo ?? null}
-                            temp2Actual={lote.temp2_objetivo ?? null}
                         />
                     )}
 
@@ -490,7 +574,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                             className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             <CheckCircle2 className="h-4 w-4" />
-                            Confirmar y aplicar
+                            Confirmar aprobación
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -558,23 +642,15 @@ function isModo(value: string): value is ModoOperacion {
 
 function PropuestaResumen({
     propuesta,
-    horno2,
     tempActual,
     velActual,
-    temp2Actual,
 }: {
     propuesta: SetpointPropuesto
-    horno2: boolean
     tempActual: number | null
     velActual: number | null
-    temp2Actual: number | null
 }) {
     const dT1 = tempActual !== null ? propuesta.temp1 - tempActual : null
     const dV = velActual !== null ? propuesta.velocidad - velActual : null
-    const dT2 =
-        horno2 && propuesta.temp2 !== null && propuesta.temp2 !== undefined && temp2Actual !== null
-            ? propuesta.temp2 - temp2Actual
-            : null
 
     return (
         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -586,14 +662,6 @@ function PropuestaResumen({
                 unit="m/s"
                 scale={2}
             />
-            {horno2 && propuesta.temp2 !== null && propuesta.temp2 !== undefined && (
-                <Delta
-                    label="T2 propuesto"
-                    value={formatTemp(propuesta.temp2)}
-                    delta={dT2}
-                    unit="°C"
-                />
-            )}
             <div className="rounded-md border bg-muted/40 p-2">
                 <p className="text-[10px] uppercase text-muted-foreground">Z predicha</p>
                 <p className="font-mono text-sm">{propuesta.z.toFixed(2)}</p>
@@ -642,6 +710,107 @@ function Stat({ label, value }: { label: string; value: string }) {
             <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
             <p className="font-mono text-sm">{value}</p>
         </div>
+    )
+}
+
+const RAZON_SKIPPED_LABELS: Record<string, string> = {
+    precalentando: "Precalentando horno",
+    confianza_baja: "Confianza baja: no se proponen cambios",
+    modelo_no_entrenado: "Modelo sin entrenar: automático bloqueado",
+    ventana_sin_muestras: "Sin muestras en la ventana",
+    receta_sin_setpoint: "El producto no tiene receta de temperatura/velocidad",
+    precalentamiento_timeout: "Precalentamiento agotado: revisá el horno",
+    restriccion_relajada: "Restricción de calidad relajada",
+}
+
+function labelRazonSkipped(razon: string | null | undefined): string | null {
+    if (!razon) return null
+    return RAZON_SKIPPED_LABELS[razon] ?? null
+}
+
+function EstadoActual({
+    lote,
+    decision,
+    metrica,
+}: {
+    lote: LoteSector
+    decision: DecisionControl | null
+    metrica: MetricaHorno | null
+}) {
+    const tempActual = metrica?.temp_horno_1 ?? decision?.temp_actual ?? null
+    const velActual = metrica?.velocidad_cinta ?? decision?.vel_actual ?? null
+    const tempObj = metrica?.temp_objetivo ?? lote.temp1_objetivo ?? null
+    const velObj = metrica?.vel_objetivo ?? lote.vel_objetivo ?? null
+    const actualizado = metrica?.received_at ?? decision?.created_at ?? null
+    const skippedLabel = labelRazonSkipped(decision?.razon_skipped)
+
+    if (tempActual === null && velActual === null && !decision) {
+        return (
+            <section aria-label="Estado actual" className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                    Estado actual
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                    Sin telemetría del horno ni muestras del MPC todavía.
+                </p>
+            </section>
+        )
+    }
+
+    return (
+        <section aria-label="Estado actual" className="space-y-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                    Estado actual
+                </h4>
+                <p className="font-mono text-[10px] text-muted-foreground">
+                    {actualizado ? formatDate(actualizado) : "—"}
+                    {decision ? ` · ${decision.muestras} muestras` : " · sin evaluación del MPC"}
+                </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+                Telemetría cada 5 s. Porcentajes y confianza, de la última evaluación del MPC.
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <Stat label="T actual" value={tempActual !== null ? formatTemp(tempActual) : "—"} />
+                <Stat label="T objetivo" value={tempObj !== null ? formatTemp(tempObj) : "—"} />
+                <Stat
+                    label="V actual"
+                    value={velActual !== null ? `${velActual.toFixed(2)} m/s` : "—"}
+                />
+                <Stat label="V objetivo" value={velObj !== null ? `${velObj.toFixed(2)} m/s` : "—"} />
+                <Stat label="% OK" value={decision ? `${decision.pct_ok_obs.toFixed(1)}%` : "—"} />
+                <Stat label="% Crudos" value={decision ? `${decision.pct_crudos_obs.toFixed(1)}%` : "—"} />
+                <Stat label="% Quemados" value={decision ? `${decision.pct_quemados_obs.toFixed(1)}%` : "—"} />
+                <Stat
+                    label="Confianza"
+                    value={
+                        decision && decision.conf_promedio > 0
+                            ? `${(decision.conf_promedio * 100).toFixed(1)}%`
+                            : "—"
+                    }
+                />
+            </div>
+            {decision?.razon_skipped && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {skippedLabel ?? (
+                        <>
+                            skip: <span className="font-mono">{decision.razon_skipped}</span>
+                        </>
+                    )}
+                </p>
+            )}
+            {decision?.prediccion?.esPlaceholder && (
+                <p className="text-xs text-destructive">
+                    Predicción placeholder: el modelo real todavía no está entrenado.
+                </p>
+            )}
+            {decision?.prediccion?.restriccionRelajada && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                    No hubo candidato que cumpla los límites de crudos/quemados; se eligió el mejor Z.
+                </p>
+            )}
+        </section>
     )
 }
 
@@ -869,7 +1038,8 @@ function PrediccionDetalle({ prediccion }: { prediccion: NonNullable<DecisionCon
 }
 
 function HeadValue({ label, value, tone }: { label: string; value: number; tone: string }) {
-    const pct = `${(value * 100).toFixed(1)}%`
+    // El backend entrega los porcentajes en 0..100, no en fracción.
+    const pct = `${value.toFixed(1)}%`
     return (
         <div className="rounded border bg-muted/40 px-2 py-1">
             <p className="text-[10px] uppercase text-muted-foreground">{label}</p>

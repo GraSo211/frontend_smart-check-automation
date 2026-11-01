@@ -6,6 +6,7 @@ import { formatLastSeen, formatRam, formatTemp } from "@/lib/format"
 import { AUTH_STATUS_LABELS, deviceAuthStatus, type AuthStatus, type Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
 import { DeviceActionsMenu } from "@/components/dispositivos/device-actions-menu"
+import { deviceWhepUrl } from "@/lib/camera-sources"
 
 // Maps each connection state to an icon and color treatment.
 const STATUS_CONFIG: Record<
@@ -90,6 +91,7 @@ export function DeviceCard({
     device.dispositivoId.length > ID_PREVIEW_LENGTH
       ? `${device.dispositivoId.slice(0, ID_PREVIEW_LENGTH)}…`
       : device.dispositivoId
+  const derivedWhepUrl = deviceWhepUrl(device)
 
   return (
     <div
@@ -150,10 +152,15 @@ export function DeviceCard({
             Sin sector
           </p>
         )}
-        {device.whepUrl && (
-          <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={device.whepUrl}>
+        {derivedWhepUrl ? (
+          <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={derivedWhepUrl}>
             <Camera className="size-3.5 shrink-0 text-info" aria-hidden="true" />
-            <span className="truncate">Cámara configurada</span>
+            <span className="truncate">{derivedWhepUrl}</span>
+          </p>
+        ) : (
+          <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground/70">
+            <Camera className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">Cámara automática no disponible</span>
           </p>
         )}
       </div>

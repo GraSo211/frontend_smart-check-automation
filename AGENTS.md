@@ -34,7 +34,7 @@ app/                      Next.js App Router
   (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → HomeDashboard
   (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → LotesDashboard
   (modulos)/configuracion/ getProductosConParametros() + getSectores() + cursor-walked getLotes() → config panels
-  (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector/WHEP, delete
+  (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector, show derived WHEP URL, delete
   (modulos)/sectores/     Sector catalog: getSectores() + getDevices() → create/rename/delete (Supervisor+)
   (modulos)/usuarios/     Users + roles (Administrador only)
   (modulos)/supervision/  Live WHEP camera view (Supervisor+)
@@ -92,6 +92,8 @@ Data flow: the backend contract is the **sector/lotes** one. `actions/api.ts` ex
 The home page (`app/(modulos)/page.tsx`) calls `getAllLotes()`; `/lotes` adds `getSectores()` + `getLoteAbierto()`; `/configuracion` walks `getLotes()` per sector/product. The client provider (`components/monitoring-provider.tsx`) stays **global**: it fetches the global snapshot from `app/api/lotes/snapshot/route.ts` (parallel sectors, cursor walk, emits a `truncada` flag) and subscribes to `app/api/lotes/events/route.ts` (`lote.creado` / `lote.actualizado` / `lote.cerrado`, payload = raw `LoteSector`). `useProductionData()` returns `LoteSector[]` plus `truncated`; pages filter by sector client-side.
 
 Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout prevents a cold-start from blocking a request indefinitely; the resulting error is propagated to the page.
+
+MediaMTX: `NEXT_PUBLIC_MEDIAMTX_URL` is the public base (http/https, no path). The WHEP URL is derived in the front as `<base>/<slug(nombre)>-<entrada|salida>/whep`; it is not editable per device. The Raspberry publishes to the same path over RTSP.
 
 ## Conventions specific to this repo
 

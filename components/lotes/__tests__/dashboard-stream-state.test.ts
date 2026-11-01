@@ -491,37 +491,17 @@ describe("KpiCards · valores reales de horno y cinta (F-F3)", () => {
     expect(screen.getByText("Unidades procesadas").parentElement?.textContent).toContain("150")
   })
 
-  it("publica T1 y T2 cuando el horno 2 está habilitado y hay valores", () => {
+  it("publica T1 cuando hay valores", () => {
     render(
       React.createElement(KpiCards, {
         runs: [
-          lote({
-            id: "l-2h",
-            horno2_habilitado: true,
-            temp1_objetivo: 200,
-            temp2_objetivo: 180,
-            vel_objetivo: 1.5,
-          }),
-        ],
-      }),
-    )
-    const tempCard = screen.getByText("Temperatura objetivo (T1 · T2)").parentElement
-    expect(tempCard?.textContent).toContain("200")
-    expect(tempCard?.textContent).toContain("180")
-    expect(screen.getByText(/Cinta objetivo 1,5/)).toBeTruthy()
-  })
-
-  it("publica sólo T1 cuando no hay lotes con horno 2", () => {
-    render(
-      React.createElement(KpiCards, {
-        runs: [
-          lote({ id: "l-1h", horno2_habilitado: false, temp1_objetivo: 200, vel_objetivo: 1.2 }),
+          lote({ id: "l-1h", temp1_objetivo: 200, vel_objetivo: 1.2 }),
         ],
       }),
     )
     const tempCard = screen.getByText("Temperatura objetivo (T1)").parentElement
     expect(tempCard?.textContent).toContain("200")
-    expect(tempCard?.textContent).not.toContain("· 1") // no concatena T2
+    expect(screen.getByText(/Cinta objetivo 1,2/)).toBeTruthy()
   })
 
   it("promedia temp1_objetivo entre varios lotes", () => {

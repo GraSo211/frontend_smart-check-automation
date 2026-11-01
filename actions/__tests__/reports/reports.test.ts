@@ -19,7 +19,6 @@ function lote(overrides: Partial<LoteSector> = {}): LoteSector {
         motivo_cierre: "FIN",
         modo: "AUTOMATICO",
         temp1_objetivo: 200,
-        temp2_objetivo: 180,
         vel_objetivo: 1.0,
         ...overrides,
     }
@@ -80,7 +79,7 @@ describe("buildLotesReport (CSV)", () => {
     it("emite la fila de encabezado con todas las columnas", () => {
         const report = buildLotesReport(runs, { format: "csv" })
         const firstLine = report.body.split("\r\n")[0]!.replace(/^\uFEFF/, "")
-        expect(firstLine.split(",").length).toBe(20)
+        expect(firstLine.split(",").length).toBe(19)
         expect(firstLine).toContain("id")
         expect(firstLine).toContain("calidad_pct")
     })
@@ -101,12 +100,11 @@ describe("buildLotesReport (CSV)", () => {
 
     it("deja vacíos los campos null/undefined (no «0» fabricado)", () => {
         const report = buildLotesReport(
-            [lote({ temp2_objetivo: null, vel_objetivo: undefined })],
+            [lote({ vel_objetivo: undefined })],
             { format: "csv" },
         )
-        // La columna temp2_objetivo y vel_objetivo quedan como string vacío
-        // entre comas: ",, " en la fila de datos.
-        expect(report.body).toContain(",,\r\n")
+        // La columna vel_objetivo queda como string vacío al final de la fila.
+        expect(report.body).toContain(",\r\n")
     })
 })
 

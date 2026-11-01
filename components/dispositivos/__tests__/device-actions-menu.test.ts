@@ -2,10 +2,14 @@
 
 import React from "react"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { DeviceActionsMenu } from "@/components/dispositivos/device-actions-menu"
 import type { Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
+
+beforeAll(() => {
+  process.env.NEXT_PUBLIC_MEDIAMTX_URL = "https://cam.test"
+})
 
 const updateDispositivo = vi.fn()
 const deleteDispositivo = vi.fn()
@@ -33,6 +37,7 @@ function device(overrides: Partial<Device> = {}): Device {
     dispositivoId: "node-1",
     nombre: "Dispositivo 1",
     sectorId: "s1",
+    type: "ENTRADA_HORNO",
     estado: "online",
     lastSeen: at,
     authStatus: "active",
@@ -125,6 +130,15 @@ describe("acción de edición del dispositivo", () => {
     })
     const payload = updateDispositivo.mock.calls[0][0] as Record<string, unknown>
     expect(payload).not.toHaveProperty("nombre")
+    expect(payload).not.toHaveProperty("whepUrl")
+  })
+
+  it("muestra la URL WHEP derivada como campo de solo lectura", async () => {
+    await openEditDialog()
+
+    const whepInput = screen.getByLabelText("URL WHEP (cámara)") as HTMLInputElement
+    expect(whepInput.readOnly).toBe(true)
+    expect(whepInput.value).toBe("https://cam.test/dispositivo-1-entrada/whep")
   })
 
   it("cuando cambia el nombre llama a renameDispositivo y luego updateDispositivo", async () => {

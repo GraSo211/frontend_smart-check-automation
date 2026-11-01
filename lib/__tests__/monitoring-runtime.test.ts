@@ -60,16 +60,9 @@ describe('monitoring runtime validation', () => {
     expect(parsed).not.toHaveProperty('pendingEnrollment')
   })
 
-  it('parsea un whepUrl opcional sin rechazar el dispositivo', () => {
-    expect(parseDeviceEventPayload({ ...device, whepUrl: '  https://cam.test/whep  ' })?.whepUrl).toBe('https://cam.test/whep')
-    expect(parseDeviceEventPayload({ ...device, whepUrl: '   ' })?.whepUrl).toBeUndefined()
-    expect(parseDeviceEventPayload({ ...device, whepUrl: 42 })?.whepUrl).toBeUndefined()
-    expect(parseDeviceEventPayload(device)?.whepUrl).toBeUndefined()
-  })
-
-  it('no invalida el dispositivo por un whepUrl malformado, pero lo conserva en snapshots válidos', () => {
-    expect(parseDeviceEventPayload({ ...device, whepUrl: 'no-es-una-url' })?.dispositivoId).toBe('n-1')
-    expect(parseDevicesPayload({ success: true, data: [{ ...liveDevice, whepUrl: 'https://cam.test/whep' }] })?.[0].whepUrl).toBe('https://cam.test/whep')
+  it('ignora el campo whepUrl heredado sin rechazar el dispositivo', () => {
+    expect(parseDeviceEventPayload({ ...device, whepUrl: 'https://cam.test/whep' })).not.toHaveProperty('whepUrl')
+    expect(parseDevicesPayload({ success: true, data: [{ ...liveDevice, whepUrl: 'https://cam.test/whep' }] })?.[0]).not.toHaveProperty('whepUrl')
   })
 
   it('rechaza atómicamente una métrica con un valor numérico inválido', () => {

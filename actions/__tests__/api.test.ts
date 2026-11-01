@@ -415,26 +415,24 @@ describe("server actions de datos del backend", () => {
     expect(result).toEqual({ ok: true, data: { requestId: "req/1", status: "REJECTED" } })
   })
 
-  it("envía el whepUrl y el sectorId al actualizar y los copia de la respuesta", async () => {
+  it("envía sólo dispositivoId y sectorId al actualizar", async () => {
     fetchMock.mockResolvedValue(json({
       success: true,
-      data: { ...validDeviceRead, whepUrl: "https://cam.test/whep" },
+      data: { ...validDeviceRead },
     }))
 
     const result = await api.updateDispositivo({
       dispositivoId: "node-1",
       sectorId: "s-1",
-      whepUrl: " https://cam.test/whep ",
     })
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
       dispositivoId: "node-1",
       sectorId: "s-1",
-      whepUrl: "https://cam.test/whep",
     })
     expect(result).toEqual({
       ok: true,
-      data: expect.objectContaining({ dispositivoId: "node-1", sectorId: "s-1", whepUrl: "https://cam.test/whep" }),
+      data: expect.objectContaining({ dispositivoId: "node-1", sectorId: "s-1" }),
     })
   })
 
@@ -508,14 +506,14 @@ describe("server actions de datos del backend", () => {
   })
 
   it("actualiza un sector y codifica el id en la ruta", async () => {
-    fetchMock.mockResolvedValue(json({ success: true, data: { id: "s/1", nombre: "Horno 2" } }))
+    fetchMock.mockResolvedValue(json({ success: true, data: { id: "s/1", nombre: "Horno Sur" } }))
 
-    const result = await api.updateSector({ id: "s/1", nombre: "Horno 2" })
+    const result = await api.updateSector({ id: "s/1", nombre: "Horno Sur" })
 
     expect(fetchMock.mock.calls[0][0]).toBe("https://backend.example.test/api/v1/sectores/s%2F1")
     expect(fetchMock.mock.calls[0][1].method).toBe("PUT")
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Horno 2" })
-    expect(result).toEqual({ ok: true, data: { id: "s/1", nombre: "Horno 2" } })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nombre: "Horno Sur" })
+    expect(result).toEqual({ ok: true, data: { id: "s/1", nombre: "Horno Sur" } })
   })
 
   it("elimina un sector sin enviar body", async () => {
@@ -638,7 +636,7 @@ describe("server actions de datos del backend", () => {
     fetchMock.mockImplementation(async (url: string) => {
       const parsed = new URL(url)
       if (parsed.pathname.endsWith("/sectores")) {
-        return json({ success: true, data: [sector, { id: "s-2", nombre: "Horno 2" }] })
+        return json({ success: true, data: [sector, { id: "s-2", nombre: "Horno Norte" }] })
       }
       const sectorId = parsed.searchParams.get("sector_id")
       const antesDe = parsed.searchParams.get("antes_de")
@@ -662,7 +660,7 @@ describe("server actions de datos del backend", () => {
     fetchMock.mockImplementation(async (url: string) => {
       const parsed = new URL(url)
       if (parsed.pathname.endsWith("/sectores")) {
-        return json({ success: true, data: [sector, { id: "s-2", nombre: "Horno 2" }] })
+        return json({ success: true, data: [sector, { id: "s-2", nombre: "Horno Norte" }] })
       }
       if (parsed.searchParams.get("sector_id") === "s-1") {
         return json({ success: true, data: [validLote], total: 1, page: 1, pageSize: 100 })
@@ -1155,6 +1153,85 @@ describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
       if (result.ok) return
       expect(result.errors[0]).toContain("no respondió a tiempo")
       vi.useRealTimers()
+    })
+  })
+
+  describe("getConsignaPropuesta (GET /api/v1/lotes/{id}/consigna-propuesta)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("parsea la forma directa actual (data contiene la propuesta)", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            decision_id: "dec-1",
+            temp1_objetivo: 180.5,
+            vel_objetivo: 1.25,
+            generated_at: "2026-09-23T08:00:00.000Z",
+            ttl_segundos: 60,
+            ventana_inicio: "2026-09-23T07:55:00.000Z",
+            ventana_fin: "2026-09-23T08:00:00.000Z",
+            autorizada: false,
+            fase: "supervision",
+          },
+        }),
+      )
+
+      await expect(api.getConsignaPropuesta("l-1")).resolves.toEqual({
+        temp1: 180.5,
+        velocidad: 1.25,
+        z: 0,
+        prediccion: null,
+        ventana_inicio: "2026-09-23T07:55:00.000Z",
+        ventana_fin: "2026-09-23T08:00:00.000Z",
+        autorizada: false,
+        fase: "supervision",
+        decision_id: "dec-1",
+      })
+    })
+
+    it("soporta la forma anidada legacy (data.propuesta)", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            propuesta: {
+              temp1: 182,
+              velocidad: 1.1,
+              z: 0.85,
+              ventana_inicio: "2026-09-23T07:50:00.000Z",
+              ventana_fin: "2026-09-23T07:55:00.000Z",
+            },
+          },
+        }),
+      )
+
+      const result = await api.getConsignaPropuesta("l-1")
+      expect(result).toMatchObject({
+        temp1: 182,
+        velocidad: 1.1,
+        z: 0.85,
+        autorizada: false,
+        fase: null,
+        decision_id: null,
+      })
+    })
+
+    it("devuelve null cuando el backend responde 204", async () => {
+      fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+
+      await expect(api.getConsignaPropuesta("l-1")).resolves.toBeNull()
+    })
+
+    it("devuelve null cuando falta la temperatura objetivo", async () => {
+      fetchMock.mockResolvedValue(
+        json({ success: true, data: { vel_objetivo: 1.2, autorizada: false } }),
+      )
+
+      await expect(api.getConsignaPropuesta("l-1")).resolves.toBeNull()
     })
   })
 })

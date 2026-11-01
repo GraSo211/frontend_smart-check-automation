@@ -142,9 +142,8 @@ export function parseDevice(value: unknown): Device | null {
     (value.lastSeen === undefined || value.lastSeen === '')
   if (!hasLastSeen && !hasOfflineEmptyLastSeen) return null
   if (hasLastSeen && !isValidIso(value.lastSeen)) return null
-  // `whepUrl` is optional: an absent or malformed value must never invalidate
-  // the device. A usable camera URL is a non-empty, trimmed string.
-  const whepUrl = typeof value.whepUrl === 'string' ? value.whepUrl.trim() : ''
+  // `whepUrl` ya no se usa en el front: el backend puede seguir enviándolo,
+  // pero la URL WHEP se deriva localmente a partir del nombre y el tipo.
   // Security fields are optional here: legacy device rows and SSE telemetry
   // events may omit them, and an absent field must never reject the device.
   const authStatus = parseAuthStatus(value.authStatus)
@@ -158,7 +157,6 @@ export function parseDevice(value: unknown): Device | null {
   return {
     dispositivoId: value.dispositivoId,
     nombre: typeof value.nombre === 'string' && value.nombre !== '' ? value.nombre : value.dispositivoId,
-    ...(whepUrl ? { whepUrl } : {}),
     estado: value.estado,
     ultimaMetrica: metric,
     // An offline node created without telemetry is valid and has no lastSeen yet.

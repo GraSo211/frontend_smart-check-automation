@@ -138,9 +138,6 @@ export function ParametersHistory({
                 <Th className="text-center">Crudas</Th>
                 <Th>Motivo de cierre</Th>
                 <Th>Turno</Th>
-                <Th className="text-center">Horno 1</Th>
-                <Th className="text-center">Horno 2</Th>
-                <Th className="text-center">Vel. cinta</Th>
               </tr>
             </thead>
             <tbody>
@@ -173,9 +170,6 @@ export function ParametersHistory({
                     {lote.motivo_cierre ?? PLACEHOLDER}
                   </td>
                   <td className="px-4 py-3.5 text-muted-foreground">{lote.turno ?? PLACEHOLDER}</td>
-                  <td className="px-4 py-3.5 text-center text-muted-foreground">{PLACEHOLDER}</td>
-                  <td className="px-4 py-3.5 text-center text-muted-foreground">{PLACEHOLDER}</td>
-                  <td className="px-4 py-3.5 text-center text-muted-foreground">{PLACEHOLDER}</td>
                 </tr>
               ))}
             </tbody>

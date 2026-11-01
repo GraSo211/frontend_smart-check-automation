@@ -18,6 +18,7 @@ import type {
     Producto,
     ProductoRequest,
     DecisionControl,
+    MetricaHorno,
     PrediccionResumen,
     SetpointPropuesto,
     ControlEstado,
@@ -444,14 +445,6 @@ const REGISTRATION_STATUS_MESSAGES: Record<number, string> = {
     410: "La solicitud de registro expiró.",
 };
 
-// Normalizes the optional camera URL sent to the backend: trim, and drop an
-// empty value so the field is omitted from the JSON body.
-function normalizeWhepUrl(value: string | undefined): string | undefined {
-    if (typeof value !== "string") return undefined
-    const trimmed = value.trim()
-    return trimmed ? trimmed : undefined
-}
-
 function errorCodeOf(result: unknown): string | null {
     if (!isRecord(result)) return null
     const errors = result.errors
@@ -629,19 +622,18 @@ export async function rejectRegistrationRequest(
     });
 }
 
-// Updates the sector and camera (WHEP) URL of an existing node
-// (PUT /api/v1/dispositivos). The name is immutable from the panel: only the
-// device itself can change it through its authenticated endpoint, so the
-// backend rejects requests carrying `nombre` with a 400. A 409 means the sector
-// already has a node with that functional role (max 1 ENTRADA_HORNO and 1
-// SALIDA_HORNO per sector).
+// Updates the sector of an existing node (PUT /api/v1/dispositivos). The name
+// is immutable from the panel: only the device itself can change it through
+// its authenticated endpoint, so the backend rejects requests carrying
+// `nombre` with a 400. A 409 means the sector already has a node with that
+// functional role (max 1 ENTRADA_HORNO and 1 SALIDA_HORNO per sector).
 export async function updateDispositivo(
     payload: UpdateDispositivoRequest,
 ): Promise<DeviceActionResult<Device>> {
     return deviceMutation<Device>({
         path: "/api/v1/dispositivos",
         method: "PUT",
-        body: { ...payload, whepUrl: normalizeWhepUrl(payload.whepUrl) },
+        body: payload,
         parse: parseDevice,
         invalidMessage: "La API devolvió un dispositivo inválido.",
         statusMessages: {
@@ -801,25 +793,45 @@ export async function stopControl(
     });
 }
 
-/** Aplica (operario) la propuesta pendiente en modo SUPERVISION. */
+/** Aprueba la propuesta pendiente en modo SUPERVISION. */
 export async function aplicarConsigna(
     loteId: string,
-): Promise<DeviceActionResult<{ lote_id: string; aplicado: boolean }>> {
-    return deviceMutation<{ lote_id: string; aplicado: boolean }>({
+    decisionId?: string,
+): Promise<DeviceActionResult<{
+    lote_id: string
+    aprobada: boolean
+    aplicada: boolean
+    decision_id?: string
+    temp1_objetivo?: number
+    vel_objetivo?: number
+}>> {
+    return deviceMutation<{
+        lote_id: string
+        aprobada: boolean
+        aplicada: boolean
+        decision_id?: string
+        temp1_objetivo?: number
+        vel_objetivo?: number
+    }>({
         path: `/api/v1/lotes/${encodeURIComponent(loteId)}/aplicar-consigna`,
         method: "POST",
+        body: decisionId ? { decision_id: decisionId } : undefined,
         parse: (raw) => {
-            if (!isRecord(raw)) return { lote_id: loteId, aplicado: false }
+            if (!isRecord(raw)) return { lote_id: loteId, aprobada: false, aplicada: false }
             return {
                 lote_id: String(raw.lote_id ?? loteId),
-                aplicado: Boolean(raw.aplicado ?? false),
+                aprobada: Boolean(raw.aprobada ?? false),
+                aplicada: Boolean(raw.aplicada ?? false),
+                decision_id: typeof raw.decision_id === "string" ? raw.decision_id : undefined,
+                temp1_objetivo: typeof raw.temp1_objetivo === "number" ? raw.temp1_objetivo : undefined,
+                vel_objetivo: typeof raw.vel_objetivo === "number" ? raw.vel_objetivo : undefined,
             }
         },
         allowEmptyData: true,
-        invalidMessage: "La API devolvió una respuesta inválida al aplicar la consigna.",
+        invalidMessage: "La API devolvió una respuesta inválida al aprobar la consigna.",
         statusMessages: {
             404: "El lote no existe o no hay loop de control activo.",
-            409: "No hay propuesta pendiente de aplicar.",
+            409: "No hay propuesta pendiente o el modo automático no requiere aprobación.",
         },
         revalidatePaths: ["/lotes", "/supervision"],
     });
@@ -971,6 +983,49 @@ export async function getDecisiones(
     })
 }
 
+/**
+ * GET /api/v1/lotes/{id}/metricas-horno — últimas lecturas del horno.
+ * El default es 1 (la más reciente) para el panel de estado actual.
+ */
+export async function getMetricasHorno(
+    loteId: string,
+    limite = 1,
+): Promise<MetricaHorno[]> {
+    const safeLimite = Math.min(200, Math.max(1, Math.trunc(limite)))
+    return withBackendFetch({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/metricas-horno?limite=${safeLimite}`,
+        timeoutMessage: "El backend no respondió a tiempo. La telemetría no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return []
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null
+            const items = Array.isArray(data?.metricas) ? data.metricas : []
+            return items.filter(isRecord).map(parseMetricaHorno)
+        },
+    }).catch(() => [])
+}
+
+function parseMetricaHorno(raw: Record<string, unknown>): MetricaHorno {
+    const num = (v: unknown) => (typeof v === "number" ? v : null)
+    return {
+        id: String(raw.id ?? ""),
+        lote_id: String(raw.lote_id ?? ""),
+        temp_horno_1: num(raw.temp_horno_1),
+        temp_comb_1: num(raw.temp_comb_1),
+        humedad_horno: num(raw.humedad_horno),
+        temp_ambiente: num(raw.temp_ambiente),
+        humedad_ambiente: num(raw.humedad_ambiente),
+        velocidad_cinta: num(raw.velocidad_cinta),
+        temp_objetivo: num(raw.temp_objetivo),
+        vel_objetivo: num(raw.vel_objetivo),
+        confianza_deteccion: num(raw.confianza_deteccion),
+        received_at: String(raw.received_at ?? ""),
+    }
+}
+
 function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
     const num = (v: unknown) => (typeof v === "number" ? v : null)
     return {
@@ -997,6 +1052,8 @@ function parseDecisionControl(raw: Record<string, unknown>): DecisionControl {
             raw.aplicado_por === "MPC" || raw.aplicado_por === "OPERARIO"
                 ? raw.aplicado_por
                 : "NADIE",
+        aprobada_por: typeof raw.aprobada_por === "string" ? raw.aprobada_por : null,
+        aprobada_at: typeof raw.aprobada_at === "string" ? raw.aprobada_at : null,
         created_at: String(raw.created_at ?? ""),
     }
 }
@@ -1009,6 +1066,7 @@ function parsePrediccion(raw: unknown): PrediccionResumen | null {
         pctQuemados: typeof raw.pctQuemados === "number" ? raw.pctQuemados : 0,
         modelVersion: typeof raw.modelVersion === "string" ? raw.modelVersion : "",
         esPlaceholder: typeof raw.esPlaceholder === "boolean" ? raw.esPlaceholder : true,
+        restriccionRelajada: typeof raw.restriccionRelajada === "boolean" ? raw.restriccionRelajada : undefined,
     }
 }
 
@@ -1020,6 +1078,9 @@ function parsePrediccion(raw: unknown): PrediccionResumen | null {
  * El Loop del MPC también emite la propuesta por SSE en `control.propuesta`,
  * pero este endpoint existe para sincronización pull-based (la UI pide el
  * snapshot al cargar y al reintentar después de un timeout).
+ *
+ * Soporta tanto la forma directa (`data` contiene la propuesta) como la
+ * forma anidada legacy (`data.propuesta`).
  */
 export async function getConsignaPropuesta(loteId: string): Promise<SetpointPropuesto | null> {
     return withBackendFetch({
@@ -1037,25 +1098,37 @@ export async function getConsignaPropuesta(loteId: string): Promise<SetpointProp
                 return null
             }
             if (!isRecord(payload) || payload.success !== true) return null
-            // El backend actualmente responde 204 sin payload; este path queda
-            // para cuando emita la propuesta también por GET (futuro).
-            const propuesta = isRecord(payload.data) ? payload.data.propuesta : null
-            if (!isRecord(propuesta)) return null
-            return parseSetpointPropuesto(propuesta)
+            const data = isRecord(payload.data) ? payload.data : null
+            if (!data) return null
+            // Forma directa (actual): la propuesta viene en `data`.
+            const direct = typeof data.temp1_objetivo === "number" ? data : null
+            // Forma anidada legacy: `data.propuesta`.
+            const legacy = isRecord(data.propuesta) ? data.propuesta : null
+            const raw = direct ?? legacy
+            if (!isRecord(raw)) return null
+            return parseSetpointPropuesto(raw)
         },
     }).catch(() => null)
 }
 
 function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto | null {
-    const temp1 = typeof raw.temp1 === "number" ? raw.temp1 : null
-    const velocidad = typeof raw.velocidad === "number" ? raw.velocidad : null
+    const temp1 =
+        typeof raw.temp1_objetivo === "number"
+            ? raw.temp1_objetivo
+            : typeof raw.temp1 === "number"
+              ? raw.temp1
+              : null
+    const velocidad =
+        typeof raw.vel_objetivo === "number"
+            ? raw.vel_objetivo
+            : typeof raw.velocidad === "number"
+              ? raw.velocidad
+              : null
     if (temp1 === null || velocidad === null) return null
     const z = typeof raw.z === "number" ? raw.z : 0
-    const temp2 = typeof raw.temp2 === "number" ? raw.temp2 : null
     const pred = isRecord(raw.prediccion) ? raw.prediccion : null
     return {
         temp1,
-        temp2,
         velocidad,
         z,
         prediccion: pred
@@ -1065,10 +1138,14 @@ function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto
                 pctQuemados: typeof pred.pctQuemados === "number" ? pred.pctQuemados : undefined,
                 modelVersion: typeof pred.modelVersion === "string" ? pred.modelVersion : undefined,
                 esPlaceholder: typeof pred.esPlaceholder === "boolean" ? pred.esPlaceholder : undefined,
+                restriccionRelajada: typeof pred.restriccionRelajada === "boolean" ? pred.restriccionRelajada : undefined,
             }
             : null,
         ventana_inicio: typeof raw.ventana_inicio === "string" ? raw.ventana_inicio : undefined,
         ventana_fin: typeof raw.ventana_fin === "string" ? raw.ventana_fin : undefined,
+        autorizada: raw.autorizada === true,
+        fase: typeof raw.fase === "string" ? raw.fase : null,
+        decision_id: typeof raw.decision_id === "string" ? raw.decision_id : null,
     }
 }
 

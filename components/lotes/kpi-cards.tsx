@@ -7,10 +7,9 @@ interface KpiCardsProps {
   runs: LoteSector[]
 }
 
-// F-F3: el backend ahora expone `temp1_objetivo`, `temp2_objetivo` y
-// `vel_objetivo` por lote. Promediamos los valores presentes por card. Una
-// métrica con todas sus observaciones ausentes se mantiene como "—" para no
-// publicar un 0 fabricado.
+// F-F3: el backend expone `temp1_objetivo` y `vel_objetivo` por lote.
+// Promediamos los valores presentes por card. Una métrica con todas sus
+// observaciones ausentes se mantiene como "—" para no publicar un 0 fabricado.
 function computeMetrics(runs: LoteSector[]) {
   const totalUnits = runs.reduce((sum, run) => sum + run.conteos.total, 0)
   const totalOk = runs.reduce((sum, run) => sum + (run.conteos.ok ?? 0), 0)
@@ -20,11 +19,9 @@ function computeMetrics(runs: LoteSector[]) {
   )
 
   const temp1: number[] = []
-  const temp2: number[] = []
   const vel: number[] = []
   for (const run of runs) {
     if (typeof run.temp1_objetivo === "number") temp1.push(run.temp1_objetivo)
-    if (typeof run.temp2_objetivo === "number") temp2.push(run.temp2_objetivo)
     if (typeof run.vel_objetivo === "number") vel.push(run.vel_objetivo)
   }
 
@@ -35,9 +32,8 @@ function computeMetrics(runs: LoteSector[]) {
     qualityRate: totalUnits ? (totalOk / totalUnits) * 100 : 0,
     defectRate: totalUnits ? (totalDefects / totalUnits) * 100 : 0,
     avgTemp1: avg(temp1),
-    avgTemp2: avg(temp2),
     avgVel: avg(vel),
-    samplesTemp: temp1.length + temp2.length,
+    samplesTemp: temp1.length,
     samplesVel: vel.length,
   }
 }
@@ -55,15 +51,7 @@ export function KpiCards({ runs }: KpiCardsProps) {
     (run) => run.conteos.quemado !== null || run.conteos.crudo !== null,
   )
 
-  // Combinamos T1 + T2 (cuando horno2 está habilitado en al menos un lote) en
-  // una sola card; si T2 está uniformemente ausente mostramos sólo T1.
-  const anyHorno2 = runs.some((run) => run.horno2_habilitado === true)
-  const tempCombined =
-    m.avgTemp1 !== null && m.avgTemp2 !== null && anyHorno2
-      ? `${formatTemp(m.avgTemp1)} · ${formatTemp(m.avgTemp2)}`
-      : m.avgTemp1 !== null
-        ? formatTemp(m.avgTemp1)
-        : null
+  const tempObjetivo = m.avgTemp1 !== null ? formatTemp(m.avgTemp1) : null
 
   const cards = [
     {
@@ -88,8 +76,8 @@ export function KpiCards({ runs }: KpiCardsProps) {
       accent: "bg-destructive/10 text-destructive",
     },
     {
-      label: anyHorno2 ? "Temperatura objetivo (T1 · T2)" : "Temperatura objetivo (T1)",
-      value: tempCombined ?? "—",
+      label: "Temperatura objetivo (T1)",
+      value: tempObjetivo ?? "—",
       hint:
         m.avgVel !== null
           ? `Cinta objetivo ${m.avgVel.toLocaleString("es-AR", { maximumFractionDigits: 2 })} m/s · ${m.samplesTemp} muestras`

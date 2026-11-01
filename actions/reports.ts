@@ -98,7 +98,6 @@ export function buildLotesReport(
         "ventana_actualizacion_segundos",
         "tolerancia_temp_c",
         "temp1_objetivo",
-        "temp2_objetivo",
         "vel_objetivo",
     ]
     const lines = [header.join(",")]
@@ -134,7 +133,6 @@ function serializeLote(l: LoteSector): Record<string, unknown> {
         ventana_actualizacion_segundos: l.ventana_actualizacion_segundos ?? null,
         tolerancia_temp_c: l.tolerancia_temp_c ?? null,
         temp1_objetivo: l.temp1_objetivo ?? null,
-        temp2_objetivo: l.temp2_objetivo ?? null,
         vel_objetivo: l.vel_objetivo ?? null,
     }
 }
@@ -161,7 +159,6 @@ function buildRow(l: LoteSector): Array<string | number | null> {
         l.ventana_actualizacion_segundos ?? "",
         l.tolerancia_temp_c ?? "",
         l.temp1_objetivo ?? "",
-        l.temp2_objetivo ?? "",
         l.vel_objetivo ?? "",
     ]
 }

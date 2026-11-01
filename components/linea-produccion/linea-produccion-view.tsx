@@ -249,15 +249,11 @@ function SemaforoTolerancia({
     }
 
     const t1 = lote.temp1_objetivo
-    const t2 = lote.temp2_objetivo
     const v = lote.vel_objetivo
 
     const niveles: Array<{ label: string; value: number | null | undefined; range: [number, number] }> = []
     if (typeof t1 === "number") {
         niveles.push({ label: "T1 objetivo", value: t1, range: [producto.tempMin, producto.tempMax] })
-    }
-    if (typeof t2 === "number") {
-        niveles.push({ label: "T2 objetivo", value: t2, range: [producto.tempMin, producto.tempMax] })
     }
     if (typeof v === "number") {
         niveles.push({

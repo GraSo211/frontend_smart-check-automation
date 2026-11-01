@@ -20,7 +20,7 @@ import { SectorSelect } from "@/components/shared/sector-select"
 import { deleteDispositivo, renameDispositivo, updateDispositivo } from "@/actions/api"
 import type { Device } from "@/lib/devices-data"
 import type { Sector } from "@/lib/production-data"
-import { isWhepUrl } from "@/lib/camera-sources"
+import { deviceWhepUrl } from "@/lib/camera-sources"
 
 interface DeviceActionsMenuProps {
   device: Device
@@ -53,8 +53,6 @@ export function DeviceActionsMenu({
   const [nombre, setNombre] = useState(device.nombre)
   const [nombreError, setNombreError] = useState<string | null>(null)
   const [sectorId, setSectorId] = useState(device.sectorId ?? "")
-  const [whepUrl, setWhepUrl] = useState(device.whepUrl ?? "")
-  const [whepError, setWhepError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -63,12 +61,12 @@ export function DeviceActionsMenu({
   const [isDeleting, setIsDeleting] = useState(false)
   const deletingRef = useRef(false)
 
+  const derivedWhepUrl = deviceWhepUrl({ nombre: nombre.trim() || device.nombre, type: device.type })
+
   const openEditDialog = () => {
     setNombre(device.nombre)
     setNombreError(null)
     setSectorId(device.sectorId ?? "")
-    setWhepUrl(device.whepUrl ?? "")
-    setWhepError(null)
     setEditOpen(true)
   }
 
@@ -81,13 +79,6 @@ export function DeviceActionsMenu({
       return
     }
     setNombreError(null)
-
-    const trimmedWhepUrl = whepUrl.trim()
-    if (!isWhepUrl(trimmedWhepUrl)) {
-      setWhepError("Ingresá una URL http(s):// que termine en /whep.")
-      return
-    }
-    setWhepError(null)
 
     const nombreCambio = trimmedNombre !== device.nombre
 
@@ -105,7 +96,6 @@ export function DeviceActionsMenu({
       const result = await updateDispositivo({
         dispositivoId: device.dispositivoId,
         sectorId: sectorId === "" ? null : sectorId,
-        whepUrl: trimmedWhepUrl || undefined,
       })
 
       if (result.ok) {
@@ -114,7 +104,7 @@ export function DeviceActionsMenu({
         router.refresh()
       } else {
         const mensaje = nombreCambio
-          ? "Se actualizó el nombre pero no se pudieron guardar el sector ni la cámara"
+          ? "Se actualizó el nombre pero no se pudo guardar el sector"
           : "No se pudo actualizar el dispositivo"
         toast.error(mensaje, {
           description: result.errors.join(" · "),
@@ -147,6 +137,14 @@ export function DeviceActionsMenu({
       setIsDeleting(false)
     }
   }
+
+  const whepHint = derivedWhepUrl
+    ? "Se arma automáticamente a partir del nombre y el tipo. No es editable."
+    : device.type
+      ? "Falta o es inválida la variable NEXT_PUBLIC_MEDIAMTX_URL (debe ser http(s)://); sin ella no se puede armar la URL."
+      : "El dispositivo no tiene tipo (entrada/salida) definido; no se puede derivar la URL."
+
+  const whepValue = derivedWhepUrl ?? (device.type ? "URL no disponible" : "Sin tipo de dispositivo")
 
   return (
     <>
@@ -189,7 +187,7 @@ export function DeviceActionsMenu({
               <Pencil className="size-5" aria-hidden="true" />
             </span>
             <DialogTitle>Editar dispositivo</DialogTitle>
-            <DialogDescription>Actualizá el nombre, el sector y la cámara del dispositivo.</DialogDescription>
+            <DialogDescription>Actualizá el nombre y el sector del dispositivo. La URL de la cámara se deriva automáticamente.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
@@ -233,26 +231,15 @@ export function DeviceActionsMenu({
               <Label htmlFor="editar-dispositivo-whep">URL WHEP (cámara)</Label>
               <Input
                 id="editar-dispositivo-whep"
-                type="url"
-                inputMode="url"
-                value={whepUrl}
-                placeholder="https://mediamtx.local/entrada/whep"
-                aria-invalid={whepError ? true : undefined}
-                aria-describedby={whepError ? "editar-dispositivo-whep-error" : "editar-dispositivo-whep-hint"}
-                onChange={(e) => {
-                  setWhepUrl(e.target.value)
-                  if (whepError) setWhepError(null)
-                }}
+                type="text"
+                value={whepValue}
+                readOnly
+                aria-readonly="true"
+                aria-describedby="editar-dispositivo-whep-hint"
               />
-              {whepError ? (
-                <p id="editar-dispositivo-whep-error" className="mt-1 text-xs text-destructive">
-                  {whepError}
-                </p>
-              ) : (
-                <p id="editar-dispositivo-whep-hint" className="mt-1 text-xs text-muted-foreground">
-                  Opcional. URL http(s):// que termina en /whep.
-                </p>
-              )}
+              <p id="editar-dispositivo-whep-hint" className="mt-1 text-xs text-muted-foreground">
+                {whepHint}
+              </p>
             </div>
 
             <DialogFooter>
