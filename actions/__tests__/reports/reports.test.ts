@@ -79,9 +79,21 @@ describe("buildLotesReport (CSV)", () => {
     it("emite la fila de encabezado con todas las columnas", () => {
         const report = buildLotesReport(runs, { format: "csv" })
         const firstLine = report.body.split("\r\n")[0]!.replace(/^\uFEFF/, "")
-        expect(firstLine.split(",").length).toBe(19)
+        expect(firstLine.split(",").length).toBe(20)
         expect(firstLine).toContain("id")
         expect(firstLine).toContain("calidad_pct")
+        expect(firstLine).toContain("confianza_promedio")
+    })
+
+    it("emite la confianza como porcentaje de un decimal o vacío", () => {
+        const report = buildLotesReport(
+            [lote({ id: "l-1", confianza_promedio: 0.873 }), lote({ id: "l-2", confianza_promedio: null })],
+            { format: "csv" },
+        )
+        expect(report.body).toContain(",87.3,")
+        const rows = report.body.split("\r\n").slice(1, 3)
+        expect(rows[0]!.split(",")[13]).toBe("87.3")
+        expect(rows[1]!.split(",")[13]).toBe("")
     })
 
     it("escapa comas y comillas según RFC 4180", () => {
@@ -125,6 +137,16 @@ describe("buildLotesReport (JSON)", () => {
         const report = buildLotesReport([lote({ id: "l-1" })], { format: "json" })
         const parsed = JSON.parse(report.body)
         expect(parsed.lotes[0].calidad_pct).toBe("80.0")
+    })
+
+    it("incluye la confianza promedio como porcentaje o null", () => {
+        const report = buildLotesReport(
+            [lote({ id: "l-1", confianza_promedio: 0.873 }), lote({ id: "l-2", confianza_promedio: null })],
+            { format: "json" },
+        )
+        const parsed = JSON.parse(report.body)
+        expect(parsed.lotes[0].confianza_promedio).toBe("87.3")
+        expect(parsed.lotes[1].confianza_promedio).toBeNull()
     })
 
     it("omite la calidad cuando ok es null (no publica 0.0%)", () => {

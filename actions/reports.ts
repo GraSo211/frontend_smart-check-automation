@@ -93,6 +93,7 @@ export function buildLotesReport(
         "quemado",
         "crudo",
         "calidad_pct",
+        "confianza_promedio",
         "modo",
         "ventana_evaluacion_segundos",
         "ventana_actualizacion_segundos",
@@ -128,6 +129,9 @@ function serializeLote(l: LoteSector): Record<string, unknown> {
         calidad_pct: l.conteos.total > 0 && l.conteos.ok !== null
             ? qualityRate(l.conteos.ok, l.conteos.total).toFixed(1)
             : null,
+        confianza_promedio: l.confianza_promedio != null
+            ? (l.confianza_promedio * 100).toFixed(1)
+            : null,
         modo: l.modo ?? null,
         ventana_evaluacion_segundos: l.ventana_evaluacion_segundos ?? null,
         ventana_actualizacion_segundos: l.ventana_actualizacion_segundos ?? null,
@@ -154,6 +158,7 @@ function buildRow(l: LoteSector): Array<string | number | null> {
         l.conteos.total > 0 && l.conteos.ok !== null
             ? qualityRate(l.conteos.ok, l.conteos.total).toFixed(1)
             : "",
+        l.confianza_promedio != null ? (l.confianza_promedio * 100).toFixed(1) : "",
         l.modo ?? "",
         l.ventana_evaluacion_segundos ?? "",
         l.ventana_actualizacion_segundos ?? "",

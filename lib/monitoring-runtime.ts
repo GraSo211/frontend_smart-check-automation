@@ -10,6 +10,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isOptionalFiniteNumber(value: unknown): boolean {
+  return value === undefined || value === null || isFiniteNumber(value)
+}
+
 function dataFromResponse(payload: unknown, allowDirect = true): unknown {
   if (!isRecord(payload)) return allowDirect ? payload : null
   if ('success' in payload && payload.success !== true) return null
@@ -57,7 +61,36 @@ function isLoteSector(value: unknown): value is LoteSector {
   if (!isOptionalIso(value.cerrado_en)) return false
   if (value.motivo_cierre !== undefined && value.motivo_cierre !== null && typeof value.motivo_cierre !== 'string') return false
   if (value.turno !== undefined && value.turno !== null && typeof value.turno !== 'string') return false
+  if (!isOptionalFiniteNumber(value.delta_temp1_max_c)) return false
+  if (!isOptionalFiniteNumber(value.delta_vel_max)) return false
   return true
+}
+
+function parseOptionalNumberOrNull(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return isFiniteNumber(value) ? value : null
+}
+
+// 0..1 or null. Missing/out-of-range/non-numeric degrades to null (legacy
+// closed lots predate the column) instead of rejecting the row.
+function parseConfianzaPromedio(value: unknown): number | null {
+  return isFiniteNumber(value) && value >= 0 && value <= 1 ? value : null
+}
+
+/**
+ * Normaliza los campos opcionales de un lote que el backend puede enviar con
+ * tipos incorrectos. Un valor inválido se convierte en `null` (equivale a "usar
+ * el valor del producto" para los deltas), nunca rechaza la fila.
+ */
+function normalizeLoteSector(value: unknown): unknown {
+  if (!isRecord(value)) return value
+  return {
+    ...value,
+    delta_temp1_max_c: parseOptionalNumberOrNull(value.delta_temp1_max_c),
+    delta_vel_max: parseOptionalNumberOrNull(value.delta_vel_max),
+    confianza_promedio: parseConfianzaPromedio(value.confianza_promedio),
+  }
 }
 
 /**
@@ -71,8 +104,9 @@ export function parseLoteSectorPayload(payload: unknown): LoteSector[] | null {
   if (!Array.isArray(data)) return null
   const valid: LoteSector[] = []
   data.forEach((value, index) => {
-    if (isLoteSector(value)) {
-      valid.push(value)
+    const normalized = normalizeLoteSector(value)
+    if (isLoteSector(normalized)) {
+      valid.push(normalized)
       return
     }
     const id = isRecord(value) && typeof value.id === 'string' ? value.id : null

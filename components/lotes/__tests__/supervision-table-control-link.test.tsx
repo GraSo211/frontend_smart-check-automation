@@ -70,3 +70,18 @@ describe("SupervisionTable · link directo al control del lote", () => {
     expect(screen.queryByRole("link", { name: /Abrir control/ })).toBeNull()
   })
 })
+
+describe("SupervisionTable · confianza promedio", () => {
+  it("muestra la confianza como porcentaje o «—» cuando es null", () => {
+    const runs = [
+      lote({ id: "lote-conf", producto_nombre: "Pan", confianza_promedio: 0.873, turno: "mañana" }),
+      lote({ id: "lote-sin", producto_nombre: "Facturas", confianza_promedio: null, turno: "mañana" }),
+    ]
+
+    render(<SupervisionTable runs={runs} />)
+
+    expect(screen.getByRole("columnheader", { name: "Confianza" })).toBeTruthy()
+    expect(screen.getByText("87.3%")).toBeTruthy()
+    expect(screen.getAllByText("—")).toHaveLength(1)
+  })
+})

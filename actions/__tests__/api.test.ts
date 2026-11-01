@@ -50,6 +50,7 @@ describe("server actions de datos del backend", () => {
     abierto_en: "2026-01-01T10:00:00.000Z",
     abierto_por: { device_id: "d-1", type: "ENTRADA_HORNO" },
     conteos: { ok: 9, crudo: null, quemado: 1, total: 10 },
+    confianza_promedio: null,
     ultimo_evento_en: "2026-01-01T10:05:00.000Z",
     inactividad_segundos: 12.5,
   }
@@ -631,6 +632,40 @@ describe("server actions de datos del backend", () => {
     await expect(api.getLoteAbierto("s-1")).rejects.toThrow("respuesta inválida para el lote abierto")
   })
 
+  it("parsea los campos delta opcionales de un lote", async () => {
+    const loteConDeltas = {
+      ...validLote,
+      delta_temp1_max_c: 10,
+      delta_vel_max: 0.05,
+    }
+    fetchMock.mockResolvedValue(json({ success: true, data: { lote: loteConDeltas } }))
+
+    await expect(api.getLoteAbierto("s-1")).resolves.toEqual(loteConDeltas)
+  })
+
+  it("normaliza valores delta inválidos a null sin rechazar la fila", async () => {
+    const loteConDeltasInvalidos = {
+      ...validLote,
+      delta_temp1_max_c: "malo",
+      delta_vel_max: {},
+    }
+    fetchMock.mockResolvedValue(json({ success: true, data: { lote: loteConDeltasInvalidos } }))
+
+    const result = await api.getLoteAbierto("s-1")
+    expect(result).toEqual({ ...validLote, delta_temp1_max_c: null, delta_vel_max: null })
+  })
+
+  it("parsea confianza_promedio en [0,1] y normaliza el resto a null", async () => {
+    fetchMock.mockResolvedValue(json({ success: true, data: { lote: { ...validLote, confianza_promedio: 0.873 } } }))
+    await expect(api.getLoteAbierto("s-1")).resolves.toMatchObject({ confianza_promedio: 0.873 })
+
+    fetchMock.mockResolvedValue(json({ success: true, data: { lote: { ...validLote, confianza_promedio: 1.2 } } }))
+    await expect(api.getLoteAbierto("s-1")).resolves.toMatchObject({ confianza_promedio: null })
+
+    fetchMock.mockResolvedValue(json({ success: true, data: { lote: { ...validLote, confianza_promedio: "alta" } } }))
+    await expect(api.getLoteAbierto("s-1")).resolves.toMatchObject({ confianza_promedio: null })
+  })
+
   it("getAllLotes itera los sectores y sigue el cursor de cada uno", async () => {
     const loteFor = (id: string, sectorId: string) => ({ ...validLote, id, sector_id: sectorId })
     fetchMock.mockImplementation(async (url: string) => {
@@ -1156,6 +1191,60 @@ describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
     })
   })
 
+  describe("updateControlParams (PATCH /api/v1/lotes/{id}/control/parametros)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("hace PATCH con sólo los campos enviados y revalida /lotes", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            lote_id: "l-1",
+            tolerancia_temp_c: 3,
+            delta_temp1_max_c: 4,
+          },
+        }),
+      )
+
+      const result = await api.updateControlParams("l-1", {
+        tolerancia_temp_c: 3,
+        delta_temp1_max_c: 4,
+      })
+
+      expect(result).toEqual({
+        ok: true,
+        data: { lote_id: "l-1", tolerancia_temp_c: 3, delta_temp1_max_c: 4 },
+      })
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://backend.example.test/api/v1/lotes/l-1/control/parametros",
+      )
+      expect(fetchMock.mock.calls[0][1].method).toBe("PATCH")
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+        tolerancia_temp_c: 3,
+        delta_temp1_max_c: 4,
+      })
+      expect(revalidatePathMock).toHaveBeenCalledWith("/lotes")
+    })
+
+    it.each([
+      [400, "Revisá los valores ingresados: están fuera de rango o faltan."],
+      [403, "Se requiere rol Supervisor o Administrador."],
+      [404, "El lote no existe."],
+      [409, "El lote no está abierto o no admite cambios de parámetros."],
+    ])("traduce el estado HTTP %i a un mensaje claro", async (status, message) => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, status))
+
+      const result = await api.updateControlParams("l-1", { tolerancia_temp_c: 3 })
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.errors[0]).toBe(message)
+    })
+  })
+
   describe("getConsignaPropuesta (GET /api/v1/lotes/{id}/consigna-propuesta)", () => {
     beforeEach(() => {
       fetchMock.mockReset()
@@ -1190,6 +1279,7 @@ describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
         autorizada: false,
         fase: "supervision",
         decision_id: "dec-1",
+        limites: null,
       })
     })
 
@@ -1232,6 +1322,63 @@ describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
       )
 
       await expect(api.getConsignaPropuesta("l-1")).resolves.toBeNull()
+    })
+
+    it("parsea los límites operativos cuando vienen en la propuesta", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            decision_id: "dec-1",
+            temp1_objetivo: 180.5,
+            vel_objetivo: 1.25,
+            z: 0.95,
+            autorizada: false,
+            limites: {
+              temp_min: 100,
+              temp_max: 300,
+              vel_min: 0.05,
+              vel_max: 0.5,
+              delta_temp1_max_c: 10,
+              delta_vel_max: 0.05,
+              tolerancia_temp_c: 2,
+            },
+          },
+        }),
+      )
+
+      const result = await api.getConsignaPropuesta("l-1")
+      expect(result).toMatchObject({
+        temp1: 180.5,
+        velocidad: 1.25,
+        limites: {
+          temp_min: 100,
+          temp_max: 300,
+          vel_min: 0.05,
+          vel_max: 0.5,
+          delta_temp1_max_c: 10,
+          delta_vel_max: 0.05,
+          tolerancia_temp_c: 2,
+        },
+      })
+    })
+
+    it("ignora límites incompletos sin rechazar la propuesta", async () => {
+      fetchMock.mockResolvedValue(
+        json({
+          success: true,
+          data: {
+            temp1_objetivo: 180.5,
+            vel_objetivo: 1.25,
+            z: 0.95,
+            autorizada: false,
+            limites: { temp_min: 100 },
+          },
+        }),
+      )
+
+      const result = await api.getConsignaPropuesta("l-1")
+      expect(result).toMatchObject({ temp1: 180.5, velocidad: 1.25, limites: null })
     })
   })
 })

@@ -20,11 +20,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import SegmentedControl from "@/components/supervision/segmented-control"
 import { cn } from "@/lib/utils"
 import { formatDate, formatTime, formatTemp } from "@/lib/format"
 import type {
     ConfianzaClase,
+    ControlLimites,
     DecisionControl,
     LoteSector,
     MetricaHorno,
@@ -39,6 +42,7 @@ import {
     getMetricasHorno,
     startControl,
     stopControl,
+    updateControlParams,
 } from "@/actions/api"
 
 type ModoOperacion = NonNullable<LoteSector["modo"]>
@@ -103,6 +107,10 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
 
     const [accionError, setAccionError] = useState<string | null>(null)
 
+    // Parámetros de control ajustables por Supervisor/Admin.
+    const [paramsNota, setParamsNota] = useState<string | null>(null)
+    const [paramsError, setParamsError] = useState<string | null>(null)
+
     // F-F8: confianza agregada del modelo de visión por clase.
     const [confianzaClases, setConfianzaClases] = useState<ConfianzaClase[] | null>(null)
     const [confianzaError, setConfianzaError] = useState<string | null>(null)
@@ -125,6 +133,17 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                 setErrorMsg(null)
             } catch (e) {
                 setErrorMsg(e instanceof Error ? e.message : "Error al cargar decisiones")
+            }
+        })
+    }
+
+    const refreshPropuesta = () => {
+        startTransition(async () => {
+            try {
+                const p = await getConsignaPropuesta(lote.id)
+                if (p) setPropuestaPendiente(p)
+            } catch {
+                // La propuesta se refresca por SSE si el pull falla.
             }
         })
     }
@@ -468,6 +487,36 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                             value={`${lote.umbral_aceptacion_quemado ?? 5} / ${lote.umbral_aceptacion_crudo ?? 5}`}
                         />
                     </div>
+
+                    {lote.estado === "ABIERTO" && canControl && (
+                        <ParametrosControl
+                            lote={lote}
+                            limites={propuestaPendiente?.limites ?? null}
+                            onSuccess={() => {
+                                setParamsNota("Parámetros actualizados")
+                                refreshPropuesta()
+                                refresh()
+                            }}
+                            onError={setParamsError}
+                        />
+                    )}
+
+                    {paramsNota && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                            {paramsNota}
+                        </div>
+                    )}
+
+                    {paramsError && (
+                        <div
+                            role="alert"
+                            className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+                        >
+                            <AlertTriangle className="size-3.5" aria-hidden="true" />
+                            <span>{paramsError}</span>
+                        </div>
+                    )}
 
                     <EstadoActual
                         lote={lote}
@@ -1044,6 +1093,199 @@ function HeadValue({ label, value, tone }: { label: string; value: number; tone:
         <div className="rounded border bg-muted/40 px-2 py-1">
             <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
             <p className={cn("font-mono tabular-nums", tone)}>{pct}</p>
+        </div>
+    )
+}
+
+interface ParametrosControlProps {
+    lote: LoteSector
+    limites: ControlLimites | null
+    onSuccess: () => void
+    onError: (msg: string | null) => void
+}
+
+function ParametrosControl({ lote, limites, onSuccess, onError }: ParametrosControlProps) {
+    const initialTolerancia = limites?.tolerancia_temp_c ?? lote.tolerancia_temp_c ?? 2
+    const initialUmbralCrudo = lote.umbral_aceptacion_crudo ?? 5
+    const initialUmbralQuemado = lote.umbral_aceptacion_quemado ?? 5
+    const initialDeltaTemp = limites?.delta_temp1_max_c ?? lote.delta_temp1_max_c ?? ""
+    const initialDeltaVel = limites?.delta_vel_max ?? lote.delta_vel_max ?? ""
+
+    const [tolerancia, setTolerancia] = useState(String(initialTolerancia))
+    const [umbralCrudo, setUmbralCrudo] = useState(String(initialUmbralCrudo))
+    const [umbralQuemado, setUmbralQuemado] = useState(String(initialUmbralQuemado))
+    const [deltaTemp, setDeltaTemp] = useState(initialDeltaTemp === "" ? "" : String(initialDeltaTemp))
+    const [deltaVel, setDeltaVel] = useState(initialDeltaVel === "" ? "" : String(initialDeltaVel))
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    const [pending, startParamsTransition] = useTransition()
+
+    const validate = (): { ok: true; params: import("@/actions/api").ControlParamsInput } | { ok: false; errors: Record<string, string> } => {
+        const errors: Record<string, string> = {}
+
+        const t = parseFloat(tolerancia)
+        if (!Number.isFinite(t) || !(t > 0 && t <= 20)) {
+            errors.tolerancia = "Entre 0,01 y 20 °C."
+        }
+        const uc = parseFloat(umbralCrudo)
+        if (!Number.isFinite(uc) || !(uc >= 0 && uc <= 100)) {
+            errors.umbralCrudo = "Entre 0 y 100 %."
+        }
+        const uq = parseFloat(umbralQuemado)
+        if (!Number.isFinite(uq) || !(uq >= 0 && uq <= 100)) {
+            errors.umbralQuemado = "Entre 0 y 100 %."
+        }
+
+        let dt: number | null = null
+        if (deltaTemp.trim() !== "") {
+            dt = parseFloat(deltaTemp)
+            if (!Number.isFinite(dt) || !(dt > 0 && dt <= 50)) {
+                errors.deltaTemp = "Entre 0,01 y 50 °C."
+            }
+        }
+        let dv: number | null = null
+        if (deltaVel.trim() !== "") {
+            dv = parseFloat(deltaVel)
+            if (!Number.isFinite(dv) || !(dv > 0 && dv <= 2)) {
+                errors.deltaVel = "Entre 0,01 y 2 m/s."
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return { ok: false, errors }
+        }
+
+        const params: import("@/actions/api").ControlParamsInput = {}
+        if (t !== initialTolerancia) params.tolerancia_temp_c = t
+        if (uc !== initialUmbralCrudo) params.umbral_aceptacion_crudo = uc
+        if (uq !== initialUmbralQuemado) params.umbral_aceptacion_quemado = uq
+        const initialDtNum = typeof initialDeltaTemp === "number" ? initialDeltaTemp : null
+        if (dt !== initialDtNum) params.delta_temp1_max_c = dt
+        const initialDvNum = typeof initialDeltaVel === "number" ? initialDeltaVel : null
+        if (dv !== initialDvNum) params.delta_vel_max = dv
+
+        return { ok: true, params }
+    }
+
+    const handleSubmit = () => {
+        onError(null)
+        const result = validate()
+        if (!result.ok) {
+            setFieldErrors(result.errors)
+            return
+        }
+        setFieldErrors({})
+        if (Object.keys(result.params).length === 0) return
+
+        startParamsTransition(async () => {
+            try {
+                const res = await updateControlParams(lote.id, result.params)
+                if (!res.ok) {
+                    onError(res.errors.join(" · "))
+                    return
+                }
+                onSuccess()
+            } catch (e) {
+                onError(e instanceof Error ? e.message : "Error al actualizar los parámetros.")
+            }
+        })
+    }
+
+    return (
+        <section aria-label="Parámetros del control" className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Parámetros del control</h4>
+                <span className="text-[10px] text-muted-foreground">Vacío = valor del producto</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                <ParametroField
+                    label="Tolerancia T"
+                    unit="°C"
+                    value={tolerancia}
+                    onChange={setTolerancia}
+                    error={fieldErrors.tolerancia}
+                    disabled={pending}
+                />
+                <ParametroField
+                    label="Umbral crudo"
+                    unit="%"
+                    value={umbralCrudo}
+                    onChange={setUmbralCrudo}
+                    error={fieldErrors.umbralCrudo}
+                    disabled={pending}
+                />
+                <ParametroField
+                    label="Umbral quemado"
+                    unit="%"
+                    value={umbralQuemado}
+                    onChange={setUmbralQuemado}
+                    error={fieldErrors.umbralQuemado}
+                    disabled={pending}
+                />
+                <ParametroField
+                    label="ΔT máx/ciclo"
+                    unit="°C"
+                    value={deltaTemp}
+                    onChange={setDeltaTemp}
+                    error={fieldErrors.deltaTemp}
+                    disabled={pending}
+                    placeholder="Producto"
+                />
+                <ParametroField
+                    label="ΔV máx/ciclo"
+                    unit="m/s"
+                    value={deltaVel}
+                    onChange={setDeltaVel}
+                    error={fieldErrors.deltaVel}
+                    disabled={pending}
+                    placeholder="Producto"
+                />
+            </div>
+            <Button size="sm" onClick={handleSubmit} disabled={pending}>
+                {pending ? "Guardando…" : "Guardar parámetros"}
+            </Button>
+        </section>
+    )
+}
+
+function ParametroField({
+    label,
+    unit,
+    value,
+    onChange,
+    error,
+    disabled,
+    placeholder,
+}: {
+    label: string
+    unit: string
+    value: string
+    onChange: (value: string) => void
+    error?: string
+    disabled?: boolean
+    placeholder?: string
+}) {
+    const id = `${label}-${unit}`.replace(/[^a-zA-Z0-9]/g, "-")
+    return (
+        <div className="space-y-1">
+            <Label htmlFor={id} className="text-[10px] uppercase text-muted-foreground">
+                {label} <span className="font-normal normal-case">({unit})</span>
+            </Label>
+            <Input
+                id={id}
+                type="text"
+                inputMode="decimal"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
+                placeholder={placeholder}
+                aria-invalid={error ? "true" : "false"}
+                className="h-7 text-sm font-mono"
+            />
+            {error ? (
+                <p className="text-[10px] text-destructive" role="alert">{error}</p>
+            ) : (
+                <p className="text-[10px] text-transparent" aria-hidden="true">.</p>
+            )}
         </div>
     )
 }

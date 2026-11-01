@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     getConsignaPropuesta: vi.fn(),
     getDecisiones: vi.fn(),
     getConfianzaClases: vi.fn(),
+    updateControlParams: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/actions/api", () => ({
     getConsignaPropuesta: mocks.getConsignaPropuesta,
     getDecisiones: mocks.getDecisiones,
     getConfianzaClases: mocks.getConfianzaClases,
+    updateControlParams: mocks.updateControlParams,
 }))
 
 class FakeEventSource {
@@ -96,6 +98,7 @@ beforeEach(() => {
         data: { lote_id: "l-1", modo: "AUTOMATICO" },
     })
     mocks.getConfianzaClases.mockResolvedValue([])
+    mocks.updateControlParams.mockResolvedValue({ ok: true, data: { lote_id: "l-1" } })
 })
 
 describe("ControlCard · selector de modo", () => {
@@ -294,5 +297,74 @@ describe("ControlCard · confianza del modelo de visión (F-F8)", () => {
         await waitFor(() => {
             expect(screen.getByText(/No se pudo cargar la confianza del modelo: boom/)).toBeTruthy()
         })
+    })
+})
+
+describe("ControlCard · parámetros del control", () => {
+    it("muestra la sección en un lote ABIERTO con control habilitado y modo AUTOMATICO", () => {
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        expect(screen.getByRole("region", { name: /Parámetros del control/i })).toBeTruthy()
+        expect(screen.getByLabelText(/Tolerancia T/i)).toBeTruthy()
+        expect(screen.getByRole("button", { name: /Guardar parámetros/i })).toBeTruthy()
+    })
+
+    it("oculta la sección en modo MANUAL", () => {
+        render(<ControlCard lote={lote({ modo: "MANUAL" })} canControl />)
+
+        expect(screen.queryByRole("region", { name: /Parámetros del control/i })).toBeNull()
+    })
+
+    it("oculta la sección cuando el usuario no puede controlar", () => {
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl={false} />)
+
+        expect(screen.queryByRole("region", { name: /Parámetros del control/i })).toBeNull()
+    })
+
+    it("envía sólo los campos cambiados", async () => {
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        const tolerancia = screen.getByLabelText(/Tolerancia T/i) as HTMLInputElement
+        const deltaTemp = screen.getByLabelText(/ΔT máx\/ciclo/i) as HTMLInputElement
+
+        fireEvent.change(tolerancia, { target: { value: "3" } })
+        fireEvent.change(deltaTemp, { target: { value: "4" } })
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Guardar parámetros/i }))
+        })
+
+        await waitFor(() => {
+            expect(mocks.updateControlParams).toHaveBeenCalledWith("l-1", {
+                tolerancia_temp_c: 3,
+                delta_temp1_max_c: 4,
+            })
+        })
+    })
+
+    it("no envía nada si los valores no cambiaron", async () => {
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Guardar parámetros/i }))
+        })
+
+        await waitFor(() => {
+            expect(mocks.updateControlParams).not.toHaveBeenCalled()
+        })
+    })
+
+    it("muestra un error inline cuando un valor está fuera de rango", async () => {
+        render(<ControlCard lote={lote({ modo: "AUTOMATICO" })} canControl />)
+
+        const tolerancia = screen.getByLabelText(/Tolerancia T/i) as HTMLInputElement
+        fireEvent.change(tolerancia, { target: { value: "25" } })
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Guardar parámetros/i }))
+        })
+
+        expect(screen.getByText(/Entre 0,01 y 20 °C/i)).toBeTruthy()
+        expect(mocks.updateControlParams).not.toHaveBeenCalled()
     })
 })

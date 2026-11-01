@@ -36,6 +36,10 @@ function count(value: number | null): string {
   return value === null ? PLACEHOLDER : formatNumber(value)
 }
 
+function confidence(value: number | null | undefined): string {
+  return value == null ? PLACEHOLDER : `${(value * 100).toFixed(1)}%`
+}
+
 // Per-product, per-sector batch-run history. The server collects the cursor
 // pages up front; pagination here is purely client-side.
 export function ParametersHistory({
@@ -136,6 +140,7 @@ export function ParametersHistory({
                 <Th className="text-center">Correctos</Th>
                 <Th className="text-center">Quemados</Th>
                 <Th className="text-center">Crudas</Th>
+                <Th className="text-center">Confianza</Th>
                 <Th>Motivo de cierre</Th>
                 <Th>Turno</Th>
               </tr>
@@ -165,6 +170,9 @@ export function ParametersHistory({
                   </td>
                   <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
                     {count(lote.conteos.crudo)}
+                  </td>
+                  <td className="px-4 py-3.5 text-center font-mono tabular-nums text-foreground">
+                    {confidence(lote.confianza_promedio)}
                   </td>
                   <td className="max-w-50 truncate px-4 py-3.5 text-xs text-muted-foreground" title={lote.motivo_cierre ?? undefined}>
                     {lote.motivo_cierre ?? PLACEHOLDER}

@@ -119,6 +119,7 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                 <Th className="text-right">Correctos</Th>
                 <Th className="text-right">Quemados</Th>
                 <Th className="text-right">Crudas</Th>
+                <Th className="text-center">Confianza</Th>
                 {canControl && <Th className="text-right">Acciones</Th>}
               </tr>
             </thead>
@@ -239,6 +240,13 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                           {((conteos.crudo / totalUnidades) * 100).toFixed(1)}%
                         </div>
                       )}
+                    </td>
+
+                    {/* //? CONFIANZA — promedio del modelo de visión (0..1). */}
+                    <td className="px-4 py-3.5 text-center font-mono tabular-nums text-muted-foreground">
+                      {lote.confianza_promedio == null
+                        ? "—"
+                        : `${(lote.confianza_promedio * 100).toFixed(1)}%`}
                     </td>
 
                     {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+). */}

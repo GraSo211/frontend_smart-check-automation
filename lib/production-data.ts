@@ -32,6 +32,11 @@ export type LoteSector = {
   abierto_en: string
   abierto_por?: AbiertoPor | null
   conteos: Conteos
+  /**
+   * Confianza promedio del modelo de visión (0..1). `null` cuando el lote no
+   * tuvo detecciones con confianza o es anterior a esta columna.
+   */
+  confianza_promedio?: number | null
   ultimo_evento_en?: string | null
   inactividad_segundos: number
   cerrado_en?: string | null
@@ -49,6 +54,10 @@ export type LoteSector = {
   tolerancia_temp_c?: number
   umbral_aceptacion_crudo?: number
   umbral_aceptacion_quemado?: number
+  /** Límite de variación de T1 por ciclo; `null`/ausente usa el valor del producto. */
+  delta_temp1_max_c?: number | null
+  /** Límite de variación de velocidad por ciclo; `null`/ausente usa el valor del producto. */
+  delta_vel_max?: number | null
   temp1_objetivo?: number | null
   vel_objetivo?: number | null
   pesos_objetivo?: PesosObjetivo | null
@@ -128,6 +137,20 @@ export type MetricaHorno = {
  * propuesta pendiente). Coincide con la propuesta que el Loop del backend
  * publica por `control.propuesta` en SSE.
  */
+/**
+ * Límites operativos del control propuestos para el lote. Devuelto dentro de
+ * `GET /api/v1/lotes/{id}/consigna-propuesta` como `limites`.
+ */
+export type ControlLimites = {
+  temp_min: number
+  temp_max: number
+  vel_min: number
+  vel_max: number
+  delta_temp1_max_c: number
+  delta_vel_max: number
+  tolerancia_temp_c: number
+}
+
 export type SetpointPropuesto = {
   temp1: number
   velocidad: number
@@ -148,6 +171,11 @@ export type SetpointPropuesto = {
   autorizada: boolean
   fase?: string | null
   decision_id?: string | null
+  /**
+   * Límites operativos vigentes usados por el MPC para generar la propuesta.
+   * Permite ajustar los parámetros del control en tiempo real.
+   */
+  limites?: ControlLimites | null
 }
 
 /**

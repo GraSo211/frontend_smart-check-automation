@@ -24,6 +24,7 @@ import type {
     ControlEstado,
     ConfianzaClase,
     Alerta,
+    ControlLimites,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -879,6 +880,59 @@ export async function cambiarModo(
     });
 }
 
+/** Body parcial para `PATCH /api/v1/lotes/{id}/control/parametros`. */
+export type ControlParamsInput = Partial<Pick<ControlLimites, "tolerancia_temp_c">> & {
+    umbral_aceptacion_crudo?: number
+    umbral_aceptacion_quemado?: number
+    /** `null` vuelve al valor definido por el producto. */
+    delta_temp1_max_c?: number | null
+    /** `null` vuelve al valor definido por el producto. */
+    delta_vel_max?: number | null
+}
+
+/** Resultado de actualizar los parámetros de control de un lote. */
+export type ControlParamsResult = { lote_id: string } & Partial<ControlLimites> & {
+    umbral_aceptacion_crudo?: number
+    umbral_aceptacion_quemado?: number
+    delta_temp1_max_c?: number | null
+    delta_vel_max?: number | null
+}
+
+/**
+ * Ajusta los parámetros de control de un lote abierto (tolerancia, umbrales y
+ * límites de variación por ciclo). Requiere rol Supervisor/Admin; el backend
+ * aplica los cambios en el próximo tick del loop sin reiniciarlo.
+ */
+export async function updateControlParams(
+    loteId: string,
+    params: ControlParamsInput,
+): Promise<DeviceActionResult<ControlParamsResult>> {
+    return deviceMutation<ControlParamsResult>({
+        path: `/api/v1/lotes/${encodeURIComponent(loteId)}/control/parametros`,
+        method: "PATCH",
+        body: params,
+        parse: (raw) => {
+            if (!isRecord(raw)) return { lote_id: loteId }
+            return {
+                lote_id: String(raw.lote_id ?? loteId),
+                tolerancia_temp_c: typeof raw.tolerancia_temp_c === "number" ? raw.tolerancia_temp_c : undefined,
+                umbral_aceptacion_crudo: typeof raw.umbral_aceptacion_crudo === "number" ? raw.umbral_aceptacion_crudo : undefined,
+                umbral_aceptacion_quemado: typeof raw.umbral_aceptacion_quemado === "number" ? raw.umbral_aceptacion_quemado : undefined,
+                delta_temp1_max_c: typeof raw.delta_temp1_max_c === "number" ? raw.delta_temp1_max_c : undefined,
+                delta_vel_max: typeof raw.delta_vel_max === "number" ? raw.delta_vel_max : undefined,
+            }
+        },
+        invalidMessage: "La API devolvió una respuesta inválida al actualizar los parámetros.",
+        statusMessages: {
+            400: "Revisá los valores ingresados: están fuera de rango o faltan.",
+            403: "Se requiere rol Supervisor o Administrador.",
+            404: "El lote no existe.",
+            409: "El lote no está abierto o no admite cambios de parámetros.",
+        },
+        revalidatePaths: ["/lotes", `/lotes/${loteId}/control`],
+    });
+}
+
 /**
  * GET /api/v1/lotes/{id}/confianza-clases — confianza agregada del modelo de
  * visión por clase, sobre las últimas `limite` detecciones (default 200).
@@ -1111,6 +1165,29 @@ export async function getConsignaPropuesta(loteId: string): Promise<SetpointProp
     }).catch(() => null)
 }
 
+function parseControlLimites(raw: unknown): ControlLimites | null {
+    if (!isRecord(raw)) return null
+    const temp_min = typeof raw.temp_min === "number" ? raw.temp_min : null
+    const temp_max = typeof raw.temp_max === "number" ? raw.temp_max : null
+    const vel_min = typeof raw.vel_min === "number" ? raw.vel_min : null
+    const vel_max = typeof raw.vel_max === "number" ? raw.vel_max : null
+    const delta_temp1_max_c = typeof raw.delta_temp1_max_c === "number" ? raw.delta_temp1_max_c : null
+    const delta_vel_max = typeof raw.delta_vel_max === "number" ? raw.delta_vel_max : null
+    const tolerancia_temp_c = typeof raw.tolerancia_temp_c === "number" ? raw.tolerancia_temp_c : null
+    if (
+        temp_min === null ||
+        temp_max === null ||
+        vel_min === null ||
+        vel_max === null ||
+        delta_temp1_max_c === null ||
+        delta_vel_max === null ||
+        tolerancia_temp_c === null
+    ) {
+        return null
+    }
+    return { temp_min, temp_max, vel_min, vel_max, delta_temp1_max_c, delta_vel_max, tolerancia_temp_c }
+}
+
 function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto | null {
     const temp1 =
         typeof raw.temp1_objetivo === "number"
@@ -1127,6 +1204,7 @@ function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto
     if (temp1 === null || velocidad === null) return null
     const z = typeof raw.z === "number" ? raw.z : 0
     const pred = isRecord(raw.prediccion) ? raw.prediccion : null
+    const limites = parseControlLimites(raw.limites)
     return {
         temp1,
         velocidad,
@@ -1146,6 +1224,7 @@ function parseSetpointPropuesto(raw: Record<string, unknown>): SetpointPropuesto
         autorizada: raw.autorizada === true,
         fase: typeof raw.fase === "string" ? raw.fase : null,
         decision_id: typeof raw.decision_id === "string" ? raw.decision_id : null,
+        limites,
     }
 }
 

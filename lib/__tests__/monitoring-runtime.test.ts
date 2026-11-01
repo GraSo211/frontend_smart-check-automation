@@ -23,6 +23,7 @@ const lote = {
   abierto_en: '2026-01-01T10:00:00.000Z',
   abierto_por: { device_id: 'd-1', type: 'ENTRADA_HORNO' },
   conteos: { ok: 9, crudo: null, quemado: 1, total: 10 },
+  confianza_promedio: null,
   ultimo_evento_en: '2026-01-01T10:05:00.000Z',
   inactividad_segundos: 12.5,
 }
@@ -120,6 +121,18 @@ describe('monitoring runtime validation', () => {
     // device_id sigue siendo obligatorio.
     expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: '', type: '' } }])).toEqual([])
     expect(parseLoteSectorPayload([{ ...lote, abierto_por: { device_id: 'd1', type: 7 } }])).toEqual([])
+  })
+
+  it('acepta confianza_promedio en [0,1] y normaliza cualquier otro valor a null', () => {
+    expect(parseLoteSectorPayload([{ ...lote, confianza_promedio: 0.873 }])?.[0]?.confianza_promedio).toBe(0.873)
+    expect(parseLoteSectorPayload([{ ...lote, confianza_promedio: 0 }])?.[0]?.confianza_promedio).toBe(0)
+    expect(parseLoteSectorPayload([{ ...lote, confianza_promedio: 1 }])?.[0]?.confianza_promedio).toBe(1)
+    for (const invalid of [1.2, -0.1, '0.5', {}, null]) {
+      expect(parseLoteSectorPayload([{ ...lote, confianza_promedio: invalid }])?.[0]?.confianza_promedio).toBeNull()
+    }
+    const withoutConfianza: Record<string, unknown> = { ...lote }
+    delete withoutConfianza.confianza_promedio
+    expect(parseLoteSectorPayload([withoutConfianza])?.[0]?.confianza_promedio).toBeNull()
   })
 
   it('descarta la fila inválida y conserva las válidas (parser no atómico)', () => {
