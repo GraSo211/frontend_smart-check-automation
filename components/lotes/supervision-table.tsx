@@ -249,21 +249,25 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                         : `${(lote.confianza_promedio * 100).toFixed(1)}%`}
                     </td>
 
-                    {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+). */}
+                    {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+ y lotes abiertos). */}
                     {canControl && (
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          href={`/lotes/${lote.id}/control`}
-                          aria-label={`Abrir control del lote ${lote.id}`}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground",
-                            "transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          )}
-                        >
-                          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                          Control
-                        </Link>
+                        {lote.estado === "ABIERTO" ? (
+                          <Link
+                            href={`/lotes/${lote.id}/control`}
+                            aria-label={`Abrir control del lote ${lote.id}`}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground",
+                              "transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            )}
+                          >
+                            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                            Control
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     )}
                   </tr>

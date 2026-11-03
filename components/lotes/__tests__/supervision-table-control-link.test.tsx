@@ -50,6 +50,27 @@ describe("SupervisionTable · link directo al control del lote", () => {
     expect(link.getAttribute("href")).toBe("/lotes/lote-admin/control")
   })
 
+  it("oculta el link en lotes cerrados pero mantiene la columna Acciones", () => {
+    const runs = [
+      lote({ id: "lote-abierto", producto_nombre: "Pan" }),
+      lote({
+        id: "lote-cerrado",
+        producto_nombre: "Facturas",
+        estado: "CERRADO",
+        cerrado_en: "2026-09-23T10:00:00.000Z",
+        motivo_cierre: "cierre manual",
+      }),
+    ]
+
+    render(<SupervisionTable runs={runs} userRole="Supervisor" />)
+
+    expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeTruthy()
+    const links = screen.getAllByRole("link", { name: /Abrir control del lote/ })
+    expect(links).toHaveLength(1)
+    expect(links[0]?.getAttribute("href")).toBe("/lotes/lote-abierto/control")
+    expect(screen.queryByRole("link", { name: /Abrir control del lote lote-cerrado/ })).toBeNull()
+  })
+
   it("oculta el link y la columna Acciones cuando el rol es Operario", () => {
     const runs = [lote({ id: "lote-op" })]
 
