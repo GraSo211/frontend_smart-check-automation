@@ -48,6 +48,7 @@ export type LoteSector = {
   turno?: string | null
   // SCA-400: control automático / supervisión.
   modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
+  /** Contrato Go; la UI actual no lo lee. */
   iniciado_manualmente?: boolean
   ventana_evaluacion_segundos?: number
   ventana_actualizacion_segundos?: number
@@ -60,6 +61,7 @@ export type LoteSector = {
   delta_vel_max?: number | null
   temp1_objetivo?: number | null
   vel_objetivo?: number | null
+  /** Contrato Go; la UI actual no lo lee (los pesos se editan por /control/parametros). */
   pesos_objetivo?: PesosObjetivo | null
 }
 
