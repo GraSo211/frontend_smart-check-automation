@@ -691,6 +691,22 @@ describe("server actions de datos del backend", () => {
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("antes_de=s1-cursor"))).toBe(true)
   })
 
+  it("getAllLotes deduplica por id los lotes repetidos entre sectores", async () => {
+    const loteFor = (id: string, sectorId: string) => ({ ...validLote, id, sector_id: sectorId })
+    fetchMock.mockImplementation(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith("/sectores")) {
+        return json({ success: true, data: [sector, { id: "s-2", nombre: "Horno Norte" }] })
+      }
+      const sectorId = parsed.searchParams.get("sector_id") ?? "s-1"
+      return json({ success: true, data: [loteFor("repetido", sectorId), loteFor(`unico-${sectorId}`, sectorId)], total: 2, page: 1, pageSize: 100 })
+    })
+
+    const lotes = await api.getAllLotes()
+
+    expect(lotes.map((item) => item.id).sort()).toEqual(["repetido", "unico-s-1", "unico-s-2"])
+  })
+
   it("getAllLotes es atómico: si falla un sector no publica una colección parcial", async () => {
     fetchMock.mockImplementation(async (url: string) => {
       const parsed = new URL(url)

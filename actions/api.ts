@@ -37,6 +37,7 @@ import {
 import { ApiError } from "@/lib/api-client"
 import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
+import { LOTE_PAGE_SIZE, walkLoteSectors } from "@/lib/lotes-cursor-walk"
 import { getSession } from "@/lib/auth"
 
 const SESSION_COOKIE = "session_token"
@@ -204,8 +205,6 @@ export async function getLotes(
     })
 }
 
-const MAX_SECTOR_PAGES = 20
-
 /**
  * Historial global: itera los sectores EN PARALELO (cada sector mantiene su
  * propio bucle de cursor secuencial). Es atómico: si un sector falla o la
@@ -215,17 +214,16 @@ const MAX_SECTOR_PAGES = 20
  */
 export async function getAllLotes(): Promise<LoteSector[]> {
     const sectores = await getSectores()
-    const byId = new Map<string, LoteSector>()
     try {
-        await Promise.all(sectores.map(async (sector) => {
-            let cursor: string | undefined
-            for (let page = 0; page < MAX_SECTOR_PAGES; page += 1) {
-                const result = await getLotes(sector.id, { limite: 100, antesDe: cursor })
-                for (const lote of result.items) byId.set(lote.id, lote)
-                if (!result.siguienteCursor) break
-                cursor = result.siguienteCursor
+        const { items } = await walkLoteSectors(sectores, async (sectorId, cursor) => {
+            const result = await getLotes(sectorId, { limite: LOTE_PAGE_SIZE, antesDe: cursor })
+            return {
+                items: result.items,
+                total: result.total,
+                siguienteCursor: result.siguienteCursor,
             }
-        }))
+        })
+        return items
     } catch (e) {
         if (e instanceof ApiError) throw e
         if (e instanceof Error && (e.name === "AbortError" || e.message.includes("no respondió a tiempo"))) {
@@ -233,7 +231,6 @@ export async function getAllLotes(): Promise<LoteSector[]> {
         }
         throw new Error("Los lotes no están disponibles.")
     }
-    return [...byId.values()]
 }
 
 // Lote abierto del sector, o null. La ausencia es 200 con `lote: null`.

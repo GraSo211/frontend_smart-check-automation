@@ -1,12 +1,9 @@
 import { proxyMonitoringJson } from '@/lib/monitoring-server'
 import { parseLoteSectorPayload } from '@/lib/monitoring-runtime'
-import type { LoteSector } from '@/lib/production-data'
 import { isRecord } from '@/lib/is-record'
+import { LOTE_PAGE_SIZE, walkLoteSectors } from '@/lib/lotes-cursor-walk'
 
 export const dynamic = 'force-dynamic'
-
-const PAGE_SIZE = 100
-const MAX_PAGES_PER_SECTOR = 20
 
 function invalidResponse(message: string): Response {
   return Response.json(
@@ -34,6 +31,18 @@ function readCursor(payload: unknown): string | null {
   return typeof cursor === 'string' && cursor !== '' ? cursor : null
 }
 
+type SnapshotPageFailure =
+  | { failure: Response }
+  | { invalid: true }
+
+// Thrown by the page fetcher so the walk stays generic while this route keeps
+// its "return the upstream error / 502 on invalid" contract.
+class SnapshotPageError extends Error {
+  constructor(readonly page: SnapshotPageFailure) {
+    super('snapshot page failure')
+  }
+}
+
 // Global snapshot: the provider is global, so the route collects every sector's
 // lote history and publishes a single deduplicated collection. Sectors are
 // walked in parallel; each sector's own cursor loop stays sequential. A failed
@@ -46,60 +55,36 @@ export async function GET(request: Request) {
   const sectores = readSectores(sectoresPayload)
   if (!sectores) return invalidResponse('La API devolvió sectores inválidos.')
 
-  const byId = new Map<string, LoteSector>()
-  let truncada = false
-
-  type SectorResult =
-    | { failure: Response }
-    | { invalid: true }
-    | { truncated: boolean }
-
-  const results = await Promise.all(sectores.map(async (sector): Promise<SectorResult> => {
-    const sectorIds = new Set<string>()
-    let cursor: string | undefined
-    let sectorTotal = 0
-    let capped = false
-    for (let page = 0; page < MAX_PAGES_PER_SECTOR; page += 1) {
-      const params = new URLSearchParams({ sector_id: sector.id, limite: String(PAGE_SIZE) })
+  let walked: Awaited<ReturnType<typeof walkLoteSectors>>
+  try {
+    walked = await walkLoteSectors(sectores, async (sectorId, cursor) => {
+      const params = new URLSearchParams({ sector_id: sectorId, limite: String(LOTE_PAGE_SIZE) })
       if (cursor) params.set('antes_de', cursor)
       const response = await proxyMonitoringJson(request, `/api/v1/lotes?${params.toString()}`, true)
-      if (!response.ok) return { failure: response }
+      if (!response.ok) throw new SnapshotPageError({ failure: response })
 
       const payload: unknown = await response.json().catch(() => null)
-      const rows = parseLoteSectorPayload(payload)
-      if (rows === null) return { invalid: true }
-      for (const lote of rows) {
-        sectorIds.add(lote.id)
-        byId.set(lote.id, lote)
+      const items = parseLoteSectorPayload(payload)
+      if (items === null) throw new SnapshotPageError({ invalid: true })
+      return {
+        items,
+        total: isRecord(payload) && typeof payload.total === 'number' && Number.isFinite(payload.total)
+          ? payload.total
+          : undefined,
+        siguienteCursor: readCursor(payload),
       }
-      if (isRecord(payload) && typeof payload.total === 'number' && Number.isFinite(payload.total)) {
-        sectorTotal = payload.total
-      }
-
-      const next = readCursor(payload)
-      if (!next) {
-        cursor = undefined
-        break
-      }
-      cursor = next
-      // A cursor on the last allowed page means we stopped with data pending.
-      if (page === MAX_PAGES_PER_SECTOR - 1) capped = true
-    }
-    return { truncated: capped || sectorIds.size < sectorTotal }
-  }))
-
-  for (const result of results) {
-    if ('failure' in result) return result.failure
-    if ('invalid' in result) return invalidResponse('La API devolvió una respuesta inválida para el historial de lotes.')
-    if (result.truncated) truncada = true
+    })
+  } catch (e) {
+    if (!(e instanceof SnapshotPageError)) throw e
+    if ('failure' in e.page) return e.page.failure
+    return invalidResponse('La API devolvió una respuesta inválida para el historial de lotes.')
   }
 
-  const merged = [...byId.values()]
-  if (truncada) {
+  if (walked.truncada) {
     console.warn('[lotes/snapshot] Snapshot truncado: se alcanzó el tope de páginas o faltan lotes respecto del total reportado por el sector.')
   }
   return Response.json(
-    { success: true, data: merged, total: merged.length, page: 1, pageSize: PAGE_SIZE, truncada },
+    { success: true, data: walked.items, total: walked.items.length, page: 1, pageSize: LOTE_PAGE_SIZE, truncada: walked.truncada },
     { headers: { 'cache-control': 'private, no-store' } },
   )
 }
