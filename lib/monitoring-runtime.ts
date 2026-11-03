@@ -14,10 +14,10 @@ function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || value === null || isFiniteNumber(value)
 }
 
-function dataFromResponse(payload: unknown, allowDirect = true): unknown {
-  if (!isRecord(payload)) return allowDirect ? payload : null
+function dataFromResponse(payload: unknown): unknown {
+  if (!isRecord(payload)) return payload
   if ('success' in payload && payload.success !== true) return null
-  return 'data' in payload ? payload.data : allowDirect ? payload : null
+  return 'data' in payload ? payload.data : payload
 }
 
 const LOTE_ESTADOS = ['ABIERTO', 'CERRADO'] as const

@@ -921,7 +921,7 @@ describe("server actions de datos del backend", () => {
       await expect(api.getAlertas()).resolves.toHaveLength(1)
     })
 
-    it("silencia timeouts: [] cuando el fetch excede los 8s", async () => {
+    it("propaga el timeout cuando el fetch excede los 8s", async () => {
       vi.useFakeTimers()
       fetchMock.mockImplementation((_url: string, options: RequestInit) =>
         new Promise((_, reject) => {
@@ -934,9 +934,16 @@ describe("server actions de datos del backend", () => {
       )
 
       const promise = api.getAlertas()
+      const rejection = expect(promise).rejects.toThrow("no respondió a tiempo")
       await vi.advanceTimersByTimeAsync(8000)
-      await expect(promise).resolves.toEqual([])
+      await rejection
       vi.useRealTimers()
+    })
+
+    it("propaga un 5xx en vez de degradar a []", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 503))
+
+      await expect(api.getAlertas()).rejects.toThrow("La API respondió con 503")
     })
   })
 
@@ -1072,7 +1079,7 @@ describe("getConfianzaClases (GET /api/v1/lotes/{id}/confianza-clases)", () => {
       ])
     })
 
-    it("silencia timeouts: [] cuando el fetch excede los 8s", async () => {
+    it("propaga el timeout cuando el fetch excede los 8s", async () => {
       vi.useFakeTimers()
       fetchMock.mockImplementation((_url: string, options: RequestInit) =>
         new Promise((_, reject) => {
@@ -1085,9 +1092,35 @@ describe("getConfianzaClases (GET /api/v1/lotes/{id}/confianza-clases)", () => {
       )
 
       const promise = api.getConfianzaClases("l-1")
+      const rejection = expect(promise).rejects.toThrow("no respondió a tiempo")
       await vi.advanceTimersByTimeAsync(8000)
-      await expect(promise).resolves.toEqual([])
+      await rejection
       vi.useRealTimers()
+    })
+
+    it("propaga un 5xx en vez de degradar a []", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 500))
+
+      await expect(api.getConfianzaClases("l-1")).rejects.toThrow("La API respondió con 500")
+    })
+  })
+
+  describe("getMetricasHorno (GET /api/v1/lotes/{id}/metricas-horno)", () => {
+    beforeEach(() => {
+      fetchMock.mockReset()
+      revalidatePathMock.mockReset()
+    })
+
+    it("tolerancia: devuelve [] cuando el lote responde 404", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 404))
+
+      await expect(api.getMetricasHorno("l-1")).resolves.toEqual([])
+    })
+
+    it("propaga un 5xx en vez de degradar a []", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 502))
+
+      await expect(api.getMetricasHorno("l-1")).rejects.toThrow("La API respondió con 502")
     })
   })
 
@@ -1379,6 +1412,12 @@ describe("cambiarModo (PATCH /api/v1/lotes/{id}/modo)", () => {
 
       const result = await api.getConsignaPropuesta("l-1")
       expect(result).toMatchObject({ temp1: 180.5, velocidad: 1.25, limites: null })
+    })
+
+    it("propaga un 5xx en vez de degradar a null", async () => {
+      fetchMock.mockResolvedValue(json({ success: false, message: "" }, 500))
+
+      await expect(api.getConsignaPropuesta("l-1")).rejects.toThrow("La API respondió con 500")
     })
   })
 })

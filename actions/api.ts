@@ -289,11 +289,11 @@ export async function getDevices() {
     })
 }
 
-async function getDeviceHistoryPageInternal(
+/** Additive paginated history contract for the device detail consumer. */
+export async function getDeviceHistoryPage(
     dispositivoId: string,
-    page: number,
-    pageSize: number,
-    allowLegacyMetadata: boolean,
+    page = 1,
+    pageSize = 20,
 ): Promise<{ items: SpecificDevice[]; total: number; page: number; pageSize: number }> {
     validatePageParams(page, pageSize)
     return withBackendFetch({
@@ -309,7 +309,6 @@ async function getDeviceHistoryPageInternal(
             const pageResult = parseBackendPage<SpecificDevice>(result, {
                 requestedPage: page,
                 requestedPageSize: pageSize,
-                allowLegacyMetadata,
             })
             if (!pageResult) {
                 if (isRecord(result) && result.success === false) {
@@ -325,15 +324,6 @@ async function getDeviceHistoryPageInternal(
             }
         },
     })
-}
-
-/** Additive paginated history contract for the device detail consumer. */
-export async function getDeviceHistoryPage(
-    dispositivoId: string,
-    page = 1,
-    pageSize = 20,
-): Promise<{ items: SpecificDevice[]; total: number; page: number; pageSize: number }> {
-    return getDeviceHistoryPageInternal(dispositivoId, page, pageSize, false)
 }
 
 
@@ -939,9 +929,8 @@ export async function updateControlParams(
 /**
  * GET /api/v1/lotes/{id}/confianza-clases — confianza agregada del modelo de
  * visión por clase, sobre las últimas `limite` detecciones (default 200).
- * Devuelve un array vacío cuando el backend responde con `data` ausente o mal
- * formado, y cuando el lote no existe (404 → [] para que la UI degrade en
- * silencio a "sin muestras").
+ * Devuelve un array vacío cuando el lote no existe (404 → [] para que la UI
+ * degrade a "sin muestras"); los timeouts y 5xx se propagan al caller.
  */
 export async function getConfianzaClases(
     loteId: string,
@@ -971,7 +960,7 @@ export async function getConfianzaClases(
             }
             return parsed
         },
-    }).catch(() => [])
+    })
 }
 
 /**
@@ -1062,7 +1051,7 @@ export async function getMetricasHorno(
             const items = Array.isArray(data?.metricas) ? data.metricas : []
             return items.filter(isRecord).map(parseMetricaHorno)
         },
-    }).catch(() => [])
+    })
 }
 
 function parseMetricaHorno(raw: Record<string, unknown>): MetricaHorno {
@@ -1165,7 +1154,7 @@ export async function getConsignaPropuesta(loteId: string): Promise<SetpointProp
             if (!isRecord(raw)) return null
             return parseSetpointPropuesto(raw)
         },
-    }).catch(() => null)
+    })
 }
 
 function parseControlLimites(raw: unknown): ControlLimites | null {
@@ -1277,9 +1266,8 @@ function parseAlerta(raw: unknown): Alerta | null {
 /**
  * GET /api/v1/alertas?estado=ACTIVA|ACK|RESUELTA — lista las alertas
  * operativas. La query `estado` es opcional; cuando se omite, el backend
- * devuelve el conjunto activo (depende del backend). Tolerante: si el endpoint
- * no existe todavía (404) o devuelve forma inválida, expone `[]` para que la
- * UI degrade como "sin alertas".
+ * devuelve el conjunto activo (depende del backend). Un 404 (endpoint todavía
+ * no implementado) se expone como `[]`; los timeouts y 5xx se propagan.
  */
 export async function getAlertas(opts?: {
     estado?: Alerta["estado"]
@@ -1307,7 +1295,7 @@ export async function getAlertas(opts?: {
             }
             return out
         },
-    }).catch(() => [])
+    })
 }
 
 /**

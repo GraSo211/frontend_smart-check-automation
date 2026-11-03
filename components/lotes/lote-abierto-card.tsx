@@ -3,6 +3,7 @@ import { Boxes, Play, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatBucket, formatDate, formatTime } from "@/lib/format"
 import type { ControlEstado, LoteSector } from "@/lib/production-data"
+import { EstadoBadge } from "@/components/lotes/estado-badge"
 
 interface LoteAbiertoCardProps {
   lote: LoteSector | null
@@ -35,29 +36,6 @@ function degradedDetail(lote: LoteSector): string {
     return "No se registró el dispositivo de apertura. Los conteos pueden ser parciales."
   }
   return `Abierto por la salida del horno (${lote.abierto_por.type}). Los conteos pueden ser parciales.`
-}
-
-function EstadoBadge({ estado }: { estado: LoteSector["estado"] }) {
-  const abierto = estado === "ABIERTO"
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset",
-        abierto
-          ? "bg-success/10 text-success ring-success/25"
-          : "bg-secondary text-muted-foreground ring-border",
-      )}
-    >
-      <span
-        className={cn(
-          "size-1.5 rounded-full",
-          abierto ? "bg-success" : "bg-muted-foreground/60",
-        )}
-        aria-hidden="true"
-      />
-      {abierto ? "Abierto" : "Cerrado"}
-    </span>
-  )
 }
 
 // Highlights the currently open lote of a sector with its live conteos and

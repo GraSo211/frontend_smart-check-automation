@@ -9,6 +9,7 @@ import { PageButton } from "@/components/shared/page-button"
 import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import { formatBucket, formatDate, formatNumber, formatTime, formatWindow, qualityRate } from "@/lib/format"
 import type { LoteSector, Sector } from "@/lib/production-data"
+import { EstadoBadge } from "@/components/lotes/estado-badge"
 
 const PAGE_SIZE = 10
 // Burnt-unit ratio above which a row is flagged as a potential line failure.
@@ -25,26 +26,6 @@ interface SupervisionTableProps {
    * y no se muestra el link (el proxy ya valida el acceso real).
    */
   userRole?: UserRole
-}
-
-function EstadoBadge({ estado }: { estado: LoteSector["estado"] }) {
-  const abierto = estado === "ABIERTO"
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset",
-        abierto
-          ? "bg-success/10 text-success ring-success/25"
-          : "bg-secondary text-muted-foreground ring-border",
-      )}
-    >
-      <span
-        className={cn("size-1.5 rounded-full", abierto ? "bg-success" : "bg-muted-foreground/60")}
-        aria-hidden="true"
-      />
-      {abierto ? "Abierto" : "Cerrado"}
-    </span>
-  )
 }
 
 // Main supervision data table with client-side pagination.

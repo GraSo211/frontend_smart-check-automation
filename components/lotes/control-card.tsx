@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import {
     AlertTriangle,
     CheckCircle2,
@@ -45,8 +45,7 @@ import {
     stopControl,
     updateControlParams,
 } from "@/actions/api"
-
-type ModoOperacion = NonNullable<LoteSector["modo"]>
+import type { ModoOperacion } from "@/actions/api"
 
 interface ControlCardProps {
     lote: LoteSector
@@ -104,6 +103,9 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     const [aprobacionNota, setAprobacionNota] = useState<string | null>(null)
 
     const [propuestaPendiente, setPropuestaPendiente] = useState<SetpointPropuesto | null>(null)
+    // Versión de la propuesta para descartar pulls viejos que resuelven después
+    // de un evento SSE o de una aprobación.
+    const propuestaVersion = useRef(0)
     const [sseConnected, setSseConnected] = useState(false)
 
     const [accionError, setAccionError] = useState<string | null>(null)
@@ -122,37 +124,44 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     // Se aplica inline en los handlers que cambian el modo (acción y SSE).
     const clearPropuestaSiNoSupervision = (nextModo: ModoOperacion) => {
         if (nextModo === "SUPERVISION") return
+        propuestaVersion.current += 1
         setPropuestaPendiente(null)
         setPropuesta(null)
+        setAprobacionNota(null)
     }
 
-    const refresh = () => {
-        startTransition(async () => {
-            try {
-                const items = await getDecisiones(lote.id)
-                setDecisiones(items)
-                setErrorMsg(null)
-            } catch (e) {
-                setErrorMsg(e instanceof Error ? e.message : "Error al cargar decisiones")
-            }
-        })
+    const refresh = async () => {
+        try {
+            const items = await getDecisiones(lote.id)
+            setDecisiones(items)
+            setErrorMsg(null)
+        } catch (e) {
+            setErrorMsg(e instanceof Error ? e.message : "Error al cargar decisiones")
+        }
     }
 
-    const refreshPropuesta = () => {
-        startTransition(async () => {
-            try {
-                const p = await getConsignaPropuesta(lote.id)
-                // El 204 limpia la propuesta: la Pi pudo aplicarla.
-                setPropuestaPendiente(p)
-            } catch {
-                // La propuesta se refresca por SSE si el pull falla.
+    const refreshPropuesta = async () => {
+        const version = propuestaVersion.current
+        try {
+            const p = await getConsignaPropuesta(lote.id)
+            // Un SSE o una aprobación más nueva invalidó este pull.
+            if (propuestaVersion.current !== version) return
+            // El 204 limpia la propuesta: la Pi pudo aplicarla.
+            setPropuestaPendiente(p)
+            if (p === null) {
+                setPropuesta(null)
+                setAprobacionNota(null)
             }
-        })
+        } catch {
+            // La propuesta se refresca por SSE si el pull falla.
+        }
     }
 
     useEffect(() => {
-        refresh()
-        const interval = window.setInterval(() => refresh(), 30000)
+        void (async () => {
+            await refresh()
+        })()
+        const interval = window.setInterval(() => void refresh(), 30000)
         return () => window.clearInterval(interval)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lote.id])
@@ -161,8 +170,10 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
     // más sondeo cada 10 s para reflejar la autorización y limpiarla al 204.
     useEffect(() => {
         if (modoActual !== "SUPERVISION") return
-        refreshPropuesta()
-        const interval = window.setInterval(() => refreshPropuesta(), 10000)
+        void (async () => {
+            await refreshPropuesta()
+        })()
+        const interval = window.setInterval(() => void refreshPropuesta(), 10000)
         return () => window.clearInterval(interval)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [modoActual, lote.id])
@@ -230,7 +241,10 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
             try {
                 const payload: unknown = JSON.parse((ev as MessageEvent).data)
                 const parsed = propuestaDesdeSSE(payload)
-                if (parsed) setPropuestaPendiente(parsed)
+                if (parsed) {
+                    propuestaVersion.current += 1
+                    setPropuestaPendiente(parsed)
+                }
             } catch {
                 // payload mal formado, ignorar
             }
@@ -366,10 +380,11 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                     return
                 }
                 setModalOpen(false)
+                propuestaVersion.current += 1
                 setPropuesta(null)
                 setPropuestaPendiente(null)
                 setAprobacionNota("Aprobada. La Pi la aplicará en el próximo ciclo.")
-                refresh()
+                void refresh()
             } catch (e) {
                 setAplicarError(
                     e instanceof Error ? e.message : "Error al aprobar la consigna.",
@@ -411,7 +426,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                                             setAccionError(result.errors.join(" · "))
                                             return
                                         }
-                                        refresh()
+                                        void refresh()
                                     } catch (e) {
                                         setAccionError(e instanceof Error ? e.message : "Error al iniciar el control.")
                                     }
@@ -434,7 +449,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                                             setAccionError(result.errors.join(" · "))
                                             return
                                         }
-                                        refresh()
+                                        void refresh()
                                     } catch (e) {
                                         setAccionError(e instanceof Error ? e.message : "Error al detener el control.")
                                     }
@@ -498,8 +513,8 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                             limites={propuestaPendiente?.limites ?? null}
                             onSuccess={() => {
                                 setParamsNota("Parámetros actualizados")
-                                refreshPropuesta()
-                                refresh()
+                                void refreshPropuesta()
+                                void refresh()
                             }}
                             onError={setParamsError}
                         />

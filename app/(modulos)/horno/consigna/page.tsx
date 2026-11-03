@@ -99,8 +99,9 @@ export default async function Page() {
             Consigna manual del horno
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Enviá una consigna de temperatura y velocidad de cinta directamente al horno. El
-            registro queda asociado al lote que elijas.
+            Enviá una consigna de temperatura y velocidad de cinta. El backend la registra y la
+            Raspberry la aplica en el próximo ciclo de control. El registro queda asociado al lote
+            que elijas.
           </p>
         </header>
 

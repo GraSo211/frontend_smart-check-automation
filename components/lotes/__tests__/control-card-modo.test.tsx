@@ -460,4 +460,130 @@ describe("ControlCard · propuesta pendiente en SUPERVISION", () => {
             vi.useRealTimers()
         }
     })
+
+    it("limpia la nota de aprobación cuando el pull devuelve null (204)", async () => {
+        vi.useFakeTimers()
+        try {
+            render(<ControlCard lote={lote({ modo: "SUPERVISION" })} canControl />)
+            // Flush del pull inicial (null) y del montaje del EventSource.
+            await act(async () => {
+                FakeEventSource.instances[0]?.open()
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            await act(async () => {
+                FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(false))
+            })
+
+            await act(async () => {
+                fireEvent.click(
+                    screen.getByRole("button", { name: "Aprobar propuesta pendiente" }),
+                )
+            })
+
+            await act(async () => {
+                fireEvent.click(screen.getByRole("button", { name: "Confirmar aprobación" }))
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            expect(mocks.aplicarConsigna).toHaveBeenCalledWith("l-1", undefined)
+            expect(
+                screen.getByText("Aprobada. La Pi la aplicará en el próximo ciclo."),
+            ).toBeTruthy()
+
+            // La Pi aplicó la propuesta: el endpoint ahora responde 204 → null.
+            mocks.getConsignaPropuesta.mockResolvedValue(null)
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10000)
+            })
+
+            expect(
+                screen.queryByText("Aprobada. La Pi la aplicará en el próximo ciclo."),
+            ).toBeNull()
+            expect(screen.getByText("Esperando propuesta del MPC")).toBeTruthy()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it("mantiene habilitado el botón tras el polling de 10 s", async () => {
+        vi.useFakeTimers()
+        try {
+            render(<ControlCard lote={lote({ modo: "SUPERVISION" })} canControl />)
+            await act(async () => {
+                FakeEventSource.instances[0]?.open()
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            await act(async () => {
+                FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(false))
+            })
+
+            const button = screen.getByRole("button", {
+                name: "Aprobar propuesta pendiente",
+            }) as HTMLButtonElement
+            expect(button.disabled).toBe(false)
+
+            // El sondeo devuelve la misma propuesta: no debe dejar pending.
+            mocks.getConsignaPropuesta.mockResolvedValue({
+                temp1: 200,
+                velocidad: 1.5,
+                z: 0.5,
+                autorizada: false,
+                decision_id: null,
+                limites: null,
+            })
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10000)
+            })
+
+            expect(button.disabled).toBe(false)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it("un pull viejo no pisa una propuesta más nueva del SSE", async () => {
+        vi.useFakeTimers()
+        try {
+            render(<ControlCard lote={lote({ modo: "SUPERVISION" })} canControl />)
+            // El pull inicial resuelve null antes de la carrera.
+            await act(async () => {
+                FakeEventSource.instances[0]?.open()
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            // El sondeo de 10 s queda pendiente.
+            let resolver: (value: null) => void = () => {}
+            mocks.getConsignaPropuesta.mockImplementationOnce(
+                () =>
+                    new Promise<null>((resolve) => {
+                        resolver = resolve
+                    }),
+            )
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10000)
+            })
+            expect(mocks.getConsignaPropuesta).toHaveBeenCalledTimes(2)
+
+            // Llega una propuesta nueva por SSE mientras el pull sigue en vuelo.
+            await act(async () => {
+                FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(false))
+            })
+
+            // El pull viejo resuelve null: debe descartarse.
+            await act(async () => {
+                resolver(null)
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            const button = screen.getByRole("button", {
+                name: "Aprobar propuesta pendiente",
+            }) as HTMLButtonElement
+            expect(button.disabled).toBe(false)
+            expect(screen.getByText("Pendiente de aprobación")).toBeTruthy()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
 })

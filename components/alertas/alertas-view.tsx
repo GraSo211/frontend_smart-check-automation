@@ -3,6 +3,8 @@
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, CircleAlert, Info, ShieldAlert } from "lucide-react"
+import { toast } from "sonner"
+import { ackAlerta } from "@/actions/api"
 import { cn } from "@/lib/utils"
 import { formatDate, formatTime } from "@/lib/format"
 import type { Alerta, AlertaEstado } from "@/lib/production-data"
@@ -149,12 +151,11 @@ function AlertaItem({
     const tone = severidadTone(alerta.severidad)
     const handleAck = () => {
         startAckTransition(async () => {
-            const { ackAlerta } = await import("@/actions/api")
             const result = await ackAlerta(alerta.id)
             if (!result.ok) {
-                // Sin canal de toast global todavía: el revalidate deja el row
-                // anterior visible y el error queda en consola.
-                console.error("ackAlerta falló", result.errors)
+                toast.error("No se pudo reconocer la alerta", {
+                    description: result.errors.join(" · "),
+                })
             }
         })
     }

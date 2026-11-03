@@ -8,7 +8,6 @@ import { getCameraHealth, getReconnectDelay, isCurrentCameraGeneration, startCam
 import { createCameraObserver } from "@/lib/camera-observer"
 
 export type CameraStatus = "connecting" | "online" | "offline" | "reconnecting" | "error" | "unknown"
-export { getReconnectDelay } from "@/lib/camera-health"
 
 function waitForIceComplete(pc: RTCPeerConnection) {
   if (pc.iceGatheringState === "complete") return Promise.resolve()
@@ -32,7 +31,6 @@ type LiveCameraProps = {
   whepUrl?: string
   title?: string
   subtitle?: string
-  location?: string
   videoAriaLabel?: string
 }
 
@@ -40,7 +38,6 @@ export default function LiveCamera({
   whepUrl,
   title = "Cámara principal",
   subtitle = "Línea de producción · Planta 01",
-  location,
   videoAriaLabel = "Transmisión en vivo de la cámara principal",
 }: LiveCameraProps) {
   const { reportCamera } = useMonitoringActions()
@@ -299,7 +296,7 @@ export default function LiveCamera({
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_color-mix(in_oklab,var(--primary)_45%,transparent)]" aria-label="Cámara de producción">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Camera className="size-4" aria-hidden="true" /></span><div><h2 className="font-heading text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p>{location ? <p className="mt-0.5 text-[11px] text-muted-foreground">{location}</p> : null}</div></div>
+        <div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Camera className="size-4" aria-hidden="true" /></span><div><h2 className="font-heading text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p></div></div>
         <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isActive ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`} role="status"><span className={`size-1.5 rounded-full ${isActive ? "animate-pulse bg-success" : "bg-current"}`} />{statusLabel}</span>
       </div>
       <div className="relative aspect-video min-h-[260px] bg-video-surface sm:min-h-[380px]">

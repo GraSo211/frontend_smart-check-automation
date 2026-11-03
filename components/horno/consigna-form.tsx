@@ -24,13 +24,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { validateConsignaInput, type LoteSector, type Producto } from "@/lib/production-data"
-
-interface LoteOption {
-  id: string
-  label: string
-  modo?: NonNullable<LoteSector["modo"]>
-}
+import {
+  validateConsignaInput,
+  type LoteOption,
+  type Producto,
+} from "@/lib/production-data"
 
 interface ConsignaFormProps {
   hornoId: string
@@ -331,7 +329,7 @@ export function ConsignaForm({
               Confirmar envío
             </DialogTitle>
             <DialogDescription>
-              Esta acción escribe directamente sobre el controlador físico del horno.
+              Esta acción se envía al backend; la Raspberry la aplica en el próximo ciclo de control.
             </DialogDescription>
           </DialogHeader>
 

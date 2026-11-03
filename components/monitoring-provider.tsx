@@ -349,9 +349,8 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
     return true
   }, [updateSync, visible])
 
-  const probe = useCallback(async (force = false) => {
+  const probe = useCallback(async () => {
     if (!visible() || !mountedRef.current) return
-    if (probeRef.current && !force) return probeRef.current
     if (probeRef.current) return probeRef.current
     const generation = generationRef.current
     const controller = new AbortController()
@@ -419,12 +418,12 @@ function MonitoringProviderRuntime({ children }: { children?: React.ReactNode })
       }
       generationRef.current += 1
       setClock(Date.now())
-      void probe(true)
+      void probe()
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     scheduleReview()
     scheduleProbe()
-    if (document.visibilityState === 'visible') void probe(true)
+    if (document.visibilityState === 'visible') void probe()
     return () => {
       cancelled = true
       document.removeEventListener('visibilitychange', onVisibilityChange)

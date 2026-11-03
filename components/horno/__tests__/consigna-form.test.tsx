@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import React from "react"
-import { render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { Producto } from "@/lib/production-data"
+import type { Consigna, Producto } from "@/lib/production-data"
 import { ConsignaPanel } from "@/components/horno/consigna-panel"
 
 const mocks = vi.hoisted(() => ({
@@ -26,7 +26,9 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("@/components/horno/consigna-historial", () => ({
-  ConsignaHistorial: () => null,
+  ConsignaHistorial: ({ consignas }: { consignas: Consigna[] }) => (
+    <div data-testid="historial">{consignas.map((c) => c.id).join(",")}</div>
+  ),
 }))
 
 vi.mock("@/components/horno/horno-estado-card", () => ({
@@ -55,18 +57,75 @@ beforeEach(() => {
 function renderPanel(overrides: {
   modo: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
   loteId?: string
+  loteOptions?: { id: string; label: string; modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO" }[]
 }) {
   return render(
     <ConsignaPanel
       hornoId="horno-01"
       productos={[producto]}
-      loteOptions={[{ id: "l-1", label: "Pan · Sector 1", modo: overrides.modo }]}
+      loteOptions={
+        overrides.loteOptions ?? [{ id: "l-1", label: "Pan · Sector 1", modo: overrides.modo }]
+      }
       initialLoteId={overrides.loteId ?? "l-1"}
       initialHistorial={[]}
       hornoEstado={null}
     />,
   )
 }
+
+function consigna(id: string): Consigna {
+  return {
+    id,
+    hornoId: "horno-01",
+    temperaturaObjetivo: 200,
+    velocidadCintaObjetivo: 1.5,
+    origen: "MANUAL",
+    exitosa: true,
+    creadaEn: "2026-01-01T10:00:00Z",
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
+describe("ConsignaPanel · historial", () => {
+  it("no deja que la respuesta de un lote viejo pise el historial del lote actual", async () => {
+    const loteA = deferred<Consigna[]>()
+    const loteB = deferred<Consigna[]>()
+    mocks.getConsignaHistorial.mockImplementation((id: string) =>
+      id === "l-a" ? loteA.promise : loteB.promise,
+    )
+
+    renderPanel({
+      modo: "MANUAL",
+      loteId: "",
+      loteOptions: [
+        { id: "l-a", label: "Lote A", modo: "MANUAL" },
+        { id: "l-b", label: "Lote B", modo: "MANUAL" },
+      ],
+    })
+
+    const selector = screen.getByLabelText("Lote") as HTMLSelectElement
+
+    fireEvent.change(selector, { target: { value: "l-a" } })
+    expect(screen.getByText("Actualizando historial…")).toBeTruthy()
+
+    fireEvent.change(selector, { target: { value: "l-b" } })
+
+    await act(async () => loteB.resolve([consigna("b-1")]))
+    expect(screen.getByTestId("historial").textContent).toBe("b-1")
+    expect(screen.queryByText("Actualizando historial…")).toBeNull()
+
+    await act(async () => loteA.resolve([consigna("a-1")]))
+    expect(screen.getByTestId("historial").textContent).toBe("b-1")
+    expect(screen.queryByText("Actualizando historial…")).toBeNull()
+  })
+})
 
 describe("ConsignaForm · bloqueo por modo del lote", () => {
   it("bloquea el formulario cuando el lote está en SUPERVISION", () => {

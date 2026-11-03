@@ -33,7 +33,6 @@ describe('proxy de autorización', () => {
     const response = proxy(request('/supervision?camera=main', role as 'Administrador' | 'Supervisor'))
 
     expect(response.headers.get('location')).toBeNull()
-    expect(response.headers.get('X-User-Role')).toBe(role)
   })
 
   it('rechaza Operario en /supervision', () => {
@@ -46,7 +45,6 @@ describe('proxy de autorización', () => {
     const response = proxy(request('/sectores', role as 'Administrador' | 'Supervisor'))
 
     expect(response.headers.get('location')).toBeNull()
-    expect(response.headers.get('X-User-Role')).toBe(role)
   })
 
   it('rechaza Operario en /sectores', () => {

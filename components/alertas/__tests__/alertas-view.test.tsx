@@ -10,12 +10,14 @@ import { AlertasView } from "@/components/alertas/alertas-view"
 const mocks = vi.hoisted(() => ({
     push: vi.fn(),
     ackAlerta: vi.fn(),
+    toastError: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock("@/actions/api", () => ({
     ackAlerta: mocks.ackAlerta,
 }))
+vi.mock("sonner", () => ({ toast: { error: mocks.toastError } }))
 
 function alerta(overrides: Partial<Alerta> = {}): Alerta {
     return {
@@ -36,6 +38,7 @@ function alerta(overrides: Partial<Alerta> = {}): Alerta {
 beforeEach(() => {
     mocks.push.mockReset()
     mocks.ackAlerta.mockReset()
+    mocks.toastError.mockReset()
 })
 
 describe("AlertasView", () => {
@@ -127,6 +130,31 @@ describe("AlertasView", () => {
 
         await waitFor(() => {
             expect(mocks.ackAlerta).toHaveBeenCalledWith("a-1")
+        })
+    })
+
+    it("muestra un toast de error cuando el ack falla", async () => {
+        mocks.ackAlerta.mockResolvedValue({
+            ok: false,
+            errors: ["La alerta no existe."],
+        })
+
+        render(
+            <AlertasView
+                initialAlertas={[alerta()]}
+                initialEstado="ACTIVA"
+                error={null}
+                canAck
+            />,
+        )
+
+        fireEvent.click(screen.getByRole("button", { name: /Reconocer alerta a-1/ }))
+
+        await waitFor(() => {
+            expect(mocks.toastError).toHaveBeenCalledWith(
+                "No se pudo reconocer la alerta",
+                { description: "La alerta no existe." },
+            )
         })
     })
 

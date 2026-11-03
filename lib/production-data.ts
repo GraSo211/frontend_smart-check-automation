@@ -63,6 +63,13 @@ export type LoteSector = {
   pesos_objetivo?: PesosObjetivo | null
 }
 
+/** Lote option shared by the manual consigna form and its panel. */
+export type LoteOption = {
+  id: string
+  label: string
+  modo?: NonNullable<LoteSector["modo"]>
+}
+
 export type PesosObjetivo = {
   wc: number
   wq: number

@@ -2,9 +2,9 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { ControlCard } from "@/components/lotes/control-card"
-import { getDecisiones, getLoteAbierto, getSectores } from "@/actions/api"
+import { getLoteAbierto, getSectores } from "@/actions/api"
 import { getSession, hasMinRole } from "@/lib/auth"
-import type { DecisionControl, LoteSector, Sector } from "@/lib/production-data"
+import type { LoteSector, Sector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
@@ -16,10 +16,10 @@ interface PageProps {
  * Vista de control automático / supervisión por lote (SCA-400 / A6).
  *
  * Server component: carga el lote abierto del sector (la Pi lo identifica
- * por sector; el id del path es el lote_id) más las últimas decisiones del
- * MPC y delega la interactividad (Iniciar/Detener/Aplicar) al ControlCard
- * cliente. El dashboard global queda como entrada; este detalle es para
- * cuando el operario ya eligió uno del listado.
+ * por sector; el id del path es el lote_id) y delega la interactividad
+ * (Iniciar/Detener/Aplicar) al ControlCard cliente. El dashboard global queda
+ * como entrada; este detalle es para cuando el operario ya eligió uno del
+ * listado.
  *
  * Reglas de acceso:
  *   - Cualquier rol autenticado puede ver el estado del control.
@@ -79,15 +79,6 @@ export default async function Page({ params }: PageProps) {
         )
     }
 
-    let decisiones: DecisionControl[] = []
-    let decisionesError: string | null = null
-    try {
-        decisiones = await getDecisiones(lote.id, 20)
-    } catch (e) {
-        decisionesError =
-            e instanceof Error ? e.message : "No se pudieron cargar las decisiones del MPC."
-    }
-
     const modo = lote.modo ?? "MANUAL"
 
     return (
@@ -126,19 +117,7 @@ export default async function Page({ params }: PageProps) {
                     </p>
                 )}
 
-                <ControlCard lote={lote} canControl={canControl} />
-
-                {decisionesError && (
-                    <p className="mt-4 text-xs text-red-600">{decisionesError}</p>
-                )}
-                {/* El ControlCard ya lista las decisiones (las vuelve a leer
-                    en cliente); dejamos el fetch server-side sólo para que el
-                    primer render ya tenga datos sin esperar al useEffect. */}
-                {decisiones.length > 0 && (
-                    <p className="mt-2 text-[10px] text-muted-foreground">
-                        {decisiones.length} decisiones pre-cargadas en el servidor.
-                    </p>
-                )}
+                <ControlCard key={lote.id} lote={lote} canControl={canControl} />
             </main>
         </div>
     )

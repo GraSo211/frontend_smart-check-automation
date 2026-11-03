@@ -65,13 +65,7 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  // Pasar rol como header interno para que Server Components lo lean si necesitan
-  const response = NextResponse.next()
-  response.headers.set('X-User-Role', session.rol)
-  response.headers.set('X-User-Email', session.email)
-  response.headers.set('X-User-Nombre', session.nombre)
-
-  return response
+  return NextResponse.next()
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

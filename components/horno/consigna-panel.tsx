@@ -1,19 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { getConsignaHistorial } from "@/actions/api"
 import { ConsignaForm } from "@/components/horno/consigna-form"
 import { ConsignaHistorial } from "@/components/horno/consigna-historial"
 import { HornoEstadoCard } from "@/components/horno/horno-estado-card"
-import type { Consigna, HornoEstado, LoteSector, Producto } from "@/lib/production-data"
-
-interface LoteOption {
-  id: string
-  label: string
-  modo?: NonNullable<LoteSector["modo"]>
-}
+import type { Consigna, HornoEstado, LoteOption, Producto } from "@/lib/production-data"
 
 interface ConsignaPanelProps {
   hornoId: string
@@ -44,8 +38,11 @@ export function ConsignaPanel({
     initialHistorialError ?? null,
   )
   const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const historialRequest = useRef(0)
 
   const loadHistorial = async (id: string) => {
+    const requestId = ++historialRequest.current
+
     if (!id) {
       setHistorial([])
       setHistorialError(null)
@@ -55,15 +52,17 @@ export function ConsignaPanel({
     setLoadingHistorial(true)
     try {
       const data = await getConsignaHistorial(id)
+      if (historialRequest.current !== requestId) return
       setHistorial(data)
       setHistorialError(null)
     } catch (error) {
+      if (historialRequest.current !== requestId) return
       setHistorial([])
       setHistorialError(
         error instanceof Error ? error.message : "No se pudo cargar el historial.",
       )
     } finally {
-      setLoadingHistorial(false)
+      if (historialRequest.current === requestId) setLoadingHistorial(false)
     }
   }
 
@@ -73,9 +72,6 @@ export function ConsignaPanel({
   }
 
   const handleSent = async (sentLoteId: string) => {
-    if (sentLoteId && sentLoteId !== loteId) {
-      setLoteId(sentLoteId)
-    }
     await loadHistorial(sentLoteId)
     router.refresh()
   }
