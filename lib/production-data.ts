@@ -288,6 +288,49 @@ export type ProductoRequest = {
   velocidadCintaSetpoint?: number | null
 }
 
+/**
+ * Consigna aplicada al horno, manual o automática. El backend devuelve la
+ * entidad en camelCase en POST /api/v1/horno/consigna y en el historial.
+ */
+export type Consigna = {
+  id: string
+  hornoId: string
+  loteId?: string | null
+  productoId?: string | null
+  temperaturaObjetivo: number
+  velocidadCintaObjetivo: number
+  origen: "MANUAL" | "AUTOMATICO"
+  usuario?: string | null
+  exitosa: boolean
+  motivoError?: string | null
+  temperaturaPrevia?: number | null
+  velocidadCintaPrevia?: number | null
+  creadaEn: string
+}
+
+/**
+ * Estado actual del horno devuelto por GET /api/v1/horno en `data.horno`.
+ */
+export type HornoEstado = {
+  id: string
+  nombre: string
+  temperatura: number
+  velocidad_cinta: number
+  producto_id?: string | null
+  lote_id?: string | null
+  estado: string
+  ultimo_check: string
+}
+
+/** Valores crudos del formulario de consigna manual. */
+export type ConsignaInput = {
+  temperaturaObjetivo: number | string
+  velocidadCintaObjetivo: number | string
+}
+
+/** Errores de validación por campo del formulario de consigna manual. */
+export type ConsignaErrores = Partial<Record<keyof ConsignaInput, string>>
+
 /** Errores de validación por campo del formulario de producto. */
 export type ProductoErrores = Partial<Record<keyof ProductoRequest, string>>
 
@@ -362,6 +405,43 @@ export function validateProducto(values: ProductoRequest): ProductoErrores {
     ) {
       errors.velocidadCintaSetpoint = "Debe estar entre la velocidad mínima y máxima."
     }
+  }
+
+  return errors
+}
+
+/**
+ * Replica las validaciones de rango del backend para el formulario de consigna
+ * manual. Devuelve un mapa por campo; vacío cuando el valor está dentro de los
+ * límites del producto.
+ */
+export function validateConsignaInput(
+  producto: Producto,
+  input: ConsignaInput,
+): ConsignaErrores {
+  const errors: ConsignaErrores = {}
+
+  const temperatura =
+    typeof input.temperaturaObjetivo === "string"
+      ? parseFloat(input.temperaturaObjetivo)
+      : input.temperaturaObjetivo
+  if (!Number.isFinite(temperatura)) {
+    errors.temperaturaObjetivo = "Ingresá un número."
+  } else if (temperatura < producto.tempMin || temperatura > producto.tempMax) {
+    errors.temperaturaObjetivo = `Debe estar entre ${producto.tempMin} y ${producto.tempMax} °C.`
+  }
+
+  const velocidad =
+    typeof input.velocidadCintaObjetivo === "string"
+      ? parseFloat(input.velocidadCintaObjetivo)
+      : input.velocidadCintaObjetivo
+  if (!Number.isFinite(velocidad)) {
+    errors.velocidadCintaObjetivo = "Ingresá un número."
+  } else if (
+    velocidad < producto.velocidadCintaMin ||
+    velocidad > producto.velocidadCintaMax
+  ) {
+    errors.velocidadCintaObjetivo = `Debe estar entre ${producto.velocidadCintaMin} y ${producto.velocidadCintaMax} m/s.`
   }
 
   return errors

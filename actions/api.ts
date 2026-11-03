@@ -25,6 +25,8 @@ import type {
     ConfianzaClase,
     Alerta,
     ControlLimites,
+    Consigna,
+    HornoEstado,
 } from "@/lib/production-data";
 import { parseDevice, parseDevicesPayload, parseLoteSectorPayload } from "@/lib/monitoring-runtime";
 import {
@@ -35,6 +37,7 @@ import {
 import { ApiError } from "@/lib/api-client"
 import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
+import { getSession } from "@/lib/auth"
 
 const SESSION_COOKIE = "session_token"
 
@@ -1323,4 +1326,133 @@ export async function ackAlerta(id: string): Promise<DeviceActionResult<Alerta>>
         },
         revalidatePaths: ["/alertas"],
     });
+}
+
+// ─── Horno: consigna manual ─────────────────────────────────────────────────
+
+function isConsigna(value: unknown): value is Consigna {
+    return (
+        isRecord(value) &&
+        typeof value.id === "string" &&
+        typeof value.hornoId === "string" &&
+        typeof value.temperaturaObjetivo === "number" &&
+        typeof value.velocidadCintaObjetivo === "number" &&
+        typeof value.origen === "string" &&
+        typeof value.exitosa === "boolean" &&
+        typeof value.creadaEn === "string"
+    )
+}
+
+function parseConsigna(data: unknown): Consigna | null {
+    return isConsigna(data) ? data : null
+}
+
+function isHornoEstado(value: unknown): value is HornoEstado {
+    return (
+        isRecord(value) &&
+        typeof value.id === "string" &&
+        typeof value.nombre === "string" &&
+        typeof value.temperatura === "number" &&
+        typeof value.velocidad_cinta === "number" &&
+        typeof value.estado === "string" &&
+        typeof value.ultimo_check === "string"
+    )
+}
+
+function parseHornoEstado(data: unknown): HornoEstado | null {
+    return isHornoEstado(data) ? data : null
+}
+
+/**
+ * GET /api/v1/horno?id=<hornoId> — estado actual del horno y alertas recientes.
+ * El backend envuelve el horno en `data.horno`. Si el horno no existe (404) o
+ * la respuesta es inválida, devuelve `null` para que la UI degrade sin romper.
+ */
+export async function getHornoEstado(hornoId: string): Promise<HornoEstado | null> {
+    return withBackendFetch({
+        path: `/api/v1/horno?id=${encodeURIComponent(hornoId)}`,
+        timeoutMessage: "El backend no respondió a tiempo. El estado del horno no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return null
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+
+            const payload: unknown = await response.json()
+            const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null
+            const horno = data?.horno
+            if (!horno) {
+                throw new Error("La API devolvió una respuesta inválida para el estado del horno.")
+            }
+            const parsed = parseHornoEstado(horno)
+            if (parsed === null) {
+                throw new Error("La API devolvió una respuesta inválida para el estado del horno.")
+            }
+            return parsed
+        },
+    })
+}
+
+/**
+ * GET /api/v1/horno/consigna/historial?loteId=<uuid> — historial de consignas
+ * de un lote. `loteId` es obligatorio para el backend. Un 404 del lote se
+ * traduce a lista vacía; cualquier otro error se propaga (incluido 401).
+ */
+export async function getConsignaHistorial(loteId: string): Promise<Consigna[]> {
+    return withBackendFetch({
+        path: `/api/v1/horno/consigna/historial?loteId=${encodeURIComponent(loteId)}`,
+        timeoutMessage: "El backend no respondió a tiempo. El historial de consignas no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                if (response.status === 404) return []
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+
+            const payload: unknown = await response.json()
+            const data = isRecord(payload) && Array.isArray(payload.data) ? payload.data : null
+            if (data === null) {
+                throw new Error("La API devolvió una respuesta inválida para el historial de consignas.")
+            }
+            const out: Consigna[] = []
+            for (const item of data) {
+                const parsed = parseConsigna(item)
+                if (parsed) out.push(parsed)
+            }
+            return out
+        },
+    })
+}
+
+export type ConsignaManualInput = {
+    hornoId: string
+    productoId: string
+    temperaturaObjetivo: number
+    velocidadCintaObjetivo: number
+    loteId?: string
+}
+
+/**
+ * POST /api/v1/horno/consigna — envía una consigna manual al horno. El backend
+ * requiere JWT cookie y acepta roles Operario/Supervisor/Admin. El `usuario`
+ * se completa desde la sesión decodificada, no desde el formulario.
+ */
+export async function enviarConsignaManual(
+    input: ConsignaManualInput,
+): Promise<DeviceActionResult<Consigna>> {
+    const session = await getSession()
+    const usuario = session?.nombre || session?.email || undefined
+
+    return deviceMutation<Consigna>({
+        path: "/api/v1/horno/consigna",
+        method: "POST",
+        body: { ...input, usuario },
+        parse: parseConsigna,
+        invalidMessage: "La API devolvió una consigna inválida.",
+        statusMessages: {
+            404: "El horno no existe.",
+            422: "El producto no tiene parámetros o los valores están fuera del rango seguro.",
+            502: "El controlador físico rechazó la consigna.",
+        },
+        revalidatePaths: ["/horno/consigna", "/linea-produccion", "/lotes"],
+    })
 }
