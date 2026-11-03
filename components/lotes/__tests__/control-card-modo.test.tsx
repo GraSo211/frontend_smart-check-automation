@@ -368,3 +368,96 @@ describe("ControlCard · parámetros del control", () => {
         expect(mocks.updateControlParams).not.toHaveBeenCalled()
     })
 })
+
+describe("ControlCard · propuesta pendiente en SUPERVISION", () => {
+    const propuestaSSE = (autorizada: boolean) => ({
+        lote_id: "l-1",
+        autorizada,
+        propuesta: { temp1: 200, velocidad: 1.5, z: 0.5 },
+    })
+
+    async function renderSupervision() {
+        render(<ControlCard lote={lote({ modo: "SUPERVISION" })} canControl />)
+        // Espera el pull inicial (resuelve null) para que no pise el SSE.
+        await waitFor(() => expect(mocks.getConsignaPropuesta).toHaveBeenCalledWith("l-1"))
+        await act(async () => {})
+    }
+
+    it("deshabilita el botón si no hay propuesta", async () => {
+        await renderSupervision()
+
+        const button = screen.getByRole("button", {
+            name: "Aprobar propuesta pendiente",
+        }) as HTMLButtonElement
+        expect(button.disabled).toBe(true)
+    })
+
+    it("habilita el botón y abre el modal con una propuesta sin autorizar", async () => {
+        await renderSupervision()
+
+        await act(async () => {
+            FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(false))
+        })
+
+        const button = screen.getByRole("button", {
+            name: "Aprobar propuesta pendiente",
+        }) as HTMLButtonElement
+        expect(button.disabled).toBe(false)
+        expect(screen.getByText("Pendiente de aprobación")).toBeTruthy()
+
+        await act(async () => {
+            fireEvent.click(button)
+        })
+
+        const dialog = await screen.findByRole("dialog")
+        expect(dialog.textContent).toContain("Aprobar propuesta del MPC")
+    })
+
+    it("mantiene el botón deshabilitado si la propuesta ya fue autorizada", async () => {
+        await renderSupervision()
+
+        await act(async () => {
+            FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(true))
+        })
+
+        const button = screen.getByRole("button", {
+            name: "Aprobar propuesta pendiente",
+        }) as HTMLButtonElement
+        expect(button.disabled).toBe(true)
+        expect(
+            screen.getByText("Aprobada: esperando que la Pi la aplique"),
+        ).toBeTruthy()
+    })
+
+    it("limpia la propuesta cuando el pull devuelve null (204)", async () => {
+        vi.useFakeTimers()
+        try {
+            render(<ControlCard lote={lote({ modo: "SUPERVISION" })} canControl />)
+            // Flush del pull inicial (null) y del montaje del EventSource.
+            await act(async () => {
+                FakeEventSource.instances[0]?.open()
+                await vi.advanceTimersByTimeAsync(0)
+            })
+
+            await act(async () => {
+                FakeEventSource.instances[0]?.emit("control.propuesta", propuestaSSE(false))
+            })
+
+            const button = screen.getByRole("button", {
+                name: "Aprobar propuesta pendiente",
+            }) as HTMLButtonElement
+            expect(button.disabled).toBe(false)
+
+            // La Pi aplicó la propuesta: el endpoint ahora responde 204 → null.
+            mocks.getConsignaPropuesta.mockResolvedValue(null)
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10000)
+            })
+
+            expect(button.disabled).toBe(true)
+            expect(screen.getByText("Esperando propuesta del MPC")).toBeTruthy()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+})

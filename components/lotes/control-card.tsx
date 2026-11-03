@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import SegmentedControl from "@/components/supervision/segmented-control"
 import { cn } from "@/lib/utils"
+import { isRecord } from "@/lib/is-record"
 import { formatDate, formatTime, formatTemp } from "@/lib/format"
 import type {
     ConfianzaClase,
@@ -141,7 +142,8 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
         startTransition(async () => {
             try {
                 const p = await getConsignaPropuesta(lote.id)
-                if (p) setPropuestaPendiente(p)
+                // El 204 limpia la propuesta: la Pi pudo aplicarla.
+                setPropuestaPendiente(p)
             } catch {
                 // La propuesta se refresca por SSE si el pull falla.
             }
@@ -154,6 +156,16 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
         return () => window.clearInterval(interval)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lote.id])
+
+    // En SUPERVISION la propuesta puede aplicarla la Pi sin SSE: pull inicial
+    // más sondeo cada 10 s para reflejar la autorización y limpiarla al 204.
+    useEffect(() => {
+        if (modoActual !== "SUPERVISION") return
+        refreshPropuesta()
+        const interval = window.setInterval(() => refreshPropuesta(), 10000)
+        return () => window.clearInterval(interval)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [modoActual, lote.id])
 
     // Telemetría del horno en vivo (la Pi publica cada 5 s). Es best-effort:
     // si falla, el panel cae a los valores de la última decisión del MPC.
@@ -216,17 +228,9 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
         es.onerror = () => setSseConnected(false)
         es.addEventListener("control.propuesta", (ev) => {
             try {
-                const payload = JSON.parse((ev as MessageEvent).data) as {
-                    propuesta?: SetpointPropuesto
-                    decision_id?: string
-                }
-                if (payload.propuesta) {
-                    setPropuestaPendiente({
-                        ...payload.propuesta,
-                        autorizada: payload.propuesta.autorizada === true,
-                        decision_id: payload.decision_id ?? payload.propuesta.decision_id,
-                    })
-                }
+                const payload: unknown = JSON.parse((ev as MessageEvent).data)
+                const parsed = propuestaDesdeSSE(payload)
+                if (parsed) setPropuestaPendiente(parsed)
             } catch {
                 // payload mal formado, ignorar
             }
@@ -530,7 +534,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                                 variant="default"
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                                 onClick={abrirModalAplicar}
-                                disabled={pending}
+                                disabled={pending || !propuestaPendiente || propuestaPendiente.autorizada}
                             >
                                 <CheckCircle2 className="h-4 w-4" />
                                 Aprobar propuesta pendiente
@@ -618,7 +622,7 @@ export function ControlCard({ lote, canControl }: ControlCardProps) {
                             Cancelar
                         </DialogClose>
                         <Button
-                            disabled={loadingPropuesta || propuesta === null}
+                            disabled={loadingPropuesta || propuesta === null || propuesta.autorizada}
                             onClick={confirmarAplicar}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
@@ -689,6 +693,44 @@ function isModo(value: string): value is ModoOperacion {
     return value === "MANUAL" || value === "SUPERVISION" || value === "AUTOMATICO"
 }
 
+/**
+ * Normaliza el payload SSE `control.propuesta`. El backend serializa
+ * `temp1`/`velocidad`/`z` en minúscula; se aceptan también las variantes
+ * capitalizadas por compatibilidad con eventos viejos.
+ */
+function propuestaDesdeSSE(payload: unknown): SetpointPropuesto | null {
+    if (!isRecord(payload) || !isRecord(payload.propuesta)) return null
+    const raw = payload.propuesta
+    const temp1 =
+        typeof raw.temp1 === "number"
+            ? raw.temp1
+            : typeof raw.Temp1 === "number"
+              ? raw.Temp1
+              : null
+    const velocidad =
+        typeof raw.velocidad === "number"
+            ? raw.velocidad
+            : typeof raw.Velocidad === "number"
+              ? raw.Velocidad
+              : null
+    if (temp1 === null || velocidad === null) return null
+
+    return {
+        ...(raw as unknown as SetpointPropuesto),
+        temp1,
+        velocidad,
+        z: typeof raw.z === "number" ? raw.z : typeof raw.Z === "number" ? raw.Z : 0,
+        autorizada: payload.autorizada === true || raw.autorizada === true,
+        decision_id:
+            typeof payload.decision_id === "string"
+                ? payload.decision_id
+                : typeof raw.decision_id === "string"
+                  ? raw.decision_id
+                  : null,
+        limites: isRecord(raw.limites) ? (raw.limites as unknown as ControlLimites) : null,
+    }
+}
+
 function PropuestaResumen({
     propuesta,
     tempActual,
@@ -698,6 +740,10 @@ function PropuestaResumen({
     tempActual: number | null
     velActual: number | null
 }) {
+    if (!Number.isFinite(propuesta.temp1) || !Number.isFinite(propuesta.velocidad)) {
+        return <p className="text-sm text-amber-600">La propuesta no tiene setpoints válidos.</p>
+    }
+
     const dT1 = tempActual !== null ? propuesta.temp1 - tempActual : null
     const dV = velActual !== null ? propuesta.velocidad - velActual : null
 
