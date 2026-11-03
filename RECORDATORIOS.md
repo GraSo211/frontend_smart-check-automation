@@ -42,9 +42,3 @@ visión» en `ControlCard`) ya están en la UI y el backend los expone. El clien
   con backend y Raspberry reales.
 - **MediaMTX**: la URL final, la red, CORS y la autenticación del servidor de
   video siguen pendientes de definición (ver `README.md`, sección de video).
-- **Tabla de API consumida del `README.md`**: sigue incompleta. Faltan las rutas
-  de control de lote (`POST /control/start`, `POST /control/stop`,
-  `GET /control/estado`, `PATCH /control/parametros`, `GET /decisiones`,
-  `GET /metricas-horno`, `GET /confianza-clases`, `GET /consigna-propuesta`,
-  `POST /aplicar-consigna`, `PATCH /modo`), `GET /api/v1/productos` y el SSE
-  externo `GET /api/v1/lotes/{id}/control/events`.

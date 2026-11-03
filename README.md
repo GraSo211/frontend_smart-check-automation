@@ -264,6 +264,17 @@ especificación completa del backend.
 | `GET /api/v1/sectores` | Dashboard, `/lotes`, `/sectores`, `/configuracion` y snapshot global. | Sin query. |
 | `GET /api/v1/lotes` | Dashboard, `/lotes`, `/configuracion` y snapshot global. Paginación por cursor. | `sector_id` (obligatorio con OAuth), `producto_id`, `limite`, `antes_de` (cursor); el backend omite `siguiente_cursor` en la última página. |
 | `GET /api/v1/lotes/abierto` | Lote abierto del sector en `/lotes`. | `sector_id`; responde `lote: null` cuando no hay ninguno. |
+| `POST /api/v1/lotes/{id}/control/start` | Inicia el loop MPC del lote desde `ControlCard`. | Sin cuerpo; requiere Supervisor/Admin. |
+| `POST /api/v1/lotes/{id}/control/stop` | Detiene el loop MPC del lote. | Sin cuerpo; requiere Supervisor/Admin. |
+| `GET /api/v1/lotes/{id}/control/estado` | Estado runtime del loop en `ControlCard`. | Sin query; un 404 degrada a `null`. |
+| `PATCH /api/v1/lotes/{id}/control/parametros` | Ajuste de parámetros del control desde `ControlCard`. | JSON parcial con los parámetros editables. |
+| `PATCH /api/v1/lotes/{id}/modo` | Cambio de modo `MANUAL`/`SUPERVISION`/`AUTOMATICO`. | JSON `{ modo }`; requiere Supervisor/Admin. |
+| `GET /api/v1/lotes/{id}/decisiones` | Audit del MPC en `ControlCard`. | `limite` (default 50, máximo 100). |
+| `GET /api/v1/lotes/{id}/metricas-horno` | Últimas lecturas del horno para el estado actual. | `limite` (default 1, máximo 200). |
+| `GET /api/v1/lotes/{id}/confianza-clases` | Confianza agregada del modelo de visión. | `limite` (default 200, máximo 2000); un 404 degrada a `[]`. |
+| `GET /api/v1/lotes/{id}/consigna-propuesta` | Propuesta pendiente del MPC en `SUPERVISION`. | Sin query; `204` = sin propuesta. |
+| `POST /api/v1/lotes/{id}/aplicar-consigna` | Aprueba/aplica la propuesta pendiente. | JSON opcional `{ decision_id }`; requiere propuesta no autorizada. |
+| `GET /api/v1/lotes/{id}/control/events` | SSE de propuestas y cambios de modo del lote. | `Accept: text/event-stream`; eventos `control.propuesta` y `control.evento`. |
 | `GET /api/v1/dispositivos` | Carga inicial de `/dispositivos`, `/sectores` y fuentes de `/supervision`. | Sin query. El front ignora el campo `whepUrl` si el backend lo envía; la URL se deriva localmente. |
 | `GET /api/v1/dispositivos/metricas` | Historial del dispositivo seleccionado. | `dispositivoId`, `page`, `pageSize`; el valor por defecto de la action es `page=1&pageSize=20`. |
 | `POST /api/v1/dispositivos` | **No se usa**: responde 405. El alta pasa por solicitudes de registro. | — |
