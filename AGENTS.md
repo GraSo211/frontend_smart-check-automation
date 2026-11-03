@@ -23,7 +23,27 @@ The repository scripts are:
 | Lint | `pnpm lint` |
 | Tests | `pnpm test` |
 
-There is no `tsc` script; run `pnpm exec tsc --noEmit` if you need a one-off type check. `next build` will not fail on type errors (see gotchas).
+There is no `tsc` script; run `pnpm exec tsc --noEmit` for a one-off type check. `pnpm build` (`next build`) verifies types: `next.config.mjs` does not set `typescript.ignoreBuildErrors`.
+
+Tests use Vitest (`pnpm test` → `vitest run`). `vitest.config.mts` defaults to the `node` environment; component tests must start with `// @vitest-environment jsdom` (see `components/horno/__tests__/consigna-form.test.tsx`). Unit tests live in `lib/__tests__/`, component tests in `components/**/__tests__/`.
+
+## Environment
+
+| Variable | Scope | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | server + client bundle | Go API base; required. |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | client bundle | Optional Google login. |
+| `NEXT_PUBLIC_MEDIAMTX_URL` | client bundle | Public MediaMTX base used by `/supervision`. |
+| `HORNO_ID` | server only | Oven id for `/horno/consigna`; defaults to `horno-01`. Included as an optional entry in `.env.example`. |
+
+`NEXT_PUBLIC_*` values are inlined at build time; changing one requires a rebuild. `HORNO_ID` is read server-side on each request of the dynamic `/horno/consigna` page, so it does not.
+
+## Documentation
+
+- [`README.md`](README.md) — functional scope, pages, environment and deployment.
+- [`MANUAL_INSTALACION.md`](MANUAL_INSTALACION.md) — step-by-step install, environment, run, deploy and functional verification.
+- [`DESIGN.md`](DESIGN.md) — themes, tokens and interaction states.
+- [`RECORDATORIOS.md`](RECORDATORIOS.md) — resolved items and current technical debt.
 
 ## Layout
 
@@ -33,20 +53,27 @@ app/                      Next.js App Router
   (auth)/                 Login / unauthorized routes
   (modulos)/page.tsx      Home dashboard (async server component, force-dynamic): getAllLotes() → HomeDashboard
   (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → LotesDashboard
-  (modulos)/configuracion/ getProductosConParametros() + getSectores() + cursor-walked getLotes() → config panels
-  (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector, show derived WHEP URL, delete
+  (modulos)/lotes/[id]/control/ Per-lote MPC control view (ControlCard)
+  (modulos)/configuracion/ getProductos() + getSectores() + cursor-walked getLotes() → config panels
+  (modulos)/horno/consigna/ Manual oven setpoint form: getProductos() + getSectores() + open lote per sector + getHornoEstado(HORNO_ID) + getConsignaHistorial(lote)
+  (modulos)/linea-produccion/ Sector line view: getSectores() + getProductos() + getLoteAbierto(sector) + getAlertas(ACTIVA)
+  (modulos)/reportes/     Lote history download (CSV/JSON) through /api/reportes/lotes
+  (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector, rename, show derived WHEP URL, delete
   (modulos)/sectores/     Sector catalog: getSectores() + getDevices() → create/rename/delete (Supervisor+)
   (modulos)/usuarios/     Users + roles (Administrador only)
   (modulos)/supervision/  Live WHEP camera view (Supervisor+)
-  (modulos)/alertas/      Placeholder module
+  (modulos)/alertas/      Operational alerts: getAlertas(estado) + ack (Supervisor+)
   api/lotes/snapshot/     Global multi-sector lote snapshot proxy (parallel sectors, cursor walk, `truncada` flag)
   api/lotes/events/       SSE proxy to the backend /api/v1/lotes/events
+  api/lotes/[id]/control/events/ SSE proxy for `control.propuesta` / `control.evento`
   api/dispositivos/*      Device snapshot/events proxies
+  api/reportes/lotes/     CSV/JSON report built from getAllLotes()
   api/system-status/      Backend health probe (GET /health)
   globals.css             Tailwind v4 @import + @theme inline design tokens (oklch, 4 themes)
 actions/
-  api.ts                  Server data fetchers + mutations (lotes, sectores, dispositivos, parámetros, registro). See "Data flow".
+  api.ts                  Server data fetchers + mutations (lotes, control, horno/consigna, sectores, dispositivos, alertas, parámetros, registro). See "Data flow".
   auth.ts                 Login/logout server actions
+  reports.ts              Lote report building (CSV/JSON)
   users.ts                Admin user server actions
 components/
   dashboard-content.tsx   Home dashboard composition ("use client")
@@ -54,10 +81,14 @@ components/
   user-management.tsx     Users/roles admin UI
   mode-toggle.tsx         Theme switcher
   theme-provider.tsx      next-themes provider
-  lotes/                  dashboard-content, kpi-cards, supervision-table, filters-bar, lote-abierto-card
+  lotes/                  dashboard-content, kpi-cards, supervision-table, filters-bar, lote-abierto-card, control-card
+  horno/                  consigna-panel, consigna-form, horno-estado-card, consigna-historial
   configuracion/          product-card, product-parameters, parameters-history
   dispositivos/           device-card, devices-state, device-history, device-actions-menu, telemetry-dashboard, pending-registration-requests
   sectores/               sector-management
+  linea-produccion/       linea-produccion-view
+  alertas/                alertas-view
+  reportes/               reportes-form
   supervision/            supervision-view, live-camera, node-selector, segmented-control
   shared/                 connection-indicator, page-button, pagination-state, sector-select
   layout/                 header, footer, sidebar, sidebar-trigger, monitoring-status
@@ -65,7 +96,7 @@ components/
 lib/
   utils.ts                `cn()` helper (clsx + tailwind-merge)
   format.ts               es-AR Intl formatters used across the dashboard
-  production-data.ts      LoteSector/Sector/Producto/Conteos API contract types
+  production-data.ts      LoteSector/Sector/Producto/Conteos API contract types + validateConsignaInput
   devices-data.ts         Device, telemetry and registration-request types
   auth.ts                 Session cookie decode/expiry + role levels (proxy + server)
   auth-redirect.ts        Safe callbackUrl validation
@@ -80,7 +111,7 @@ lib/
   sidebar-nav.ts          Sidebar nav model
   sync-store.ts           Client store for the "última sincronización" timestamp
   user-management-state.ts  Users list state helpers
-  __tests__/              Unit tests
+  __tests__/              Unit tests (includes consigna-validation.test.ts)
 hooks/
   use-mobile.ts           Viewport breakpoint hook (shadcn sidebar)
 public/                   Static logos and icons
@@ -91,9 +122,13 @@ Data flow: the backend contract is the **sector/lotes** one. `actions/api.ts` ex
 
 The home page (`app/(modulos)/page.tsx`) calls `getAllLotes()`; `/lotes` adds `getSectores()` + `getLoteAbierto()`; `/configuracion` walks `getLotes()` per sector/product. The client provider (`components/monitoring-provider.tsx`) stays **global**: it fetches the global snapshot from `app/api/lotes/snapshot/route.ts` (parallel sectors, cursor walk, emits a `truncada` flag) and subscribes to `app/api/lotes/events/route.ts` (`lote.creado` / `lote.actualizado` / `lote.cerrado`, payload = raw `LoteSector`). `useProductionData()` returns `LoteSector[]` plus `truncated`; pages filter by sector client-side.
 
+`/horno/consigna` (`force-dynamic`) composes `getProductos()`, `getSectores()`, one `getLoteAbierto()` per sector, `getHornoEstado(process.env.HORNO_ID ?? "horno-01")` and `getConsignaHistorial(initialLoteId)`. Each fetch fails independently: productos/sectores render an inline `role="alert"`, while the oven state and history degrade inside their cards.
+
 Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout prevents a cold-start from blocking a request indefinitely; the resulting error is propagated to the page.
 
 MediaMTX: `NEXT_PUBLIC_MEDIAMTX_URL` is the public base (http/https, no path). The WHEP URL is derived in the front as `<base>/<slug(nombre)>-<entrada|salida>/whep`; it is not editable per device. The Raspberry publishes to the same path over RTSP.
+
+Lote control (`components/lotes/control-card.tsx`, `/lotes/[id]/control`): mode changes go through `cambiarModo()` (`PATCH /api/v1/lotes/{id}/modo`) and require Supervisor (`canControl`). In `SUPERVISION` the card pulls `GET /api/v1/lotes/{id}/consigna-propuesta` on mount and every 10 s; a 204 clears the pending proposal, and the `control.propuesta` SSE event also feeds it. **There is at most one pending proposal per lote — it is not a queue.** The "Aprobar propuesta pendiente" button is enabled only when a proposal exists and `autorizada !== true`; the approval modal's confirm button applies the same guard. After approving, the card shows "Aprobada. La Pi la aplicará en el próximo ciclo." until the Pi applies it and the next pull returns 204.
 
 ## Conventions specific to this repo
 
@@ -103,7 +138,7 @@ MediaMTX: `NEXT_PUBLIC_MEDIAMTX_URL` is the public base (http/https, no path). T
 - Tailwind v4 tokens live entirely in `app/globals.css` (`@theme inline` + `:root` / `.dark` oklch vars). Add new design tokens there, not in a JS config.
 ## Gotchas
 
-- `next.config.mjs` sets `typescript.ignoreBuildErrors: true` and `images.unoptimized: true`. The build will pass even with type errors; still try to keep types clean.
+- `next.config.mjs` only sets `output: "standalone"` and `images.unoptimized: true`. It does **not** set `typescript.ignoreBuildErrors`, so `pnpm build` fails on type errors. Run `pnpm exec tsc --noEmit` to see them in isolation.
 - `lucide-react` is pinned at `^1.16.0` and `next` at `16.2.6` (pinned exact, no caret). Don't bump either casually — other deps assume these versions.
 - `pnpm dev` uses Turbopack by default in Next 16. Page shells and KPI cards are server components; the header, footer, sidebar and most interactive modules are client components (`"use client"`).
 - `package.json` `name` is still the default `my-project` — it is not the source of truth for the project name (use `app/layout.tsx` metadata / footer string `Smart-Check Automation`).

@@ -175,6 +175,41 @@ Definidas en `@layer components` de `app/globals.css`:
 | `.telemetry-offline` | Atenúa en escala de grises un bloque de telemetría sin conexión y restaura el badge. |
 | `.critical-pulse` | Pulso de atención con `--destructive`; se desactiva con `prefers-reduced-motion: reduce`. |
 
+## Estados de interacción
+
+### Formulario de consigna bloqueado (`/horno/consigna`)
+
+Cuando el lote seleccionado está en `SUPERVISION` o `AUTOMATICO` —o cuando se
+elige «Sin lote» y hay un lote abierto automático— el formulario muestra un
+aviso y deshabilita la edición:
+
+| Elemento | Tratamiento |
+|---|---|
+| Aviso | `role="alert"`, contenedor `rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning`, ícono `AlertTriangle`, título «Consigna manual bloqueada» y motivo en `text-warning/80`. |
+| Campos | Producto, temperatura y velocidad de cinta deshabilitados (`disabled:cursor-not-allowed disabled:opacity-60`). |
+| Botón «Enviar consigna» | Deshabilitado. |
+| Selector de lote | **Habilitado**, para poder elegir un lote en `MANUAL` sin salir de la página. |
+| Validación por campo | Mensaje en `text-destructive`; el rango permitido se muestra como ayuda en `text-xs text-muted-foreground`. |
+| Diálogo de confirmación | Ícono en `bg-warning/10 text-warning`; advierte que la consigna se envía al backend y la Raspberry la aplica en el próximo ciclo de control. |
+
+El color de atención usa el token `warning`; no se introducen colores nuevos.
+
+### Aprobación de propuesta del MPC (`ControlCard`, modo `SUPERVISION`)
+
+Hay como máximo **una propuesta pendiente por lote**; la tarjeta no muestra una
+cola. Los tres estados del botón «Aprobar propuesta pendiente» son:
+
+| Estado | Botón | Indicador de estado |
+|---|---|---|
+| Sin propuesta | Deshabilitado. | «Esperando propuesta del MPC» con punto `bg-muted-foreground/40`, o «Stream SSE desconectado» si el SSE no está conectado. |
+| Pendiente sin autorizar | Habilitado; abre el modal de aprobación. | «Pendiente de aprobación» con punto `bg-emerald-500`. |
+| Aprobada, esperando a la Pi | Deshabilitado, igual que el botón «Confirmar aprobación» del modal. | «Aprobada: esperando que la Pi la aplique». |
+
+Después de aprobar se muestra la nota «Aprobada. La Pi la aplicará en el próximo
+ciclo.» con `CheckCircle2`. El botón de aprobación usa el verde literal
+`bg-emerald-600 hover:bg-emerald-700 text-white` (no un token semántico); los
+errores de la tarjeta usan `destructive`.
+
 ## Convenciones
 
 - **Tokens sólo en `app/globals.css`.** No hay `tailwind.config.*`: Tailwind v4
