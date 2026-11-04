@@ -14,6 +14,7 @@ function productoBase(overrides?: Partial<Producto>): Producto {
     tempMax: 180,
     velocidadCintaMin: 0.1,
     velocidadCintaMax: 0.3,
+    capacidadNominalKgH: null,
     ...overrides,
   }
 }

@@ -47,6 +47,7 @@ const product = {
   tempMax: 2,
   velocidadCintaMin: 1,
   velocidadCintaMax: 2,
+  capacidadNominalKgH: null,
   createdAt: "2026-01-01",
   updatedAt: "2026-01-01",
 }

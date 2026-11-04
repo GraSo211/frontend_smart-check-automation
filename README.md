@@ -30,14 +30,14 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Operación | Dashboard con indicadores de producción, calidad, temperatura, conectividad y sincronización. |
 | Supervisión | Lista y muestra la cámara de los dispositivos con tipo (entrada/salida) derivando la URL WHEP a partir del nombre, el tipo y `NEXT_PUBLIC_MEDIAMTX_URL`, con reconexión automática. Por capacidad de las Raspberry, cada dispositivo expone una sola cámara/stream. |
 | Lotes | Consulta de lotes, búsqueda por producto, filtro por estado y sector (en la URL), KPIs y tabla histórica. |
-| Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno (`HORNO_ID`) asociada opcionalmente a un lote abierto, y muestra el estado del horno y el historial de consignas. El formulario queda bloqueado si el lote seleccionado está en `SUPERVISION` o `AUTOMATICO`, o si se elige «Sin lote» y hay un lote abierto automático; el selector de lote sigue habilitado para poder elegir uno en `MANUAL`. |
+| Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada opcionalmente a un lote abierto, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si el lote seleccionado está en `SUPERVISION` o `AUTOMATICO`, o si se elige «Sin lote» y hay un lote abierto automático; el selector de lote sigue habilitado para poder elegir uno en `MANUAL`. |
 | Línea de producción | Vista por sector del lote abierto: modo de operación, setpoints contra el rango del producto, KPIs de calidad y alertas activas del sector. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
 | Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de dispositivos asignados. La gestión requiere rol Supervisor o Administrador. |
 | Dispositivos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y baja de dispositivos. La URL WHEP de la cámara se deriva del nombre y el tipo y es de solo lectura en el panel; el nombre se sincroniza con la Raspberry, que es la fuente de verdad. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
 | Alertas | Listado de alertas operativas con filtro por estado (`ACTIVA`, `ACK`, `RESUELTA`, `TODAS`) y acuse de recibo para Supervisor y Administrador. |
-| Reportes | Descarga del historial de lotes en CSV o JSON, filtrando por lote o por rango de fechas. |
+| Reportes | Centro de reportes con KPIs de producción, calidad, proceso, alertas, MPC y OEE (A/P/Q + energía). Filtros por rango de fechas (ART), sector, producto y turno; descarga del detalle en CSV, CSV para Excel es-AR, JSON y PDF operativo, alertas del período en CSV/JSON, y PDF/CSV de trazabilidad por lote con métricas, consignas, alertas y decisiones MPC. |
 
 ## Stack y servicios
 
@@ -53,6 +53,7 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Tiempo real | `EventSource`/SSE del navegador, proxificado por handlers internos de Next.js |
 | Video | WebRTC del navegador consumiendo una sesión WHEP de MediaMTX |
 | Notificaciones UI | `sonner` |
+| PDF | `@react-pdf/renderer` `4.9.x` (Route Handler Node, Helvetica built-in) |
 | Analítica | `@vercel/analytics` `1.6.1`, montada únicamente con `NODE_ENV=production` |
 | Pruebas | Vitest `4.1.x`; entorno `node` por defecto y `jsdom` en los tests de componentes |
 | Gestor de paquetes | `pnpm` (canónico; usar el lockfile `pnpm-lock.yaml`) |
@@ -104,7 +105,6 @@ Las variables reconocidas por el código son:
 | `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Configurarla siempre, incluso cuando algunas acciones de autenticación y usuarios tienen un default de producción. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID público de Google para mostrar y utilizar el login con Google. No es un client secret. | Solo para login con Google. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | Base pública del servidor MediaMTX (sin path final). El front arma la URL WHEP de cada dispositivo como `<base>/<slug(nombre)>-<entrada|salida>/whep`. | Sí, para que `/supervision` pueda reproducir video. |
-| `HORNO_ID` | Identificador del horno que consulta y recibe las consignas de `/horno/consigna`. Es una variable de servidor (sin prefijo `NEXT_PUBLIC_`) y no se expone al navegador. | No. Default: `horno-01`. |
 | `NODE_ENV` | Controla, entre otras cosas, la analítica de producción y el atributo `Secure` de la cookie. Next.js lo establece según el modo de ejecución. | No se configura manualmente para el uso normal. |
 
 Las variables `NEXT_PUBLIC_CAMERA_NODES`, `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`,
@@ -116,8 +116,7 @@ build. Si se cambia uno de esos valores en Vercel o en otro entorno, hay que
 generar un nuevo build para que el navegador reciba el valor actualizado; no
 son todas variables de runtime del cliente. `NEXT_PUBLIC_API_URL` también se
 lee en código de servidor, por lo que debe estar disponible en el entorno de
-ejecución. `HORNO_ID` se lee en el servidor en cada request de
-`/horno/consigna`, así que no requiere rebuild.
+ejecución.
 
 No colocar contraseñas, tokens privados ni otros secretos en variables
 `NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador.
@@ -129,7 +128,6 @@ Crear `.env.local` en la raíz, sin subirlo al repositorio:
 ```dotenv
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
-# HORNO_ID=horno-01
 ```
 
 El backend local confirmado para desarrollo es `http://localhost:8080`.
@@ -233,11 +231,12 @@ iniciando.
 | `/lotes` | Lotes y datos históricos con filtros locales, KPIs y tabla de supervisión. |
 | `/lotes/<id>/control` | Control automático/supervisión de un lote: modo (`MANUAL`, `SUPERVISION`, `AUTOMATICO`), Iniciar/Detener, estado del MPC, propuesta pendiente y confianza del modelo. |
 | `/linea-produccion` | Vista por sector del lote abierto: modo, setpoints, KPIs de calidad y alertas activas. |
-| `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto o sin lote, estado del horno e historial de consignas. |
+| `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto o sin lote, última telemetría real de la Pi por sector/lote e historial de consignas. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
 | `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
-| `/reportes` | Descarga del historial de lotes en CSV o JSON por lote o rango de fechas. |
+| `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE/energía, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
+| `/planificacion` | Importación CSV de plan de producción, paradas y lecturas de energía para habilitar OEE; rechaza planes solapados por sector, lista lo cargado con eliminación y permite editar reimportando el CSV (upsert). Requiere Supervisor o Administrador. |
 | `/supervision` | Lista los dispositivos con cámara derivada, permite cambiar de dispositivo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
 | `/dispositivos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de dispositivos y vista de solo lectura de la URL WHEP derivada. |
 
@@ -294,9 +293,9 @@ especificación completa del backend.
 | `PATCH /api/v1/admin/usuarios/{id}` | Cambio de nombre, rol o estado. | JSON con `nombre`, `rol` y/o `activo`. |
 | `GET /api/v1/lotes/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
 | `GET /api/v1/dispositivos/events` | SSE de estado y métricas de dispositivos. | `Accept: text/event-stream`. |
-| `GET /api/v1/horno` | Estado actual del horno y alertas recientes en `/horno/consigna`. | `id` con el valor de `HORNO_ID`; un 404 degrada a `null`. |
+| `GET /api/v1/horno` | Última telemetría real del horno de un sector en `/horno/consigna` (proyección de `metricas_horno`). | `sector_id` obligatorio; si el sector no existe (404), degrada a `null`. |
 | `GET /api/v1/horno/consigna/historial` | Historial de consignas del lote seleccionado. | `loteId` obligatorio; un 404 degrada a lista vacía. |
-| `POST /api/v1/horno/consigna` | Envío de una consigna manual; el campo `usuario` se completa desde la sesión. | JSON `{ hornoId, productoId, temperaturaObjetivo, velocidadCintaObjetivo, loteId?, usuario? }`. |
+| `POST /api/v1/horno/consigna` | Envío de una consigna manual al horno del sector; el campo `usuario` se completa desde la sesión. | JSON `{ sectorId, productoId, temperaturaObjetivo, velocidadCintaObjetivo, loteId?, usuario? }`. |
 | `GET /api/v1/alertas` | Listado de alertas en `/alertas` y alertas activas de `/linea-produccion`. | `estado=ACTIVA\|ACK\|RESUELTA`; un 404 degrada a lista vacía. |
 | `POST /api/v1/alertas/{id}/ack` | Acuse de recibo de una alerta. | Sin cuerpo; 409 si la alerta ya fue reconocida o resuelta. |
 
@@ -317,7 +316,13 @@ servidor.
 | `GET /api/lotes/{id}/control/events` | `GET /api/v1/lotes/{id}/control/events` (SSE `control.propuesta` y `control.evento`) |
 | `GET /api/dispositivos/events` | `GET /api/v1/dispositivos/events` |
 | `GET /api/dispositivos/snapshot` | `GET /api/v1/dispositivos` |
-| `GET /api/reportes/lotes` | Genera el CSV/JSON localmente con `getAllLotes()`; no reenvía a un endpoint de reportes |
+| `GET /api/reportes/lotes` | Genera CSV/JSON/PDF a partir de `GET /api/v1/reportes/resumen` y `GET /api/v1/reportes/lotes`; el PDF se renderiza con `@react-pdf/renderer` |
+| `GET /api/reportes/trazabilidad` | Genera el PDF de trazabilidad de un lote, o CSV de `dataset=proceso|alertas|decisiones|consignas`, a partir de `GET /api/v1/reportes/trazabilidad?lote_id=...` |
+| `GET /api/reportes/alertas` | Genera CSV/JSON de alertas del período desde `GET /api/v1/reportes/alertas` |
+| `GET /api/reportes/oee` | Consume `GET /api/v1/reportes/oee` para el bloque OEE/energía del panel y del PDF |
+| `POST /api/planificacion/[tipo]/import` | Reenvía el CSV multipart a `POST /api/v1/planificacion/{plan,paradas,energia}/import` |
+| `GET /api/planificacion/[tipo]` | Lista lo importado desde `GET /api/v1/planificacion/{plan,paradas,energia}` |
+| `DELETE /api/planificacion/[tipo]/[id]` | Elimina una fila importada vía `DELETE /api/v1/planificacion/{tipo}/{id}` |
 | `GET /api/system-status` | `GET /health` |
 
 ### Sesiones WHEP de MediaMTX
@@ -403,10 +408,8 @@ consultas tienen un timeout de 8 segundos y exponen el error si se agota.
 1. Configurar el proyecto Next.js desde este repositorio.
 2. Definir en Vercel `NEXT_PUBLIC_API_URL` apuntando al backend Go de Render.
 3. Definir `NEXT_PUBLIC_MEDIAMTX_URL` con la base pública de MediaMTX.
-4. Definir `HORNO_ID` si el horno no es `horno-01`. Se lee en el servidor, así
-   que no requiere rebuild.
-5. Definir opcionalmente el Client ID de Google.
-6. Ejecutar un nuevo build/deploy cada vez que cambie una variable
+4. Definir opcionalmente el Client ID de Google.
+5. Ejecutar un nuevo build/deploy cada vez que cambie una variable
    `NEXT_PUBLIC_*` que consuma el cliente.
 
 El proyecto usa `output: "standalone"` y `images.unoptimized: true` en

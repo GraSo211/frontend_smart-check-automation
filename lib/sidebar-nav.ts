@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   Database,
   Eye,
   Factory,
@@ -40,6 +41,7 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
     label: "Sistema",
     items: [
       { href: "/configuracion", label: "Parámetros de Configuración", icon: SlidersHorizontal },
+      { href: "/planificacion", label: "Planificación", icon: CalendarClock },
       { href: "/sectores", label: "Sectores", icon: MapPin },
       { href: "/alertas", label: "Manejo de Alertas", icon: TriangleAlert },
       { href: "/dispositivos", label: "Estado de los Dispositivos", icon: Cpu },

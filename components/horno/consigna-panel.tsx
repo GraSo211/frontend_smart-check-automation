@@ -7,10 +7,12 @@ import { getConsignaHistorial } from "@/actions/api"
 import { ConsignaForm } from "@/components/horno/consigna-form"
 import { ConsignaHistorial } from "@/components/horno/consigna-historial"
 import { HornoEstadoCard } from "@/components/horno/horno-estado-card"
-import type { Consigna, HornoEstado, LoteOption, Producto } from "@/lib/production-data"
+import { SectorSelect } from "@/components/shared/sector-select"
+import type { Consigna, HornoEstado, LoteOption, Producto, Sector } from "@/lib/production-data"
 
 interface ConsignaPanelProps {
-  hornoId: string
+  sectores: Sector[]
+  sectorId: string
   productos: Producto[]
   loteOptions: LoteOption[]
   initialLoteId: string
@@ -21,7 +23,8 @@ interface ConsignaPanelProps {
 }
 
 export function ConsignaPanel({
-  hornoId,
+  sectores,
+  sectorId,
   productos,
   loteOptions,
   initialLoteId,
@@ -81,20 +84,49 @@ export function ConsignaPanel({
   const hayLoteAutomatico = loteOptions.some(
     (l) => l.modo === "SUPERVISION" || l.modo === "AUTOMATICO",
   )
-  const bloqueadaPorModo = modoSeleccionado
-    ? modoSeleccionado === "SUPERVISION" || modoSeleccionado === "AUTOMATICO"
-    : hayLoteAutomatico
-  const motivoBloqueo = bloqueadaPorModo
-    ? modoSeleccionado
-      ? `El lote seleccionado está en modo ${modoSeleccionado}. Cambialo a modo MANUAL desde Control del lote para enviar una consigna manual.`
-      : "Hay un lote abierto en modo SUPERVISION o AUTOMATICO. Elegí un lote en modo MANUAL o cambialo a MANUAL desde Control del lote para enviar una consigna manual."
-    : null
+
+  const sinSectores = sectores.length === 0
+  const bloqueadaPorModo = sinSectores
+    ? true
+    : modoSeleccionado
+      ? modoSeleccionado === "SUPERVISION" || modoSeleccionado === "AUTOMATICO"
+      : hayLoteAutomatico
+  const motivoBloqueo = sinSectores
+    ? "No hay sectores configurados. La consigna manual necesita al menos un sector con su horno."
+    : bloqueadaPorModo
+      ? modoSeleccionado
+        ? `El lote seleccionado está en modo ${modoSeleccionado}. Cambialo a modo MANUAL desde Control del lote para enviar una consigna manual.`
+        : "Hay un lote abierto en modo SUPERVISION o AUTOMATICO. Elegí un lote en modo MANUAL o cambialo a MANUAL desde Control del lote para enviar una consigna manual."
+      : null
 
   return (
     <div className="space-y-6">
+      {sinSectores ? (
+        <div
+          role="status"
+          className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+        >
+          <p className="font-medium">No hay sectores configurados</p>
+          <p className="text-warning/80">
+            La consigna manual necesita al menos un sector con su horno.
+          </p>
+        </div>
+      ) : (
+        <div className="max-w-full sm:w-80">
+          <SectorSelect
+            id="horno-consigna-sector"
+            label="Sector"
+            value={sectorId}
+            sectores={sectores}
+            onChange={(id) => router.push(`/horno/consigna?sector_id=${encodeURIComponent(id)}`)}
+            hint="Cada sector tiene su horno. La consigna se envía al horno del sector seleccionado."
+          />
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <ConsignaForm
-          hornoId={hornoId}
+          sectorId={sectorId}
           productos={productos}
           loteOptions={loteOptions}
           loteId={loteId}

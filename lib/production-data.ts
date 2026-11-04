@@ -272,6 +272,8 @@ export type Producto = {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  /** Capacidad nominal para calcular Performance/OEE; `null` si no se configuró. */
+  capacidadNominalKgH: number | null
   /** Valor objetivo opcional dentro de [tempMin, tempMax]; `null`/ausente si no se usa. */
   tempSetpoint?: number | null
   /** Valor objetivo opcional dentro de [velocidadCintaMin, velocidadCintaMax]. */
@@ -291,6 +293,8 @@ export type ProductoRequest = {
   tempMax: number
   velocidadCintaMin: number
   velocidadCintaMax: number
+  /** Opcional: `null`/ausente desactiva el cálculo de Performance/OEE. */
+  capacidadNominalKgH?: number | null
   /** Si se omite o es `null`, el backend no lo persiste. */
   tempSetpoint?: number | null
   /** Si se omite o es `null`, el backend no lo persiste. */
@@ -319,16 +323,28 @@ export type Consigna = {
 
 /**
  * Estado actual del horno devuelto por GET /api/v1/horno en `data.horno`.
+ * Es una proyección de la última telemetría real publicada por la Pi
+ * (`metricas_horno`) para el sector/lote seleccionado.
  */
 export type HornoEstado = {
   id: string
   nombre: string
-  temperatura: number
-  velocidad_cinta: number
-  producto_id?: string | null
+  sector_id?: string
   lote_id?: string | null
+  producto_id?: string | null
+  temperatura: number | null
+  velocidad_cinta: number | null
+  temp_comb_1?: number | null
+  humedad_horno?: number | null
+  temp_ambiente?: number | null
+  humedad_ambiente?: number | null
+  temp_objetivo?: number | null
+  vel_objetivo?: number | null
+  confianza_deteccion?: number | null
   estado: string
-  ultimo_check: string
+  fuente?: string
+  ultimo_check: string | null
+  antiguedad_segundos?: number | null
 }
 
 /** Valores crudos del formulario de consigna manual. */
@@ -385,6 +401,15 @@ export function validateProducto(values: ProductoRequest): ProductoErrores {
     errors.velocidadCintaMax = "Ingresá un número."
   } else if (!(values.velocidadCintaMax > values.velocidadCintaMin)) {
     errors.velocidadCintaMax = "Debe ser mayor a la velocidad mínima."
+  }
+
+  // Capacidad nominal opcional: sólo se valida si viene con valor.
+  if (values.capacidadNominalKgH != null) {
+    if (!Number.isFinite(values.capacidadNominalKgH)) {
+      errors.capacidadNominalKgH = "Ingresá un número."
+    } else if (!(values.capacidadNominalKgH > 0)) {
+      errors.capacidadNominalKgH = "Debe ser mayor a 0."
+    }
   }
 
   // Setpoints opcionales: sólo se validan si vienen con valor. Un setpoint sin

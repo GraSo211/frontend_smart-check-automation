@@ -31,7 +31,7 @@ import {
 } from "@/lib/production-data"
 
 interface ConsignaFormProps {
-  hornoId: string
+  sectorId: string
   productos: Producto[]
   loteOptions: LoteOption[]
   loteId: string
@@ -60,7 +60,7 @@ function valoresPorDefecto(producto: Producto | undefined): { temp: string; vel:
 }
 
 export function ConsignaForm({
-  hornoId,
+  sectorId,
   productos,
   loteOptions,
   loteId,
@@ -113,7 +113,7 @@ export function ConsignaForm({
     setIsPending(true)
 
     const result = await enviarConsignaManual({
-      hornoId,
+      sectorId,
       productoId: selectedProducto.id,
       temperaturaObjetivo: parseFloat(temp),
       velocidadCintaObjetivo: parseFloat(vel),
@@ -147,8 +147,8 @@ export function ConsignaForm({
         </div>
         <CardTitle className="text-base font-semibold">Consigna manual del horno</CardTitle>
         <CardDescription>
-          Elegí producto, temperatura y velocidad de cinta. La consigna se envía al backend y la
-          Raspberry la aplica en el próximo ciclo de control.
+          Elegí producto, temperatura y velocidad de cinta. La consigna se envía al horno del sector
+          seleccionado; la telemetría de la Pi reflejará el valor aplicado por el controlador.
         </CardDescription>
       </CardHeader>
 
@@ -329,7 +329,8 @@ export function ConsignaForm({
               Confirmar envío
             </DialogTitle>
             <DialogDescription>
-              Esta acción se envía al backend; la Raspberry la aplica en el próximo ciclo de control.
+              Esta acción se envía al horno del sector seleccionado. La telemetría de la Pi
+              reflejará el valor aplicado por el controlador.
             </DialogDescription>
           </DialogHeader>
 

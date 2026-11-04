@@ -143,6 +143,12 @@ export default function ProductGrid({
               Horno {fmtNum(producto.tempMin)}–{fmtNum(producto.tempMax)} °C
               <br />
               Cinta {fmtNum(producto.velocidadCintaMin)}–{fmtNum(producto.velocidadCintaMax)} m/s
+              {producto.capacidadNominalKgH != null && (
+                <>
+                  <br />
+                  Capacidad {fmtNum(producto.capacidadNominalKgH)} kg/h
+                </>
+              )}
             </span>
             {!producto.activo ? (
               <Badge variant="outline" className="mt-1 text-muted-foreground">

@@ -71,24 +71,56 @@ describe("SupervisionTable · link directo al control del lote", () => {
     expect(screen.queryByRole("link", { name: /Abrir control del lote lote-cerrado/ })).toBeNull()
   })
 
-  it("oculta el link y la columna Acciones cuando el rol es Operario", () => {
+  it("muestra Trazabilidad para Operario y mantiene la columna Acciones", () => {
     const runs = [lote({ id: "lote-op" })]
 
     render(<SupervisionTable runs={runs} userRole="Operario" />)
 
+    expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeTruthy()
     expect(screen.queryByRole("link", { name: /Abrir control/ })).toBeNull()
-    expect(screen.queryByRole("columnheader", { name: "Acciones" })).toBeNull()
+    const link = screen.getByRole("link", {
+      name: /Descargar trazabilidad del lote lote-op/,
+    })
+    expect(link.getAttribute("href")).toContain(
+      "/api/reportes/trazabilidad?lote_id=lote-op",
+    )
+  })
+
+  it("muestra Trazabilidad para un lote cerrado sin rol de control", () => {
+    const runs = [
+      lote({
+        id: "lote-cerrado",
+        producto_nombre: "Facturas",
+        estado: "CERRADO",
+        cerrado_en: "2026-09-23T10:00:00.000Z",
+        motivo_cierre: "cierre manual",
+      }),
+    ]
+
+    render(<SupervisionTable runs={runs} userRole="Operario" />)
+
+    expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeTruthy()
+    expect(screen.queryByRole("link", { name: /Abrir control/ })).toBeNull()
+    const link = screen.getByRole("link", {
+      name: /Descargar trazabilidad del lote lote-cerrado/,
+    })
+    expect(link.getAttribute("href")).toBe(
+      "/api/reportes/trazabilidad?lote_id=lote-cerrado&format=pdf",
+    )
   })
 
   it("asume Operario por defecto si no se pasa la prop userRole", () => {
     const runs = [lote({ id: "lote-default" })]
 
-    // Importante: la prop es opcional. La tabla NO debe filtrar `runs` por rol,
-    // sólo ocultar la columna Acciones.
     render(<SupervisionTable runs={runs} />)
 
     expect(screen.getByText("Pan")).toBeTruthy()
     expect(screen.queryByRole("link", { name: /Abrir control/ })).toBeNull()
+    expect(
+      screen.getByRole("link", {
+        name: /Descargar trazabilidad del lote lote-default/,
+      }),
+    ).toBeTruthy()
   })
 })
 

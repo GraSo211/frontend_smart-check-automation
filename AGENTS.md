@@ -34,9 +34,8 @@ Tests use Vitest (`pnpm test` → `vitest run`). `vitest.config.mts` defaults to
 | `NEXT_PUBLIC_API_URL` | server + client bundle | Go API base; required. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | client bundle | Optional Google login. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | client bundle | Public MediaMTX base used by `/supervision`. |
-| `HORNO_ID` | server only | Oven id for `/horno/consigna`; defaults to `horno-01`. Included as an optional entry in `.env.example`. |
 
-`NEXT_PUBLIC_*` values are inlined at build time; changing one requires a rebuild. `HORNO_ID` is read server-side on each request of the dynamic `/horno/consigna` page, so it does not.
+`NEXT_PUBLIC_*` values are inlined at build time; changing one requires a rebuild.
 
 ## Documentation
 
@@ -55,25 +54,31 @@ app/                      Next.js App Router
   (modulos)/lotes/        Sector-scoped dashboard: getSectores() + getAllLotes() + getLoteAbierto(sector) → LotesDashboard
   (modulos)/lotes/[id]/control/ Per-lote MPC control view (ControlCard)
   (modulos)/configuracion/ getProductos() + getSectores() + cursor-walked getLotes() → config panels
-  (modulos)/horno/consigna/ Manual oven setpoint form: getProductos() + getSectores() + open lote per sector + getHornoEstado(HORNO_ID) + getConsignaHistorial(lote)
+  (modulos)/horno/consigna/ Manual oven setpoint form: getProductos() + getSectores() + getLoteAbierto(selectedSector) + getHornoEstado(selectedSector) + getConsignaHistorial(lote)
   (modulos)/linea-produccion/ Sector line view: getSectores() + getProductos() + getLoteAbierto(sector) + getAlertas(ACTIVA)
-  (modulos)/reportes/     Lote history download (CSV/JSON) through /api/reportes/lotes
+  (modulos)/reportes/     Report center: KPI summary + filters + CSV/Excel/JSON/PDF downloads through /api/reportes/lotes
   (modulos)/dispositivos/ Device catalog: getDevices() + getRegistrationRequests() → approve/reject, edit sector, rename, show derived WHEP URL, delete
   (modulos)/sectores/     Sector catalog: getSectores() + getDevices() → create/rename/delete (Supervisor+)
   (modulos)/usuarios/     Users + roles (Administrador only)
   (modulos)/supervision/  Live WHEP camera view (Supervisor+)
   (modulos)/alertas/      Operational alerts: getAlertas(estado) + ack (Supervisor+)
+  (modulos)/planificacion/ CSV import of production plan, downtime and energy (Supervisor+)
   api/lotes/snapshot/     Global multi-sector lote snapshot proxy (parallel sectors, cursor walk, `truncada` flag)
   api/lotes/events/       SSE proxy to the backend /api/v1/lotes/events
   api/lotes/[id]/control/events/ SSE proxy for `control.propuesta` / `control.evento`
   api/dispositivos/*      Device snapshot/events proxies
-  api/reportes/lotes/     CSV/JSON report built from getAllLotes()
+  api/reportes/lotes/     CSV/Excel/JSON/PDF built from /api/v1/reportes/{resumen,lotes} (PDF via @react-pdf/renderer)
+  api/reportes/trazabilidad/ PDF de trazabilidad por lote + CSV de proceso/alertas/decisiones/consignas
+  api/reportes/alertas/  CSV/JSON de alertas del período desde /api/v1/reportes/alertas
+  api/planificacion/[tipo]/import/ Proxy multipart a /api/v1/planificacion/{plan,paradas,energia}/import
+  api/planificacion/[tipo]/       GET listado de lo importado (proxy con cookie)
+  api/planificacion/[tipo]/[id]/  DELETE de una fila importada (proxy con cookie)
   api/system-status/      Backend health probe (GET /health)
   globals.css             Tailwind v4 @import + @theme inline design tokens (oklch, 4 themes)
 actions/
   api.ts                  Server data fetchers + mutations (lotes, control, horno/consigna, sectores, dispositivos, alertas, parámetros, registro). See "Data flow".
   auth.ts                 Login/logout server actions
-  reports.ts              Lote report building (CSV/JSON)
+  reports.ts              Lote report building (CSV/Excel/JSON)
   users.ts                Admin user server actions
 components/
   dashboard-content.tsx   Home dashboard composition ("use client")
@@ -88,7 +93,8 @@ components/
   sectores/               sector-management
   linea-produccion/       linea-produccion-view
   alertas/                alertas-view
-  reportes/               reportes-form
+  planificacion/          CSV import cards + loaded-data tables with delete (plan, paradas, energía)
+  reportes/               reportes-form, reportes-dashboard (KPI cards + SVG charts + tables)
   supervision/            supervision-view, live-camera, node-selector, segmented-control
   shared/                 connection-indicator, page-button, pagination-state, sector-select
   layout/                 header, footer, sidebar, sidebar-trigger, monitoring-status
@@ -96,6 +102,14 @@ components/
 lib/
   utils.ts                `cn()` helper (clsx + tailwind-merge)
   format.ts               es-AR Intl formatters used across the dashboard
+  reportes.ts             Report filter defaults/validation, download hrefs and display formatters (ART)
+  reportes-types.ts       Types for GET /api/v1/reportes/{resumen,lotes}
+  reportes-query.ts       Report filter query-string builder shared by actions and tests
+  reportes-trazabilidad-csv.ts  CSV datasets (proceso/alertas/decisiones/consignas) for a lote
+  reportes-alertas-csv.ts       CSV/JSON builder for period alerts
+  oee-types.ts                  Types for GET /api/v1/reportes/oee
+  planificacion.ts              CSV import types/templates/URLs
+  reportes-pdf/           @react-pdf/renderer operational + per-lote traceability reports (A4, Helvetica, SVG charts)
   production-data.ts      LoteSector/Sector/Producto/Conteos API contract types + validateConsignaInput
   devices-data.ts         Device, telemetry and registration-request types
   auth.ts                 Session cookie decode/expiry + role levels (proxy + server)
@@ -120,9 +134,13 @@ proxy.ts                  Next 16 proxy (middleware): route protection + session
 
 Data flow: the backend contract is the **sector/lotes** one. `actions/api.ts` exposes `getSectores()` (`GET /api/v1/sectores`), `getProductos()` (`GET /api/v1/productos`), `getLotes(sectorId, { productoId?, limite?, antesDe? })` (`GET /api/v1/lotes`, cursor-paginated via `siguiente_cursor`; `sector_id` is required with OAuth), `getAllLotes()` (walks every sector in parallel, following each cursor, deduplicated by id), and `getLoteAbierto(sectorId)` (`GET /api/v1/lotes/abierto`, `lote:null` when there is none). All use an 8s `AbortController` timeout and `cache: "no-store"`, and forward the OAuth `session_token` cookie via `getSessionHeaders()`.
 
+Reports use `getReporteResumen()` (`GET /api/v1/reportes/resumen`) and `getReporteLotes()` (`GET /api/v1/reportes/lotes`, cursor-paginated) with a 20s timeout. Dates are `YYYY-MM-DD` in ART, inclusive, default last 30 days, max 366. `/reportes` renders the summary server-side; `/api/reportes/lotes` walks the detail cursor and returns CSV, Excel es-AR CSV (`delim=;`), JSON, or an A4 PDF rendered with `@react-pdf/renderer` (Node runtime, no Chromium). The per-lote traceability PDF uses `getReporteTrazabilidad(loteId)` (`GET /api/v1/reportes/trazabilidad`) and is reachable from `/reportes` and from each row of the lote table. Report kg are estimates: `count × productos.peso_referencia_kg`.
+
+OEE uses `getReporteOEE()` (`GET /api/v1/reportes/oee`) and is only calculable when the period has a production plan, product nominal capacity (`capacidadNominalKgH`), closed lotes and (optionally) energy readings. Plan/paradas/energía are loaded as CSV from `/planificacion` (Supervisor+), listed there with deletion, and edited by re-importing the CSV (upsert). The test/proxy routes forward multipart/GET/DELETE to the Go API. Energy readings and `kg_plan` are prorated by their overlap with the report period; plan imports reject overlapping rows within a sector (same-key re-imports update instead). OEE is calculated per sector/period (it ignores product/turno filters) and is shown on `/reportes`, in the operational PDF, and with explicit `motivos` when data is missing.
+
 The home page (`app/(modulos)/page.tsx`) calls `getAllLotes()`; `/lotes` adds `getSectores()` + `getLoteAbierto()`; `/configuracion` walks `getLotes()` per sector/product. The client provider (`components/monitoring-provider.tsx`) stays **global**: it fetches the global snapshot from `app/api/lotes/snapshot/route.ts` (parallel sectors, cursor walk, emits a `truncada` flag) and subscribes to `app/api/lotes/events/route.ts` (`lote.creado` / `lote.actualizado` / `lote.cerrado`, payload = raw `LoteSector`). `useProductionData()` returns `LoteSector[]` plus `truncated`; pages filter by sector client-side.
 
-`/horno/consigna` (`force-dynamic`) composes `getProductos()`, `getSectores()`, one `getLoteAbierto()` per sector, `getHornoEstado(process.env.HORNO_ID ?? "horno-01")` and `getConsignaHistorial(initialLoteId)`. Each fetch fails independently: productos/sectores render an inline `role="alert"`, while the oven state and history degrade inside their cards.
+`/horno/consigna` (`force-dynamic`) composes `getProductos()`, `getSectores()`, `getLoteAbierto(selectedSector)`, `getHornoEstado(selectedSector)` and `getConsignaHistorial(initialLoteId)`. The sector is selected via query-string (`?sector_id=...`) or defaults to the first available. `GET /api/v1/horno?sector_id=<id>` returns a projection of the latest real telemetry from the Pi (`metricas_horno`), including temperature, belt speed, combustion temp, humidity, ambient readings, targets and detection confidence; states like `SIN_LOTE`, `SIN_TELEMETRIA`, `SIN_DATOS`, `DESACTUALIZADO` or `CONTROL_MANUAL` are surfaced by the card. Each fetch fails independently: productos/sectores render an inline `role="alert"`, while the oven state and history degrade inside their cards.
 
 Backend: there IS now an external backend — a Go service on Render (free-tier) at `NEXT_PUBLIC_API_URL` (see `.env.example`). It sleeps after ~15 min idle (cold-start 30–60 s). The 8s fetch timeout prevents a cold-start from blocking a request indefinitely; the resulting error is propagated to the page.
 

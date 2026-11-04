@@ -84,6 +84,14 @@ const GROUPS: FieldGroup[] = [
         placeholder: "ej: 2",
         helper: "Diferencia en centímetros admitida respecto a la dimensión base.",
       },
+      {
+        key: "capacidadNominalKgH",
+        label: "Capacidad nominal",
+        unidad: "kg/h",
+        min: 0,
+        placeholder: "ej: 120",
+        helper: "Opcional. Se usa para calcular Performance/OEE. Dejá en blanco si no aplica.",
+      },
     ],
   },
 ]
@@ -112,13 +120,15 @@ function toFormValues(initial?: Producto): FormValues {
     tempMax: initial ? String(initial.tempMax) : "",
     velocidadCintaMin: initial ? String(initial.velocidadCintaMin) : "",
     velocidadCintaMax: initial ? String(initial.velocidadCintaMax) : "",
+    capacidadNominalKgH:
+      initial?.capacidadNominalKgH != null ? String(initial.capacidadNominalKgH) : "",
     tempSetpoint: initial?.tempSetpoint != null ? String(initial.tempSetpoint) : "",
     velocidadCintaSetpoint:
       initial?.velocidadCintaSetpoint != null ? String(initial.velocidadCintaSetpoint) : "",
   }
 }
 
-function toRequest(values: FormValues): ProductoRequest {
+export function toRequest(values: FormValues): ProductoRequest {
   const num = (raw: string) => (raw === "" ? Number.NaN : Number(raw))
   // Vacío o no numérico -> se omite del body (no se manda null ni 0).
   const optionalNum = (raw: string): number | undefined => {
@@ -136,6 +146,8 @@ function toRequest(values: FormValues): ProductoRequest {
     tempMax: num(values.tempMax),
     velocidadCintaMin: num(values.velocidadCintaMin),
     velocidadCintaMax: num(values.velocidadCintaMax),
+    // La capacidad nominal siempre viaja: vacío = sin capacidad (null).
+    capacidadNominalKgH: optionalNum(values.capacidadNominalKgH) ?? null,
   }
 
   const tempSetpoint = optionalNum(values.tempSetpoint)

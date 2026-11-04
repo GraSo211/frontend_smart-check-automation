@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ChevronLeft, ChevronRight, SearchX, SlidersHorizontal } from "lucide-react"
+import { AlertTriangle, ChevronLeft, ChevronRight, FileText, SearchX, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { hasMinRole, type UserRole } from "@/lib/auth"
 import { PageButton } from "@/components/shared/page-button"
@@ -10,6 +10,7 @@ import { clampPage, pageCount } from "@/components/shared/pagination-state"
 import { formatBucket, formatDate, formatNumber, formatTime, formatWindow, qualityRate } from "@/lib/format"
 import type { LoteSector, Sector } from "@/lib/production-data"
 import { EstadoBadge } from "@/components/lotes/estado-badge"
+import { buildTrazabilidadDownloadHref } from "@/lib/reportes"
 
 const PAGE_SIZE = 10
 // Burnt-unit ratio above which a row is flagged as a potential line failure.
@@ -20,10 +21,9 @@ interface SupervisionTableProps {
   /** Optional catalog to resolve `sector_id` into a human name. */
   sectores?: Sector[]
   /**
-   * Rol del usuario autenticado. Cuando es `Supervisor` o `Administrador` se
-   * renderiza una columna "Acciones" con el link directo a la vista de control
-   * (`/lotes/{id}/control`). Por seguridad, sin rol explícito se asume Operario
-   * y no se muestra el link (el proxy ya valida el acceso real).
+   * Rol del usuario autenticado. Determina si se muestra el link directo a la
+   * vista de control (`/lotes/{id}/control`) para lotes abiertos. El link de
+   * descarga de trazabilidad se muestra para cualquier rol.
    */
   userRole?: UserRole
 }
@@ -101,7 +101,7 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                 <Th className="text-right">Quemados</Th>
                 <Th className="text-right">Crudas</Th>
                 <Th className="text-center">Confianza</Th>
-                {canControl && <Th className="text-right">Acciones</Th>}
+                <Th className="text-right">Acciones</Th>
               </tr>
             </thead>
 
@@ -230,10 +230,10 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                         : `${(lote.confianza_promedio * 100).toFixed(1)}%`}
                     </td>
 
-                    {/* //? ACCIONES — link directo al control del lote (sólo Supervisor+ y lotes abiertos). */}
-                    {canControl && (
-                      <td className="px-4 py-3.5 text-right">
-                        {lote.estado === "ABIERTO" ? (
+                    {/* //? ACCIONES — control (sólo Supervisor+ y lotes abiertos) + trazabilidad (todos). */}
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {canControl && lote.estado === "ABIERTO" ? (
                           <Link
                             href={`/lotes/${lote.id}/control`}
                             aria-label={`Abrir control del lote ${lote.id}`}
@@ -246,11 +246,22 @@ export function SupervisionTable({ runs, sectores = [], userRole = "Operario" }:
                             <SlidersHorizontal className="size-3.5" aria-hidden="true" />
                             Control
                           </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    )}
+                        ) : null}
+                        <a
+                          href={buildTrazabilidadDownloadHref(lote.id)}
+                          download
+                          aria-label={`Descargar trazabilidad del lote ${lote.id}`}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground",
+                            "transition-colors hover:border-info/40 hover:bg-info/10 hover:text-info",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          )}
+                        >
+                          <FileText className="size-3.5" aria-hidden="true" />
+                          Trazabilidad
+                        </a>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}

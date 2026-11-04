@@ -67,6 +67,7 @@ describe("server actions de datos del backend", () => {
     tempMax: 2,
     velocidadCintaMin: 1,
     velocidadCintaMax: 2,
+    capacidadNominalKgH: null,
   }
   const validProductoRequest = {
     nombre: "Producto real",
@@ -215,6 +216,13 @@ describe("server actions de datos del backend", () => {
   it("conserva las formas de éxito de productos", async () => {
     fetchMock.mockResolvedValue(json({ success: true, data: [validProducto] }))
     await expect(api.getProductos()).resolves.toEqual([validProducto])
+  })
+
+  it("normaliza a null la capacidad nominal ausente en respuestas viejas", async () => {
+    const legacyProducto: Record<string, unknown> = { ...validProducto }
+    delete legacyProducto.capacidadNominalKgH
+    fetchMock.mockResolvedValue(json({ success: true, data: [legacyProducto] }))
+    await expect(api.getProductos()).resolves.toEqual([{ ...legacyProducto, capacidadNominalKgH: null }])
   })
 
   it("rechaza un producto con forma inválida en getProductos", async () => {

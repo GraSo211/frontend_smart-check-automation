@@ -17,8 +17,13 @@
   Cubierto por `components/horno/__tests__/consigna-form.test.tsx` y
   `lib/__tests__/consigna-validation.test.ts`.
 - **Documentación de instalación**: `MANUAL_INSTALACION.md` cubre requisitos,
-  variables (incluida `HORNO_ID`), ejecución, despliegue y la verificación
-  funcional de `/horno/consigna`.
+  variables de entorno, ejecución, despliegue y la verificación funcional de
+  `/horno/consigna`.
+- **Telemetría real en `/horno/consigna`**: `GET /api/v1/horno` ahora proyecta
+  `metricas_horno` en `HornoEstado`; la tarjeta muestra T1, velocidad de cinta,
+  temperatura de combustión, humedades, objetivos y confianza, con estados
+  `SIN_LOTE`, `SIN_TELEMETRIA`, `SIN_DATOS`, `DESACTUALIZADO` y `CONTROL_MANUAL`.
+  El copy de consigna manual ya no habla de "horno simulado".
 
 ## Endpoints de control ya implementados en el backend Go
 

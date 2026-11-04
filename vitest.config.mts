@@ -10,6 +10,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["lib/__tests__/**/*.test.{ts,tsx}", "actions/__tests__/**/*.test.{ts,tsx}", "components/**/__tests__/**/*.test.{ts,tsx}"],
+    include: ["lib/__tests__/**/*.test.{ts,tsx}", "lib/reportes-pdf/__tests__/**/*.test.{ts,tsx}", "actions/__tests__/**/*.test.{ts,tsx}", "components/**/__tests__/**/*.test.{ts,tsx}"],
   },
 })

@@ -1,17 +1,21 @@
-import type { LoteSector } from "@/lib/production-data"
-import { qualityRate } from "@/lib/format"
+import type { ReporteLote } from "@/lib/reportes-types"
+import { APP_TIME_ZONE } from "@/lib/format"
 
 export type ReportFormat = "csv" | "json"
+
+export type ReportDelimiter = "," | ";"
 
 export interface ReportFilters {
     /** Formato de salida del archivo (`csv` o `json`). */
     format: ReportFormat
-    /** Filtra por un lote específico; tiene precedencia sobre `fechas`. */
-    loteId?: string | null
-    /** ISO date; conserva sólo lotes con `abierto_en >= desde`. */
+    /** Separador CSV. `;` activa coma decimal y fechas dd/mm/aaaa hh:mm. */
+    delimiter?: ReportDelimiter
+    /** Rango del backend (YYYY-MM-DD), inclusivo. */
     desde?: string | null
-    /** ISO date; conserva sólo lotes con `abierto_en <= hasta`. */
     hasta?: string | null
+    sectorId?: string | null
+    productoId?: string | null
+    turno?: string | null
 }
 
 export interface BuiltReport {
@@ -19,53 +23,64 @@ export interface BuiltReport {
     body: string
     /** Content-Type del response. */
     contentType: string
-    /** Nombre sugerido del archivo (incluye fecha de generación). */
+    /** Nombre sugerido del archivo. */
     filename: string
     /** Cantidad de filas efectivamente exportadas. */
     rows: number
 }
 
-/**
- * Aplica los filtros de `ReportFilters` sobre una lista de lotes en memoria.
- * Cuando se pasa `loteId`, tiene precedencia absoluta: `desde`/`hasta` se
- * ignoran. Las fechas se comparan con `Date.parse` sobre `abierto_en`.
- */
-export function filterLotesForReport(
-    runs: LoteSector[],
-    filters: { loteId?: string | null; desde?: string | null; hasta?: string | null },
-): LoteSector[] {
-    if (filters.loteId && filters.loteId !== "") {
-        return runs.filter((r) => r.id === filters.loteId)
-    }
-    const desdeMs = filters.desde ? Date.parse(filters.desde) : null
-    const hastaMs = filters.hasta ? Date.parse(filters.hasta) : null
-    return runs.filter((r) => {
-        const openMs = Date.parse(r.abierto_en)
-        if (!Number.isFinite(openMs)) return false
-        if (desdeMs !== null && Number.isFinite(desdeMs) && openMs < desdeMs) return false
-        if (hastaMs !== null && Number.isFinite(hastaMs) && openMs > hastaMs) return false
-        return true
-    })
-}
+const CSV_HEADER = [
+    "id",
+    "sector_id",
+    "sector_nombre",
+    "producto_id",
+    "producto_nombre",
+    "turno",
+    "estado",
+    "abierto_en",
+    "cerrado_en",
+    "motivo_cierre",
+    "modo",
+    "total",
+    "ok",
+    "crudo",
+    "quemado",
+    "kg_ok",
+    "kg_crudo",
+    "kg_quemado",
+    "kg_total",
+    "kg_merma",
+    "confianza_promedio",
+    "duracion_min",
+    "fpy_pct",
+    "crudo_pct",
+    "quemado_pct",
+] as const
 
 /**
- * Genera el archivo final (CSV o JSON) a partir de los lotes ya filtrados.
- * Es puro: no hace fetch ni side-effects; los tests lo ejercitan directo.
+ * Genera el archivo final (CSV o JSON) a partir de los lotes que ya devolvió
+ * GET /api/v1/reportes/lotes. Es puro: no hace fetch ni side-effects.
  */
 export function buildLotesReport(
-    runs: LoteSector[],
+    lotes: ReporteLote[],
     filters: ReportFilters,
 ): BuiltReport {
-    const filtered = filterLotesForReport(runs, filters)
     const generatedAt = new Date().toISOString()
-    const stem = buildFilenameStem(filters, generatedAt)
+    const stem = buildFilenameStem(filters)
 
     if (filters.format === "json") {
         const body = JSON.stringify(
             {
                 generated_at: generatedAt,
-                total: filtered.length,
-                lotes: filtered.map(serializeLote),
+                total: lotes.length,
+                filtros: {
+                    desde: filters.desde ?? null,
+                    hasta: filters.hasta ?? null,
+                    sector_id: filters.sectorId ?? null,
+                    producto_id: filters.productoId ?? null,
+                    turno: filters.turno ?? null,
+                },
+                lotes,
             },
             null,
             2,
@@ -74,118 +89,120 @@ export function buildLotesReport(
             body,
             contentType: "application/json; charset=utf-8",
             filename: `${stem}.json`,
-            rows: filtered.length,
+            rows: lotes.length,
         }
     }
 
-    // CSV. Emitimos BOM UTF-8 para que Excel abra correctamente con acentos.
-    const header = [
-        "id",
-        "sector_id",
-        "producto_id",
-        "producto_nombre",
-        "estado",
-        "abierto_en",
-        "cerrado_en",
-        "motivo_cierre",
-        "total",
-        "ok",
-        "quemado",
-        "crudo",
-        "calidad_pct",
-        "confianza_promedio",
-        "modo",
-        "ventana_evaluacion_segundos",
-        "ventana_actualizacion_segundos",
-        "tolerancia_temp_c",
-        "temp1_objetivo",
-        "vel_objetivo",
-    ]
-    const lines = [header.join(",")]
-    for (const lote of filtered) {
-        const row = buildRow(lote)
-        lines.push(row.map(csvEscape).join(","))
+    const delimiter = filters.delimiter === ";" ? ";" : ","
+    const esAr = delimiter === ";"
+    const lines = [CSV_HEADER.join(delimiter)]
+    for (const lote of lotes) {
+        lines.push(buildRow(lote, delimiter, esAr).join(delimiter))
     }
     const body = "\uFEFF" + lines.join("\r\n") + "\r\n"
     return {
         body,
         contentType: "text/csv; charset=utf-8",
         filename: `${stem}.csv`,
-        rows: filtered.length,
+        rows: lotes.length,
     }
 }
 
-function serializeLote(l: LoteSector): Record<string, unknown> {
-    return {
-        id: l.id,
-        sector_id: l.sector_id,
-        producto_id: l.producto_id,
-        producto_nombre: l.producto_nombre,
-        estado: l.estado,
-        abierto_en: l.abierto_en,
-        cerrado_en: l.cerrado_en,
-        motivo_cierre: l.motivo_cierre,
-        conteos: l.conteos,
-        calidad_pct: l.conteos.total > 0 && l.conteos.ok !== null
-            ? qualityRate(l.conteos.ok, l.conteos.total).toFixed(1)
-            : null,
-        confianza_promedio: l.confianza_promedio != null
-            ? (l.confianza_promedio * 100).toFixed(1)
-            : null,
-        modo: l.modo ?? null,
-        ventana_evaluacion_segundos: l.ventana_evaluacion_segundos ?? null,
-        ventana_actualizacion_segundos: l.ventana_actualizacion_segundos ?? null,
-        tolerancia_temp_c: l.tolerancia_temp_c ?? null,
-        temp1_objetivo: l.temp1_objetivo ?? null,
-        vel_objetivo: l.vel_objetivo ?? null,
-    }
-}
-
-function buildRow(l: LoteSector): Array<string | number | null> {
+function buildRow(
+    l: ReporteLote,
+    delimiter: ReportDelimiter,
+    esAr: boolean,
+): string[] {
+    const num = (value: number | null) => formatNumber(value, esAr)
+    const date = (value: string | null) => formatDate(value, esAr)
     return [
-        l.id,
-        l.sector_id,
-        l.producto_id,
-        l.producto_nombre,
-        l.estado,
-        l.abierto_en,
-        l.cerrado_en ?? "",
-        l.motivo_cierre ?? "",
-        l.conteos.total,
-        l.conteos.ok ?? "",
-        l.conteos.quemado ?? "",
-        l.conteos.crudo ?? "",
-        l.conteos.total > 0 && l.conteos.ok !== null
-            ? qualityRate(l.conteos.ok, l.conteos.total).toFixed(1)
-            : "",
-        l.confianza_promedio != null ? (l.confianza_promedio * 100).toFixed(1) : "",
-        l.modo ?? "",
-        l.ventana_evaluacion_segundos ?? "",
-        l.ventana_actualizacion_segundos ?? "",
-        l.tolerancia_temp_c ?? "",
-        l.temp1_objetivo ?? "",
-        l.vel_objetivo ?? "",
+        text(l.id, delimiter),
+        text(l.sector_id, delimiter),
+        text(l.sector_nombre, delimiter),
+        text(l.producto_id, delimiter),
+        text(l.producto_nombre, delimiter),
+        text(l.turno, delimiter),
+        text(l.estado, delimiter),
+        text(date(l.abierto_en), delimiter),
+        text(date(l.cerrado_en), delimiter),
+        text(l.motivo_cierre, delimiter),
+        text(l.modo, delimiter),
+        num(l.conteos.total),
+        num(l.conteos.ok),
+        num(l.conteos.crudo),
+        num(l.conteos.quemado),
+        num(l.kg.ok),
+        num(l.kg.crudo),
+        num(l.kg.quemado),
+        num(l.kg.total),
+        num(l.kg.merma),
+        num(l.confianza_promedio),
+        num(l.duracion_min),
+        num(l.fpy_pct),
+        num(l.crudo_pct),
+        num(l.quemado_pct),
     ]
 }
 
-// Escape RFC 4180: envuelve en comillas dobles si el campo contiene
-// separadores, comillas o saltos de línea. Comillas internas se duplican.
-function csvEscape(value: string | number | null): string {
-    if (value === null || value === undefined) return ""
-    const str = typeof value === "number" ? String(value) : value
-    if (/[",\r\n]/.test(str)) {
-        return `"${str.replace(/"/g, '""')}"`
-    }
-    return str
+// Neutraliza fórmulas de hoja de cálculo en strings. Los números no se tocan.
+function neutralize(value: string): string {
+    return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
 }
 
-function buildFilenameStem(filters: ReportFilters, generatedAt: string): string {
-    const date = generatedAt.slice(0, 10)
-    if (filters.loteId) return `lotes-${filters.loteId}-${date}`
-    if (filters.desde || filters.hasta) {
-        const d = filters.desde?.slice(0, 10) ?? "inicio"
-        const h = filters.hasta?.slice(0, 10) ?? "hoy"
-        return `lotes-${d}_a_${h}`
+function text(value: string | null, delimiter: ReportDelimiter): string {
+    if (value === null || value === undefined) return ""
+    return csvEscape(neutralize(value), delimiter)
+}
+
+function formatNumber(value: number | null, esAr: boolean): string {
+    if (value === null || value === undefined) return ""
+    // 3 decimales alcanzan para kg y tasas; evita ruido de punto flotante.
+    const raw = String(Number(value.toFixed(3)))
+    return esAr ? raw.replace(".", ",") : raw
+}
+
+// dd/mm/aaaa hh:mm en ART (Excel es-AR) o ISO cuando el separador es coma.
+function formatDate(value: string | null, esAr: boolean): string {
+    if (!value) return ""
+    if (!esAr) return value
+    const date = new Date(value)
+    if (!Number.isFinite(date.getTime())) return value
+    const parts = new Intl.DateTimeFormat("es-AR", {
+        timeZone: APP_TIME_ZONE,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(date)
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+        parts.find((item) => item.type === type)?.value ?? ""
+    return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`
+}
+
+// Escape RFC 4180: envuelve en comillas dobles si el campo contiene el
+// separador, comillas o saltos de línea. Comillas internas se duplican.
+function csvEscape(value: string, delimiter: ReportDelimiter): string {
+    if (value.includes(delimiter) || /["\r\n]/.test(value)) {
+        return `"${value.replace(/"/g, '""')}"`
     }
-    return `lotes-${date}`
+    return value
+}
+
+function sanitize(value: string): string {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 64)
+}
+
+function buildFilenameStem(filters: ReportFilters): string {
+    const desde = filters.desde?.slice(0, 10) || "inicio"
+    const hasta = filters.hasta?.slice(0, 10) || "hoy"
+    const parts = ["reporte-lotes", `${desde}_a_${hasta}`]
+    if (filters.sectorId) parts.push(sanitize(filters.sectorId))
+    if (filters.productoId) parts.push(sanitize(filters.productoId))
+    return parts.filter(Boolean).join("-")
 }

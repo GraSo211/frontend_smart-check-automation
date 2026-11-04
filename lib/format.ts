@@ -4,8 +4,9 @@
 export const APP_TIME_ZONE = "America/Argentina/Buenos_Aires"
 
 // Formats a number with thousands separators (e.g. 1200 -> "1,200").
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat("es-AR").format(value)
+// A `null` value means "not reported", shown as "—" instead of a misleading 0.
+export function formatNumber(value: number | null): string {
+  return value === null ? "—" : new Intl.NumberFormat("es-AR").format(value)
 }
 
 // Formats an ISO date into a short readable date in Buenos Aires time (e.g. "Jun 02").
@@ -47,8 +48,9 @@ export function formatBucket(value: number | null): string {
 }
 
 // Formats a chip temperature with one decimal and the °C unit (e.g. "46,8 °C").
-export function formatTemp(value: number): string {
-  return `${value.toLocaleString("es-AR", { maximumFractionDigits: 1 })} °C`
+// A `null` reading is shown as "—" instead of a misleading 0 °C.
+export function formatTemp(value: number | null): string {
+  return value === null ? "—" : `${value.toLocaleString("es-AR", { maximumFractionDigits: 1 })} °C`
 }
 
 // Formats available RAM, switching to GB once >= 1024 MB (e.g. "3,04 GB" / "900 MB").
@@ -57,6 +59,24 @@ export function formatRam(megabytes: number): string {
     return `${(megabytes / 1024).toLocaleString("es-AR", { maximumFractionDigits: 2 })} GB`
   }
   return `${formatNumber(Math.round(megabytes))} MB`
+}
+
+// Formats a percentage from a 0..1 fraction (e.g. 0.98 -> "98%").
+// `null` means "not reported" and renders as "—".
+export function formatPct(value: number | null): string {
+  return value === null ? "—" : `${(value * 100).toLocaleString("es-AR", { maximumFractionDigits: 0 })}%`
+}
+
+// Formats a decimal number with a fixed max of fraction digits and optional unit.
+// `null` renders as "—" so missing sensor readings are not confused with 0.
+export function formatDecimal(
+  value: number | null,
+  fractionDigits = 1,
+  unit?: string,
+): string {
+  if (value === null) return "—"
+  const formatted = value.toLocaleString("es-AR", { maximumFractionDigits: fractionDigits })
+  return unit ? `${formatted} ${unit}` : formatted
 }
 
 // Returns a relative "time ago" label in es-AR (e.g. "hace 5 min", "hace 3 h").

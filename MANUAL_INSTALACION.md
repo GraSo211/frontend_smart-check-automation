@@ -8,9 +8,6 @@ externo en Go; sin ese backend el panel no muestra datos. El frontend no
 implementa endpoints de negocio: las server actions y los handlers internos
 reenvían la sesión al backend.
 
-Documentación relacionada: [`README.md`](README.md) (alcance, páginas y API) y
-[`DESIGN.md`](DESIGN.md) (temas, tokens y estados de interacción).
-
 ---
 
 ## 1. Requisitos
@@ -78,7 +75,6 @@ expuestos al navegador.
 | `NEXT_PUBLIC_API_URL` | Sí | URL base de la API Go, sin path final. En desarrollo `http://localhost:8080`; en producción, la URL del servicio en Render. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Solo para login con Google | Client ID **público** de Google OAuth. No es un client secret. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | Solo para `/supervision` | Base pública de MediaMTX, sin path final. Si no hay un proxy delante, incluir el puerto WHEP (por defecto `8889`). |
-| `HORNO_ID` | No | Identificador del horno que usa `/horno/consigna`. Default: `horno-01`. Es una variable de servidor (sin prefijo `NEXT_PUBLIC_`), no se expone al navegador. |
 
 `NODE_ENV` lo establece Next.js según el modo de ejecución; no se configura a
 mano para el uso normal.
@@ -89,12 +85,10 @@ Ejemplo de `.env.local` para desarrollo:
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 # NEXT_PUBLIC_MEDIAMTX_URL=https://mediamtx.example.com:8889
-# HORNO_ID=horno-01
 ```
 
 Con `NEXT_PUBLIC_GOOGLE_CLIENT_ID` comentada, el login con Google queda
-deshabilitado y se usa email/contraseña. `HORNO_ID` está en `.env.example` como
-entrada opcional; si se omite, la página usa `horno-01`.
+deshabilitado y se usa email/contraseña.
 
 ### Variables deprecadas
 
@@ -226,59 +220,7 @@ Sin backend no hay login ni datos: las pantallas muestran error o estado vacío.
 
 ---
 
-## 7. Verificación funcional: `/horno/consigna`
-
-La página `/horno/consigna` envía una consigna manual de temperatura y velocidad
-de cinta al horno, asociada a un lote. Requiere:
-
-1. Backend Go accesible por `NEXT_PUBLIC_API_URL`.
-2. Sesión válida (cualquier rol autenticado; el backend acepta
-   Operario/Supervisor/Admin para esta operación).
-3. `HORNO_ID` definido si el horno no es `horno-01`.
-
-Comportamiento actual del formulario: si el lote seleccionado está en modo
-`SUPERVISION` o `AUTOMATICO`, el envío de consigna manual queda **bloqueado**.
-Para enviar una consigna, elegí un lote en modo `MANUAL` o cambialo a `MANUAL`
-desde el control del lote (`/lotes/<id>/control`). El selector de lote sigue
-habilitado durante el bloqueo; «Sin lote» también queda bloqueado si hay un
-lote abierto en modo automático.
-
-Esto es una verificación funcional posterior a la instalación, no un paso de
-instalación.
-
----
-
-## 8. Despliegue
-
-### Frontend en Vercel
-
-1. Importar este repositorio como proyecto Next.js en Vercel.
-2. Definir las variables de entorno del proyecto:
-   - `NEXT_PUBLIC_API_URL` → URL del backend Go en Render.
-   - `NEXT_PUBLIC_MEDIAMTX_URL` → base pública de MediaMTX (si se usa video).
-   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` → Client ID público (opcional).
-   - `HORNO_ID` → opcional, si no se usa `horno-01`.
-3. Desplegar.
-4. Cada vez que cambie una variable `NEXT_PUBLIC_*`, generar un **nuevo
-   build/deploy**: el cliente conserva el valor inlinado en el build anterior.
-
-No subir secretos al repositorio ni a variables `NEXT_PUBLIC_*`.
-
-### Backend en Render
-
-El backend Go se despliega por separado en Render y se referencia con
-`NEXT_PUBLIC_API_URL`. En el servicio de Render, `FRONTEND_ORIGINS` debe incluir
-el origen público del frontend en Vercel (por ejemplo
-`https://<proyecto>.vercel.app`), sin path final.
-
-Render (plan gratuito) puede entrar en cold start tras ~15 minutos de
-inactividad: la primera respuesta puede demorar 30–60 s. Las consultas del
-frontend tienen timeout de 8 s y muestran el error si se agota; los streams SSE
-reintentan solos.
-
----
-
-## 9. Problemas frecuentes
+## 7. Problemas frecuentes
 
 | Síntoma | Qué revisar |
 |---|---|
@@ -295,42 +237,3 @@ reintentan solos.
 | `EADDRINUSE` en el puerto 3000 | Usar `pnpm dev -- -p 3001` y actualizar `FRONTEND_ORIGINS` y el origen de Google. |
 | Fallan los tests | `pnpm test` usa Vitest. El entorno por defecto es `node`; los tests de componentes declaran `// @vitest-environment jsdom`. Verificar que `jsdom` esté instalado por `pnpm install`. |
 | `pnpm build` falla por tipos | El build verifica tipos porque `next.config.mjs` no los ignora. Ejecutar `pnpm exec tsc --noEmit` para el detalle. |
-
----
-
-## 10. Estructura mínima y verificación rápida
-
-```text
-app/
-├── (auth)/                  Login y no autorizado
-├── (modulos)/               Dashboard y páginas de operación/sistema
-│   ├── horno/consigna/      Consigna manual del horno
-│   ├── supervision/         Video en vivo por WHEP
-│   └── ...
-├── api/                     Handlers internos: snapshot/SSE y health check
-└── layout.tsx               Layout raíz
-actions/
-├── api.ts                   Server actions de datos y mutaciones
-├── auth.ts                  Login/logout
-└── users.ts                 Administración de usuarios
-components/                  UI por módulo y primitivas shadcn/ui
-lib/                         Tipos, auth, cliente HTTP y utilidades
-proxy.ts                     Protección de rutas y headers de sesión
-next.config.mjs              standalone + imágenes sin optimizar
-package.json                 Scripts y dependencias
-.env.example                 Plantilla de variables sin secretos
-```
-
-Verificación rápida antes de desplegar:
-
-```bash
-pnpm install
-pnpm lint
-pnpm test
-pnpm exec tsc --noEmit
-pnpm build
-```
-
-Con el backend local corriendo en `http://localhost:8080` y `.env.local`
-completo, `pnpm dev` debe permitir iniciar sesión en <http://localhost:3000> y
-mostrar datos reales. Sin backend, el panel funciona pero no hay datos.

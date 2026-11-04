@@ -4,12 +4,14 @@ import React from "react"
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { Consigna, Producto } from "@/lib/production-data"
+import type { Consigna, Producto, Sector } from "@/lib/production-data"
 import { ConsignaPanel } from "@/components/horno/consigna-panel"
 
 const mocks = vi.hoisted(() => ({
   enviarConsignaManual: vi.fn(),
   getConsignaHistorial: vi.fn(),
+  push: vi.fn(),
+  refresh: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => ({
@@ -22,7 +24,7 @@ vi.mock("sonner", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
 }))
 
 vi.mock("@/components/horno/consigna-historial", () => ({
@@ -47,7 +49,10 @@ const producto: Producto = {
   tempMax: 240,
   velocidadCintaMin: 1,
   velocidadCintaMax: 2,
+  capacidadNominalKgH: null,
 }
+
+const sector: Sector = { id: "horno-1", nombre: "Horno 1" }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -58,10 +63,13 @@ function renderPanel(overrides: {
   modo: "MANUAL" | "SUPERVISION" | "AUTOMATICO"
   loteId?: string
   loteOptions?: { id: string; label: string; modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO" }[]
-}) {
+  sectores?: Sector[]
+  sectorId?: string
+}): ReturnType<typeof render> {
   return render(
     <ConsignaPanel
-      hornoId="horno-01"
+      sectores={overrides.sectores ?? [sector]}
+      sectorId={overrides.sectorId ?? sector.id}
       productos={[producto]}
       loteOptions={
         overrides.loteOptions ?? [{ id: "l-1", label: "Pan · Sector 1", modo: overrides.modo }]
@@ -76,7 +84,7 @@ function renderPanel(overrides: {
 function consigna(id: string): Consigna {
   return {
     id,
-    hornoId: "horno-01",
+    hornoId: "horno-1",
     temperaturaObjetivo: 200,
     velocidadCintaObjetivo: 1.5,
     origen: "MANUAL",
@@ -124,6 +132,18 @@ describe("ConsignaPanel · historial", () => {
     await act(async () => loteA.resolve([consigna("a-1")]))
     expect(screen.getByTestId("historial").textContent).toBe("b-1")
     expect(screen.queryByText("Actualizando historial…")).toBeNull()
+  })
+})
+
+describe("ConsignaPanel · selector de sector", () => {
+  it("navega a /horno/consigna?sector_id=... al cambiar de sector", () => {
+    const sector2: Sector = { id: "horno-2", nombre: "Horno 2" }
+    renderPanel({ modo: "MANUAL", sectores: [sector, sector2], sectorId: sector.id })
+
+    const selector = screen.getByLabelText("Sector") as HTMLSelectElement
+    fireEvent.change(selector, { target: { value: "horno-2" } })
+
+    expect(mocks.push).toHaveBeenCalledWith("/horno/consigna?sector_id=horno-2")
   })
 })
 
@@ -182,6 +202,35 @@ describe("ConsignaForm · bloqueo por modo del lote", () => {
     expect(screen.getByRole("alert").textContent).toContain("Consigna manual bloqueada")
     expect(screen.getByRole("alert").textContent).toContain(
       "Hay un lote abierto en modo SUPERVISION o AUTOMATICO",
+    )
+  })
+})
+
+describe("ConsignaForm · envío", () => {
+  it("envía la consigna con el sectorId seleccionado", async () => {
+    mocks.enviarConsignaManual.mockResolvedValue({ ok: true, data: consigna("c-1") })
+
+    renderPanel({ modo: "MANUAL" })
+
+    const tempInput = screen.getByLabelText("Temperatura objetivo") as HTMLInputElement
+    const velInput = screen.getByLabelText("Velocidad de cinta objetivo") as HTMLInputElement
+
+    fireEvent.change(tempInput, { target: { value: "210" } })
+    fireEvent.change(velInput, { target: { value: "1.2" } })
+
+    fireEvent.click(screen.getByRole("button", { name: "Enviar consigna" }))
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }))
+
+    await act(() => Promise.resolve())
+
+    expect(mocks.enviarConsignaManual).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectorId: sector.id,
+        productoId: producto.id,
+        temperaturaObjetivo: 210,
+        velocidadCintaObjetivo: 1.2,
+        loteId: "l-1",
+      }),
     )
   })
 })

@@ -39,6 +39,25 @@ import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
 import { LOTE_PAGE_SIZE, walkLoteSectors } from "@/lib/lotes-cursor-walk"
 import { getSession } from "@/lib/auth"
+import type {
+    ReporteAlerta,
+    ReporteAlertasData,
+    ReporteLote,
+    ReporteLotesPage,
+    ReporteResumen,
+    ReporteTrazabilidad,
+} from "@/lib/reportes-types"
+import {
+    buildReporteQuery,
+    type ReporteFiltros,
+} from "@/lib/reportes-query"
+import type { ReporteOEE } from "@/lib/oee-types"
+import type { TipoImportacion } from "@/lib/planificacion"
+import type {
+    PlanificacionItemPorTipo,
+    PlanificacionLista,
+    PlanificacionListaFiltros,
+} from "@/lib/planificacion-types"
 
 const SESSION_COOKIE = "session_token"
 
@@ -73,12 +92,14 @@ async function getSessionHeaders(): Promise<HeadersInit> {
 async function withBackendFetch<T>(options: {
     path: string
     timeoutMessage: string
+    /** Milisegundos antes de abortar la request. Default 8000. */
+    timeoutMs?: number
     handle: (response: Response) => Promise<T>
 }): Promise<T> {
     const apiUrl = getApiUrl()
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000);
     try {
         const response = await fetch(`${apiUrl}${options.path}`, {
             headers: await getSessionHeaders(),
@@ -140,11 +161,17 @@ function isProducto(value: unknown): value is Producto {
         typeof value.tempMin === "number" &&
         typeof value.tempMax === "number" &&
         typeof value.velocidadCintaMin === "number" &&
-        typeof value.velocidadCintaMax === "number";
+        typeof value.velocidadCintaMax === "number" &&
+        // Respuestas viejas no traen el campo: se acepta ausente y se normaliza a null.
+        (value.capacidadNominalKgH === undefined ||
+            value.capacidadNominalKgH === null ||
+            typeof value.capacidadNominalKgH === "number");
 }
 
 function parseProducto(data: unknown): Producto | null {
-    return isProducto(data) ? data : null;
+    return isProducto(data)
+        ? { ...data, capacidadNominalKgH: data.capacidadNominalKgH ?? null }
+        : null;
 }
 
 export async function getSectores(): Promise<Sector[]> {
@@ -231,6 +258,308 @@ export async function getAllLotes(): Promise<LoteSector[]> {
         }
         throw new Error("Los lotes no están disponibles.")
     }
+}
+
+// ─── Reportes (GET /api/v1/reportes/*) ──────────────────────────────────────
+//
+// Contrato snake_case, filtros opcionales por rango ART, sector, producto y
+// turno. Los reportes pueden tardar más que una lectura operativa; usan 20s.
+
+function isSuccessfulRecordResponse(
+    value: unknown,
+): value is Record<string, unknown> & { success: true; data: Record<string, unknown> } {
+    return isRecord(value) && value.success === true && isRecord(value.data)
+}
+
+function reportInvalidResponse(message: string): Error {
+    return new Error(message)
+}
+
+/** GET /api/v1/reportes/resumen — agregados del período. */
+export async function getReporteResumen(filtros: ReporteFiltros = {}): Promise<ReporteResumen> {
+    const query = buildReporteQuery(filtros)
+    return withBackendFetch({
+        path: `/api/v1/reportes/resumen${query ? `?${query}` : ""}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. El resumen del período no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isSuccessfulRecordResponse(payload)) {
+                throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
+            }
+            const data = payload.data
+            const secciones = [
+                "periodo",
+                "filtros",
+                "produccion",
+                "calidad",
+                "proceso",
+                "alertas",
+                "automatizacion",
+            ]
+            for (const key of secciones) {
+                if (!isRecord(data[key])) {
+                    throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
+                }
+            }
+            const produccion = data.produccion as Record<string, unknown>
+            const calidad = data.calidad as Record<string, unknown>
+            const proceso = data.proceso as Record<string, unknown>
+            const alertas = data.alertas as Record<string, unknown>
+            const automatizacion = data.automatizacion as Record<string, unknown>
+            for (const key of ["por_turno", "por_sector", "por_producto"]) {
+                if (!Array.isArray(produccion[key])) {
+                    throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
+                }
+            }
+            for (const serie of [
+                calidad.serie_diaria,
+                proceso.serie_diaria,
+                alertas.serie_diaria,
+                automatizacion.top_skip,
+            ]) {
+                if (!Array.isArray(serie)) {
+                    throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
+                }
+            }
+            if (!isRecord(alertas.por_severidad) || !isRecord(automatizacion.modo_pct)) {
+                throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
+            }
+            return data as unknown as ReporteResumen
+        },
+    })
+}
+
+/** GET /api/v1/reportes/oee — disponibilidad, rendimiento y calidad del período. */
+export async function getReporteOEE(
+    filtros: { desde?: string | null; hasta?: string | null; sectorId?: string | null } = {},
+): Promise<ReporteOEE> {
+    const params = new URLSearchParams()
+    if (filtros.desde) params.set("desde", filtros.desde)
+    if (filtros.hasta) params.set("hasta", filtros.hasta)
+    if (filtros.sectorId) params.set("sector_id", filtros.sectorId)
+    const query = params.toString()
+
+    return withBackendFetch({
+        path: `/api/v1/reportes/oee${query ? `?${query}` : ""}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. El OEE del período no está disponible.",
+        handle: async (response) => {
+            if (response.status === 400) {
+                throw new ApiError(400, "Los filtros del OEE son inválidos.")
+            }
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isSuccessfulRecordResponse(payload)) {
+                throw reportInvalidResponse("La API devolvió un OEE inválido.")
+            }
+            const data = payload.data
+            // `energy` es opcional: se valida sólo cuando viene.
+            if (
+                !isRecord(data.global) ||
+                !Array.isArray(data.por_sector) ||
+                !data.por_sector.every(isRecord) ||
+                (data.global.energy !== undefined && !isRecord(data.global.energy))
+            ) {
+                throw reportInvalidResponse("La API devolvió un OEE inválido.")
+            }
+            return data as unknown as ReporteOEE
+        },
+    })
+}
+
+/** GET /api/v1/reportes/lotes — una página de detalle. */
+export async function getReporteLotes(
+    filtros: ReporteFiltros = {},
+    opts: { cursor?: string | null; limite?: number } = {},
+): Promise<ReporteLotesPage> {
+    const params = new URLSearchParams(buildReporteQuery(filtros))
+    const limite = Math.min(1000, Math.max(1, Math.trunc(opts.limite ?? 100)))
+    params.set("limite", String(limite))
+    if (opts.cursor) params.set("antes_de", opts.cursor)
+
+    return withBackendFetch({
+        path: `/api/v1/reportes/lotes?${params.toString()}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. El detalle de lotes no está disponible.",
+        handle: async (response) => {
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isRecord(payload) || payload.success !== true || !Array.isArray(payload.data)) {
+                throw reportInvalidResponse("La API devolvió un detalle de reporte inválido.")
+            }
+            const lotes: ReporteLote[] = []
+            for (const item of payload.data) {
+                if (
+                    !isRecord(item) ||
+                    typeof item.id !== "string" ||
+                    typeof item.sector_id !== "string" ||
+                    typeof item.producto_id !== "string" ||
+                    typeof item.estado !== "string" ||
+                    typeof item.abierto_en !== "string" ||
+                    !isRecord(item.conteos) ||
+                    typeof item.conteos.total !== "number" ||
+                    !isRecord(item.kg)
+                ) {
+                    throw reportInvalidResponse("La API devolvió un detalle de reporte inválido.")
+                }
+                lotes.push(item as unknown as ReporteLote)
+            }
+            const cursor = payload.siguiente_cursor
+            return {
+                lotes,
+                total: typeof payload.total === "number" && Number.isFinite(payload.total)
+                    ? payload.total
+                    : lotes.length,
+                page: typeof payload.page === "number" ? payload.page : 1,
+                pageSize: typeof payload.pageSize === "number" ? payload.pageSize : lotes.length,
+                siguienteCursor: typeof cursor === "string" && cursor !== "" ? cursor : null,
+            }
+        },
+    })
+}
+
+/**
+ * GET /api/v1/reportes/alertas — alertas del período, recortadas a `limite`.
+ * 400/404 se traducen a `ApiError` para que la route propague el status.
+ */
+export async function getReporteAlertas(
+    filtros: ReporteFiltros = {},
+    opts: { limite?: number } = {},
+): Promise<ReporteAlertasData> {
+    const params = new URLSearchParams(buildReporteQuery(filtros))
+    const limite = Math.min(5000, Math.max(1, Math.trunc(opts.limite ?? 100)))
+    params.set("limite", String(limite))
+
+    return withBackendFetch({
+        path: `/api/v1/reportes/alertas?${params.toString()}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. Las alertas del período no están disponibles.",
+        handle: async (response) => {
+            if (response.status === 400 || response.status === 404) {
+                throw new ApiError(
+                    response.status,
+                    response.status === 404
+                        ? "No hay alertas para los filtros indicados."
+                        : "Los filtros de alertas son inválidos.",
+                )
+            }
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isSuccessfulRecordResponse(payload) || !Array.isArray(payload.data.alertas)) {
+                throw reportInvalidResponse("La API devolvió alertas del período inválidas.")
+            }
+            const alertas: ReporteAlerta[] = []
+            for (const item of payload.data.alertas) {
+                if (
+                    !isRecord(item) ||
+                    typeof item.id !== "string" ||
+                    typeof item.creada_en !== "string" ||
+                    typeof item.tipo !== "string" ||
+                    typeof item.severidad !== "string" ||
+                    typeof item.estado !== "string" ||
+                    typeof item.mensaje !== "string"
+                ) {
+                    throw reportInvalidResponse("La API devolvió alertas del período inválidas.")
+                }
+                alertas.push(item as unknown as ReporteAlerta)
+            }
+            return {
+                alertas,
+                total: typeof payload.data.total === "number" && Number.isFinite(payload.data.total)
+                    ? payload.data.total
+                    : alertas.length,
+                truncada: payload.data.truncada === true,
+            }
+        },
+    })
+}
+
+/**
+ * GET /api/v1/reportes/trazabilidad — snapshot completo de un lote (proceso,
+ * confianza, decisiones, consignas y alertas). 400/404 se traducen a `ApiError`
+ * para que la route devuelva el mismo status al navegador.
+ */
+export async function getReporteTrazabilidad(loteId: string): Promise<ReporteTrazabilidad> {
+    const params = new URLSearchParams()
+    params.set("lote_id", loteId)
+
+    return withBackendFetch({
+        path: `/api/v1/reportes/trazabilidad?${params.toString()}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. La trazabilidad del lote no está disponible.",
+        handle: async (response) => {
+            if (response.status === 400 || response.status === 404) {
+                throw new ApiError(
+                    response.status,
+                    response.status === 404
+                        ? "El lote no existe."
+                        : "El lote_id es inválido.",
+                )
+            }
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (!isSuccessfulRecordResponse(payload)) {
+                throw reportInvalidResponse("La API devolvió una trazabilidad inválida.")
+            }
+            const data = payload.data
+            if (
+                !isRecord(data.lote) ||
+                typeof data.lote.id !== "string" ||
+                !isRecord(data.lote.conteos) ||
+                !isRecord(data.lote.kg) ||
+                !isRecord(data.proceso) ||
+                !Array.isArray(data.proceso.serie)
+            ) {
+                throw reportInvalidResponse("La API devolvió una trazabilidad inválida.")
+            }
+            for (const key of ["confianza_clases", "decisiones", "consignas", "alertas"]) {
+                if (!Array.isArray(data[key])) {
+                    throw reportInvalidResponse("La API devolvió una trazabilidad inválida.")
+                }
+            }
+            return data as unknown as ReporteTrazabilidad
+        },
+    })
+}
+
+/**
+ * Recorre todas las páginas del detalle secuencialmente. Deduplica por id y se
+ * detiene en `maxPages`: si todavía queda cursor, `truncada` es `true`.
+ */
+export async function getAllReporteLotes(
+    filtros: ReporteFiltros = {},
+    opts: { maxPages?: number } = {},
+): Promise<{ lotes: ReporteLote[]; total: number; truncada: boolean }> {
+    const maxPages = Math.max(1, Math.trunc(opts.maxPages ?? 50))
+    const lotes: ReporteLote[] = []
+    const seen = new Set<string>()
+    let total = 0
+    let cursor: string | null = null
+
+    for (let page = 0; page < maxPages; page += 1) {
+        const result = await getReporteLotes(filtros, { cursor, limite: 1000 })
+        if (page === 0) total = result.total
+        for (const lote of result.lotes) {
+            if (seen.has(lote.id)) continue
+            seen.add(lote.id)
+            lotes.push(lote)
+        }
+        cursor = result.siguienteCursor
+        if (!cursor) return { lotes, total, truncada: false }
+    }
+    return { lotes, total, truncada: cursor !== null }
 }
 
 // Lote abierto del sector, o null. La ausencia es 200 con `lote: null`.
@@ -356,7 +685,10 @@ export async function getProductos(): Promise<Producto[]> {
                 }
                 throw new Error("La API devolvió una respuesta inválida para productos.");
             }
-            return result.data;
+            return result.data.map((producto) => ({
+                ...producto,
+                capacidadNominalKgH: producto.capacidadNominalKgH ?? null,
+            }));
         },
     })
 }
@@ -1337,10 +1669,10 @@ function isHornoEstado(value: unknown): value is HornoEstado {
         isRecord(value) &&
         typeof value.id === "string" &&
         typeof value.nombre === "string" &&
-        typeof value.temperatura === "number" &&
-        typeof value.velocidad_cinta === "number" &&
+        (value.temperatura === null || typeof value.temperatura === "number") &&
+        (value.velocidad_cinta === null || typeof value.velocidad_cinta === "number") &&
         typeof value.estado === "string" &&
-        typeof value.ultimo_check === "string"
+        (value.ultimo_check === null || typeof value.ultimo_check === "string")
     )
 }
 
@@ -1349,13 +1681,14 @@ function parseHornoEstado(data: unknown): HornoEstado | null {
 }
 
 /**
- * GET /api/v1/horno?id=<hornoId> — estado actual del horno y alertas recientes.
- * El backend envuelve el horno en `data.horno`. Si el horno no existe (404) o
- * la respuesta es inválida, devuelve `null` para que la UI degrade sin romper.
+ * GET /api/v1/horno?sector_id=<sectorId> — última telemetría real del horno del
+ * sector, proyectada desde `metricas_horno` (la Pi publica cada ~5 s). El
+ * backend envuelve el horno en `data.horno`. Si el sector no existe (404)
+ * o la respuesta es inválida, devuelve `null` para que la UI degrade sin romper.
  */
-export async function getHornoEstado(hornoId: string): Promise<HornoEstado | null> {
+export async function getHornoEstado(sectorId: string): Promise<HornoEstado | null> {
     return withBackendFetch({
-        path: `/api/v1/horno?id=${encodeURIComponent(hornoId)}`,
+        path: `/api/v1/horno?sector_id=${encodeURIComponent(sectorId)}`,
         timeoutMessage: "El backend no respondió a tiempo. El estado del horno no está disponible.",
         handle: async (response) => {
             if (!response.ok) {
@@ -1409,7 +1742,7 @@ export async function getConsignaHistorial(loteId: string): Promise<Consigna[]> 
 }
 
 export type ConsignaManualInput = {
-    hornoId: string
+    sectorId: string
     productoId: string
     temperaturaObjetivo: number
     velocidadCintaObjetivo: number
@@ -1417,9 +1750,9 @@ export type ConsignaManualInput = {
 }
 
 /**
- * POST /api/v1/horno/consigna — envía una consigna manual al horno. El backend
- * requiere JWT cookie y acepta roles Operario/Supervisor/Admin. El `usuario`
- * se completa desde la sesión decodificada, no desde el formulario.
+ * POST /api/v1/horno/consigna — envía una consigna manual al horno del sector.
+ * El backend requiere JWT cookie y acepta roles Operario/Supervisor/Admin. El
+ * `usuario` se completa desde la sesión decodificada, no desde el formulario.
  */
 export async function enviarConsignaManual(
     input: ConsignaManualInput,
@@ -1436,8 +1769,65 @@ export async function enviarConsignaManual(
         statusMessages: {
             404: "El horno no existe.",
             422: "El producto no tiene parámetros o los valores están fuera del rango seguro.",
-            502: "El controlador físico rechazó la consigna.",
+            502: "El horno rechazó la consigna.",
         },
         revalidatePaths: ["/horno/consigna", "/linea-produccion", "/lotes"],
+    })
+}
+
+// ─── Planificación (GET /api/v1/planificacion/{tipo}) ───────────────────────
+//
+// Listado de plan / paradas / energía con filtros opcionales. Comparte el
+// envelope `{success,message,data:{total,truncada,items}}` de reportes.
+
+function isPlanificacionItem(value: unknown): value is Record<string, unknown> {
+    return isRecord(value) &&
+        typeof value.id === "string" && value.id !== "" &&
+        typeof value.sector_id === "string" && value.sector_id !== ""
+}
+
+export async function getPlanificacionLista<T extends TipoImportacion>(
+    tipo: T,
+    filtros: PlanificacionListaFiltros = {},
+): Promise<PlanificacionLista<PlanificacionItemPorTipo[T]>> {
+    const params = new URLSearchParams()
+    if (filtros.desde) params.set("desde", filtros.desde)
+    if (filtros.hasta) params.set("hasta", filtros.hasta)
+    if (filtros.sectorId) params.set("sector_id", filtros.sectorId)
+    if (filtros.limite !== undefined) {
+        params.set("limite", String(Math.min(1000, Math.max(1, Math.trunc(filtros.limite)))))
+    }
+    const query = params.toString()
+
+    return withBackendFetch({
+        path: `/api/v1/planificacion/${tipo}${query ? `?${query}` : ""}`,
+        timeoutMs: 20000,
+        timeoutMessage: "El backend no respondió a tiempo. La planificación no está disponible.",
+        handle: async (response) => {
+            if (response.status === 400) {
+                throw new ApiError(400, "Los filtros de planificación son inválidos.")
+            }
+            if (!response.ok) {
+                throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            }
+            const payload: unknown = await response.json()
+            if (
+                !isRecord(payload) ||
+                payload.success !== true ||
+                !isRecord(payload.data) ||
+                !Array.isArray(payload.data.items) ||
+                !payload.data.items.every(isPlanificacionItem)
+            ) {
+                throw new Error("La API devolvió una lista de planificación inválida.")
+            }
+            const items = payload.data.items
+            return {
+                total: typeof payload.data.total === "number" && Number.isFinite(payload.data.total)
+                    ? payload.data.total
+                    : items.length,
+                truncada: payload.data.truncada === true,
+                items: items as PlanificacionItemPorTipo[T][],
+            }
+        },
     })
 }

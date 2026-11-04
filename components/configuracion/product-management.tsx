@@ -65,6 +65,7 @@ function controlParams(producto: Producto): Omit<ProductoRequest, "nombre"> {
     tempMax: producto.tempMax,
     velocidadCintaMin: producto.velocidadCintaMin,
     velocidadCintaMax: producto.velocidadCintaMax,
+    capacidadNominalKgH: producto.capacidadNominalKgH ?? null,
   }
   // Setpoints opcionales: se omiten cuando el producto no los tiene.
   if (producto.tempSetpoint != null) params.tempSetpoint = producto.tempSetpoint

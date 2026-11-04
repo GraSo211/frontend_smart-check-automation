@@ -39,6 +39,7 @@ function producto(overrides: Partial<Producto> = {}): Producto {
         tempMax: 220,
         velocidadCintaMin: 0.5,
         velocidadCintaMax: 1.5,
+        capacidadNominalKgH: null,
         ...overrides,
     }
 }

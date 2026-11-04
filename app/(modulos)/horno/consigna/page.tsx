@@ -16,16 +16,26 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
+interface PageProps {
+  searchParams: Promise<{ sector_id?: string | string[] }>
+}
+
+function firstParam(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw && raw !== "" ? raw : null
+}
+
 interface LoteAbiertoOption extends LoteSector {
   sectorNombre: string
 }
 
-export default async function Page() {
-  const hornoId = process.env.HORNO_ID ?? "horno-01"
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams
+  const requested = firstParam(params.sector_id)
 
   let productos: Producto[] = []
   let sectores: Sector[] = []
-  let lotesAbiertos: LoteAbiertoOption[] = []
+  let loteAbierto: LoteAbiertoOption | null = null
   let hornoEstado: HornoEstado | null = null
   let initialHistorial: Consigna[] = []
   const errors: {
@@ -47,30 +57,37 @@ export default async function Page() {
     errors.sectores = e instanceof Error ? e.message : "No se pudieron consultar los sectores."
   }
 
-  if (sectores.length > 0) {
-    const resultados = await Promise.allSettled(
-      sectores.map((sector) => getLoteAbierto(sector.id)),
-    )
-    lotesAbiertos = resultados
-      .map((resultado, index) => {
-        if (resultado.status !== "fulfilled" || !resultado.value) return null
-        const lote = resultado.value
-        const sector = sectores[index]
-        return {
+  const selectedSectorId =
+    requested && sectores.some((s) => s.id === requested)
+      ? requested
+      : (sectores[0]?.id ?? null)
+
+  const selectedSector = sectores.find((s) => s.id === selectedSectorId)
+
+  if (selectedSectorId) {
+    try {
+      const lote = await getLoteAbierto(selectedSectorId)
+      if (lote) {
+        loteAbierto = {
           ...lote,
-          sectorNombre: sector?.nombre ?? lote.sector_id,
+          sectorNombre: selectedSector?.nombre ?? lote.sector_id,
         }
-      })
-      .filter((lote): lote is LoteAbiertoOption => lote !== null)
+      }
+    } catch {
+      // El lote abierto es opcional: si falla, se deja sin opción de lote
+      // pero el formulario sigue usable.
+    }
   }
 
-  try {
-    hornoEstado = await getHornoEstado(hornoId)
-  } catch (e) {
-    errors.horno = e instanceof Error ? e.message : "No se pudo consultar el estado del horno."
+  if (selectedSectorId) {
+    try {
+      hornoEstado = await getHornoEstado(selectedSectorId)
+    } catch (e) {
+      errors.horno = e instanceof Error ? e.message : "No se pudo consultar el estado del horno."
+    }
   }
 
-  const initialLoteId = lotesAbiertos[0]?.id ?? ""
+  const initialLoteId = loteAbierto?.id ?? ""
 
   if (initialLoteId) {
     try {
@@ -81,11 +98,15 @@ export default async function Page() {
     }
   }
 
-  const loteOptions = lotesAbiertos.map((lote) => ({
-    id: lote.id,
-    label: `${lote.producto_nombre} · ${lote.sectorNombre}`,
-    modo: lote.modo ?? "MANUAL",
-  }))
+  const loteOptions = loteAbierto
+    ? [
+        {
+          id: loteAbierto.id,
+          label: `${loteAbierto.producto_nombre} · ${loteAbierto.sectorNombre}`,
+          modo: loteAbierto.modo ?? "MANUAL",
+        },
+      ]
+    : []
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -99,9 +120,9 @@ export default async function Page() {
             Consigna manual del horno
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Enviá una consigna de temperatura y velocidad de cinta. El backend la registra y la
-            Raspberry la aplica en el próximo ciclo de control. El registro queda asociado al lote
-            que elijas.
+            Elegí un sector: cada uno tiene su horno con telemetría de la Pi. La consigna de
+            temperatura y velocidad de cinta se envía al horno de ese sector y queda asociada al
+            lote que elijas.
           </p>
         </header>
 
@@ -123,7 +144,9 @@ export default async function Page() {
         )}
 
         <ConsignaPanel
-          hornoId={hornoId}
+          key={selectedSectorId ?? "sin-sector"}
+          sectores={sectores}
+          sectorId={selectedSectorId ?? ""}
           productos={productos}
           loteOptions={loteOptions}
           initialLoteId={initialLoteId}

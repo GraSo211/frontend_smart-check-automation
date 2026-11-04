@@ -1,167 +1,147 @@
 import { describe, expect, it } from "vitest"
 
-import type { LoteSector } from "@/lib/production-data"
-import { buildLotesReport, filterLotesForReport } from "@/actions/reports"
+import type { ReporteLote } from "@/lib/reportes-types"
+import { buildLotesReport } from "@/actions/reports"
 
-function lote(overrides: Partial<LoteSector> = {}): LoteSector {
+function lote(overrides: Partial<ReporteLote> = {}): ReporteLote {
     return {
         id: "l-1",
         sector_id: "s-1",
-        estado: "CERRADO",
+        sector_nombre: "Horno 1",
         producto_id: "p-1",
         producto_nombre: "Tostada",
-        abierto_en: "2026-01-15T10:00:00.000Z",
-        abierto_por: { device_id: "d-1", type: "ENTRADA_HORNO" },
-        conteos: { ok: 80, crudo: 5, quemado: 15, total: 100 },
-        ultimo_evento_en: "2026-01-15T11:00:00.000Z",
-        inactividad_segundos: 5,
-        cerrado_en: "2026-01-15T11:30:00.000Z",
-        motivo_cierre: "FIN",
+        turno: "mañana",
+        estado: "CERRADO",
+        abierto_en: "2026-01-15T13:00:00.000Z",
+        cerrado_en: "2026-01-15T14:00:00.000Z",
+        motivo_cierre: "manual",
         modo: "AUTOMATICO",
-        temp1_objetivo: 200,
-        vel_objetivo: 1.0,
+        conteos: { ok: 90, crudo: 6, quemado: 4, total: 100 },
+        kg: { ok: 22.5, crudo: 1.5, quemado: 1, total: 25, merma: 2.5 },
+        confianza_promedio: 0.873,
+        duracion_min: 60,
+        fpy_pct: 90.5,
+        crudo_pct: 6,
+        quemado_pct: 4,
         ...overrides,
     }
 }
 
-describe("filterLotesForReport", () => {
-    const runs: LoteSector[] = [
-        lote({ id: "l-1", abierto_en: "2026-01-15T10:00:00.000Z" }),
-        lote({ id: "l-2", abierto_en: "2026-01-20T10:00:00.000Z" }),
-        lote({ id: "l-3", abierto_en: "2026-01-25T10:00:00.000Z" }),
-    ]
-
-    it("filtra por loteId con precedencia absoluta", () => {
-        const filtered = filterLotesForReport(runs, { loteId: "l-2" })
-        expect(filtered.map((r) => r.id)).toEqual(["l-2"])
-    })
-
-    it("filtra por rango de fechas con `desde` y `hasta`", () => {
-        const filtered = filterLotesForReport(runs, {
-            desde: "2026-01-18T00:00:00.000Z",
-            hasta: "2026-01-22T00:00:00.000Z",
-        })
-        expect(filtered.map((r) => r.id)).toEqual(["l-2"])
-    })
-
-    it("incluye los bordes del rango", () => {
-        const filtered = filterLotesForReport(runs, {
-            desde: "2026-01-15T10:00:00.000Z",
-            hasta: "2026-01-25T10:00:00.000Z",
-        })
-        expect(filtered).toHaveLength(3)
-    })
-
-    it("omite lotes con abierto_en inválida", () => {
-        const filtered = filterLotesForReport(
-            [lote({ id: "l-mal", abierto_en: "no-es-fecha" })],
-            {},
-        )
-        expect(filtered).toEqual([])
-    })
-
-    it("devuelve todos los lotes cuando no hay filtros", () => {
-        expect(filterLotesForReport(runs, {})).toHaveLength(3)
-    })
-})
+function csvLines(body: string): string[] {
+    return body.replace(/^\uFEFF/, "").split("\r\n")
+}
 
 describe("buildLotesReport (CSV)", () => {
-    const runs = [lote({ id: "l-1" }), lote({ id: "l-2", producto_nombre: "Pan, con coma" })]
-
-    it("incluye BOM UTF-8 y separador CRLF", () => {
-        const report = buildLotesReport(runs, { format: "csv" })
+    it("incluye BOM UTF-8, CRLF y las 25 columnas del contrato", () => {
+        const report = buildLotesReport([lote()], { format: "csv" })
         expect(report.body.charCodeAt(0)).toBe(0xfeff)
         expect(report.body).toContain("\r\n")
         expect(report.contentType).toContain("text/csv")
-        expect(report.rows).toBe(2)
+        expect(report.rows).toBe(1)
+        const header = csvLines(report.body)[0]!.split(",")
+        expect(header).toEqual([
+            "id", "sector_id", "sector_nombre", "producto_id", "producto_nombre",
+            "turno", "estado", "abierto_en", "cerrado_en", "motivo_cierre", "modo",
+            "total", "ok", "crudo", "quemado", "kg_ok", "kg_crudo", "kg_quemado",
+            "kg_total", "kg_merma", "confianza_promedio", "duracion_min", "fpy_pct",
+            "crudo_pct", "quemado_pct",
+        ])
     })
 
-    it("emite la fila de encabezado con todas las columnas", () => {
-        const report = buildLotesReport(runs, { format: "csv" })
-        const firstLine = report.body.split("\r\n")[0]!.replace(/^\uFEFF/, "")
-        expect(firstLine.split(",").length).toBe(20)
-        expect(firstLine).toContain("id")
-        expect(firstLine).toContain("calidad_pct")
-        expect(firstLine).toContain("confianza_promedio")
-    })
-
-    it("emite la confianza como porcentaje de un decimal o vacío", () => {
+    it("deja vacíos los campos null", () => {
         const report = buildLotesReport(
-            [lote({ id: "l-1", confianza_promedio: 0.873 }), lote({ id: "l-2", confianza_promedio: null })],
+            [lote({
+                cerrado_en: null,
+                motivo_cierre: null,
+                turno: null,
+                modo: null,
+                kg: { ok: null, crudo: null, quemado: null, total: null, merma: null },
+                confianza_promedio: null,
+                duracion_min: null,
+                fpy_pct: null,
+                crudo_pct: null,
+                quemado_pct: null,
+            })],
             { format: "csv" },
         )
-        expect(report.body).toContain(",87.3,")
-        const rows = report.body.split("\r\n").slice(1, 3)
-        expect(rows[0]!.split(",")[13]).toBe("87.3")
-        expect(rows[1]!.split(",")[13]).toBe("")
+        const row = csvLines(report.body)[1]!.split(",")
+        expect(row[5]).toBe("")
+        expect(row[8]).toBe("")
+        expect(row[9]).toBe("")
+        expect(row[10]).toBe("")
+        expect(row.slice(15)).toEqual(Array(10).fill(""))
     })
 
     it("escapa comas y comillas según RFC 4180", () => {
-        const report = buildLotesReport(runs, { format: "csv" })
-        expect(report.body).toContain('"Pan, con coma"')
-    })
-
-    it("genera filename estable basado en loteId o fecha", () => {
-        expect(
-            buildLotesReport(runs, { format: "csv", loteId: "l-1" }).filename,
-        ).toMatch(/^lotes-l-1-\d{4}-\d{2}-\d{2}\.csv$/)
-        expect(buildLotesReport(runs, { format: "csv" }).filename).toMatch(
-            /^lotes-\d{4}-\d{2}-\d{2}\.csv$/,
-        )
-    })
-
-    it("deja vacíos los campos null/undefined (no «0» fabricado)", () => {
         const report = buildLotesReport(
-            [lote({ vel_objetivo: undefined })],
+            [lote({ producto_nombre: 'Pan, "artesanal"' })],
             { format: "csv" },
         )
-        // La columna vel_objetivo queda como string vacío al final de la fila.
-        expect(report.body).toContain(",\r\n")
+        expect(report.body).toContain('"Pan, ""artesanal"""')
+    })
+
+    it("neutraliza fórmulas CSV sólo en strings", () => {
+        const report = buildLotesReport(
+            [lote({ producto_nombre: "=SUM(A1)", sector_nombre: "@hola", id: "-lote" })],
+            { format: "csv" },
+        )
+        const row = csvLines(report.body)[1]!.split(",")
+        expect(row[0]).toBe("'-lote")
+        expect(row[2]).toBe("'@hola")
+        expect(row[4]).toBe("'=SUM(A1)")
+        // Los números negativos no se prefijan.
+        expect(csvLines(
+            buildLotesReport([lote({ duracion_min: -3 })], { format: "csv" }).body,
+        )[1]!.split(",")[21]).toBe("-3")
+    })
+
+    it("con delim=; usa coma decimal y fechas dd/mm/aaaa hh:mm ART", () => {
+        const report = buildLotesReport([lote()], { format: "csv", delimiter: ";" })
+        const row = csvLines(report.body)[1]!.split(";")
+        expect(row[7]).toBe("15/01/2026 10:00")
+        expect(row[8]).toBe("15/01/2026 11:00")
+        expect(row[21]).toBe("60")
+        expect(row[22]).toBe("90,5")
+        expect(row[15]).toBe("22,5")
+        expect(report.body).not.toContain('""')
+    })
+
+    it("genera filename con el rango y los filtros sanitizados", () => {
+        expect(
+            buildLotesReport([], { format: "csv", desde: "2026-10-01", hasta: "2026-10-31" }).filename,
+        ).toBe("reporte-lotes-2026-10-01_a_2026-10-31.csv")
+        expect(
+            buildLotesReport([], {
+                format: "json",
+                desde: "2026-10-01",
+                hasta: "2026-10-31",
+                sectorId: "Horno 1",
+                productoId: "p/1",
+            }).filename,
+        ).toBe("reporte-lotes-2026-10-01_a_2026-10-31-horno-1-p-1.json")
     })
 })
 
 describe("buildLotesReport (JSON)", () => {
-    const runs = [lote({ id: "l-1" }), lote({ id: "l-2" })]
-
-    it("devuelve JSON con metadatos y array de lotes", () => {
-        const report = buildLotesReport(runs, { format: "json" })
+    it("incluye metadatos, filtros y los lotes crudos", () => {
+        const report = buildLotesReport([lote()], {
+            format: "json",
+            desde: "2026-10-01",
+            hasta: "2026-10-31",
+            sectorId: "s-1",
+        })
         expect(report.contentType).toContain("application/json")
-        const parsed = JSON.parse(report.body)
-        expect(parsed.total).toBe(2)
-        expect(parsed.lotes).toHaveLength(2)
-        expect(parsed.lotes[0].id).toBe("l-1")
-        expect(parsed.generated_at).toBeTruthy()
-    })
-
-    it("incluye la calidad computada cuando ok no es null", () => {
-        const report = buildLotesReport([lote({ id: "l-1" })], { format: "json" })
-        const parsed = JSON.parse(report.body)
-        expect(parsed.lotes[0].calidad_pct).toBe("80.0")
-    })
-
-    it("incluye la confianza promedio como porcentaje o null", () => {
-        const report = buildLotesReport(
-            [lote({ id: "l-1", confianza_promedio: 0.873 }), lote({ id: "l-2", confianza_promedio: null })],
-            { format: "json" },
-        )
-        const parsed = JSON.parse(report.body)
-        expect(parsed.lotes[0].confianza_promedio).toBe("87.3")
-        expect(parsed.lotes[1].confianza_promedio).toBeNull()
-    })
-
-    it("omite la calidad cuando ok es null (no publica 0.0%)", () => {
-        const report = buildLotesReport(
-            [lote({ id: "l-1", conteos: { ok: null, crudo: 0, quemado: 0, total: 100 } })],
-            { format: "json" },
-        )
-        const parsed = JSON.parse(report.body)
-        expect(parsed.lotes[0].calidad_pct).toBeNull()
-    })
-
-    it("respeta el filtro por loteId", () => {
-        const report = buildLotesReport(runs, { format: "json", loteId: "l-2" })
+        expect(report.rows).toBe(1)
         const parsed = JSON.parse(report.body)
         expect(parsed.total).toBe(1)
-        expect(parsed.lotes[0].id).toBe("l-2")
+        expect(parsed.generated_at).toBeTruthy()
+        expect(parsed.filtros).toEqual({
+            desde: "2026-10-01",
+            hasta: "2026-10-31",
+            sector_id: "s-1",
+            producto_id: null,
+            turno: null,
+        })
+        expect(parsed.lotes).toEqual([lote()])
     })
 })
