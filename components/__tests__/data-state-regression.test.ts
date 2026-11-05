@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getLotes: vi.fn(),
   getLoteAbierto: vi.fn(),
   getProductos: vi.fn(),
+  getAlertas: vi.fn(),
+  getHornoEstado: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => mocks)
@@ -80,20 +82,51 @@ beforeEach(() => {
 describe("estados sin datos de producción", () => {
   it("conserva un vacío válido y sincroniza sólo la respuesta exitosa", async () => {
     mocks.getAllLotes.mockResolvedValueOnce([])
+    mocks.getAlertas.mockResolvedValueOnce([])
     const { default: Page } = await import("@/app/(modulos)/page")
     const html = renderedProps(await Page())
     expect(html).toContain('"runs":[]')
     expect(html).toContain('"lastSyncAt":"')
     expect(html).toContain('"error":null')
+    expect(html).toContain('"alertasActivas":0')
+    expect(html).toContain('"alertasError":null')
+    expect(html).toContain('"temperaturaPromedio":null')
+    expect(html).toContain('"temperaturaError":null')
+    expect(mocks.getHornoEstado).not.toHaveBeenCalled()
   })
 
   it("no reemplaza un error por conteos o datos de respaldo", async () => {
     mocks.getAllLotes.mockRejectedValueOnce(new Error("API caída"))
+    mocks.getAlertas.mockResolvedValueOnce([])
     const { default: Page } = await import("@/app/(modulos)/page")
     const html = renderedProps(await Page())
     expect(html).toContain('"runs":[]')
     expect(html).toContain('"lastSyncAt":null')
     expect(html).toContain("API caída")
+    expect(html).toContain('"alertasActivas":0')
+    expect(html).toContain('"alertasError":null')
+    expect(html).toContain('"temperaturaPromedio":null')
+    expect(html).toContain('"temperaturaError":null')
+  })
+
+  it("consulta telemetría de sectores con lote abierto y calcula el promedio", async () => {
+    mocks.getAllLotes.mockResolvedValueOnce([lote("lote-1")])
+    mocks.getAlertas.mockResolvedValueOnce([{ id: "a-1", estado: "ACTIVA" }])
+    mocks.getHornoEstado.mockResolvedValueOnce({
+      id: "h-1",
+      nombre: "Horno 1",
+      sector_id: "s-1",
+      temperatura: 210,
+      velocidad_cinta: 1.2,
+      estado: "OK",
+      ultimo_check: "2026-01-01T10:05:00.000Z",
+    })
+    const { default: Page } = await import("@/app/(modulos)/page")
+    const html = renderedProps(await Page())
+    expect(html).toContain('"alertasActivas":1')
+    expect(html).toContain('"temperaturaPromedio":210')
+    expect(html).toContain('"temperaturaError":null')
+    expect(mocks.getHornoEstado).toHaveBeenCalledWith("s-1")
   })
 
   it("mantiene vacío y error explícitos en la página de lotes", async () => {

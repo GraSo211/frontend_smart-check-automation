@@ -17,18 +17,61 @@ interface ConsignaHistorialProps {
 }
 
 function resultadoBadge(consigna: Consigna) {
-  if (consigna.exitosa) {
+  switch (consigna.estado) {
+    case "APLICADA":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+          <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
+          Aplicada
+        </span>
+      )
+    case "PENDIENTE":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+          <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />
+          Pendiente
+        </span>
+      )
+    case "RECHAZADA":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+          Rechazada
+        </span>
+      )
+    default:
+      if (consigna.exitosa) {
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+            <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
+            Enviada
+          </span>
+        )
+      }
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+          Rechazada
+        </span>
+      )
+  }
+}
+
+function decisionIdChip(consigna: Consigna) {
+  if (!consigna.decisionId) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-        <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-        Exitosa
+      <span data-testid="decision-id-chip" className="text-muted-foreground">
+        —
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-      <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
-      Rechazada
+    <span
+      data-testid="decision-id-chip"
+      className="font-mono text-[10px] text-muted-foreground"
+      title={consigna.decisionId}
+    >
+      {consigna.decisionId.slice(0, 8)}
     </span>
   )
 }
@@ -61,7 +104,7 @@ export function ConsignaHistorial({ consignas, loteId, error }: ConsignaHistoria
         <CardTitle className="text-base font-semibold">Historial de consignas del lote</CardTitle>
         <CardDescription>
           {loteId
-            ? "Registro de consignas asociadas al lote seleccionado."
+            ? "Pendiente = encolada para la Pi; Aplicada = confirmada por ack; Rechazada = no se pudo encolar."
             : "Seleccioná un lote para ver el historial de consignas asociadas."}
         </CardDescription>
       </CardHeader>
@@ -91,7 +134,7 @@ export function ConsignaHistorial({ consignas, loteId, error }: ConsignaHistoria
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] border-collapse text-sm">
+            <table className="w-full min-w-[46rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-secondary/50 text-left">
                   <Th>Fecha y hora</Th>
@@ -129,7 +172,12 @@ export function ConsignaHistorial({ consignas, loteId, error }: ConsignaHistoria
                       </div>
                     </Td>
                     <Td className="text-muted-foreground">{consigna.usuario ?? "—"}</Td>
-                    <Td>{resultadoBadge(consigna)}</Td>
+                    <Td>
+                      <div className="flex flex-col items-start gap-0.5">
+                        {resultadoBadge(consigna)}
+                        {decisionIdChip(consigna)}
+                      </div>
+                    </Td>
                     <Td className="max-w-[12rem] truncate text-xs text-muted-foreground">
                       {consigna.motivoError ?? "—"}
                     </Td>

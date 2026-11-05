@@ -60,6 +60,8 @@ const data: ReporteTrazabilidad = {
       origen: "manual",
       usuario: "op-1",
       exitosa: true,
+      estado: "PENDIENTE",
+      decision_id: "c1d2e3f4-0000-0000-0000-000000000000",
       motivo_error: null,
       temperatura_previa: 44,
       velocidad_cinta_previa: 1.3,
@@ -99,7 +101,7 @@ describe("buildTrazabilidadCsv", () => {
       decisiones:
         "creada_en,ventana_inicio,ventana_fin,muestras,temp_actual,vel_actual,pct_ok_obs,pct_crudos_obs,pct_quemados_obs,conf_promedio,temp_propuesto,vel_propuesto,temp_aplicado,vel_aplicado,z_observado,z_predicho,razon_skipped,aplicado_por,aprobada_por,aprobada_at",
       consignas:
-        "creada_en,origen,temperatura_objetivo,velocidad_cinta_objetivo,temperatura_previa,velocidad_cinta_previa,exitosa,motivo_error,usuario",
+        "creada_en,origen,temperatura_objetivo,velocidad_cinta_objetivo,temperatura_previa,velocidad_cinta_previa,exitosa,estado,decision_id,motivo_error,usuario",
     }
     for (const dataset of DATASETS) {
       expect(lines(buildTrazabilidadCsv(data, dataset).body)[0]).toBe(

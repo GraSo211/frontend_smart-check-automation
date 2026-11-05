@@ -55,6 +55,8 @@ const HEADERS: Record<TrazabilidadDataset, readonly string[]> = {
     "temperatura_previa",
     "velocidad_cinta_previa",
     "exitosa",
+    "estado",
+    "decision_id",
     "motivo_error",
     "usuario",
   ],
@@ -151,6 +153,8 @@ function rowsFor(
         c.temperatura_previa,
         c.velocidad_cinta_previa,
         c.exitosa,
+        c.estado ?? null,
+        c.decision_id ?? null,
         c.motivo_error,
         c.usuario,
       ])

@@ -233,6 +233,8 @@ export type ReporteTrazabilidadConsigna = {
     origen: string
     usuario: string | null
     exitosa: boolean
+    estado?: string | null
+    decision_id?: string | null
     motivo_error: string | null
     temperatura_previa: number | null
     velocidad_cinta_previa: number | null

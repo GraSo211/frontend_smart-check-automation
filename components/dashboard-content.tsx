@@ -15,7 +15,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react"
-import { formatNumber, qualityRate } from "@/lib/format"
+import { formatNumber, formatPct, formatTemp, qualityRate } from "@/lib/format"
 import type { UserRole } from "@/lib/auth"
 import type { LoteSector } from "@/lib/production-data"
 import { useMonitoring, useProductionData } from "@/components/monitoring-provider"
@@ -26,6 +26,10 @@ interface HomeDashboardProps {
   lastSyncAt: string | null
   userRole?: UserRole
   error?: string | null
+  alertasActivas?: number | null
+  alertasError?: string | null
+  temperaturaPromedio?: number | null
+  temperaturaError?: string | null
 }
 
 const sections: Array<{
@@ -44,22 +48,20 @@ const sections: Array<{
   { href: "/usuarios", label: "Usuarios y roles", description: "Accesos, permisos y responsables del sistema.", icon: Users, tone: "bg-accent/10 text-accent", metric: "Gestión de equipo" },
 ]
 
-// Proyección interna, no contable: se aplica sólo sobre la merma observada en runs.
-// Los supuestos son deliberadamente conservadores y se mantienen visibles en el microcopy.
-const ESTIMATION = {
-  avoidableWasteRate: 0.15,
-  replacementCostPerUnit: 85,
-} as const
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value)
-}
-
 function freshnessLabel(freshness: "fresh" | "stale" | "never") {
   return freshness === "fresh" ? "Actualizada" : freshness === "stale" ? "Desactualizada" : "Sin confirmar"
 }
 
-export function HomeDashboard({ runs, lastSyncAt, userRole = "Operario", error }: HomeDashboardProps) {
+export function HomeDashboard({
+  runs,
+  lastSyncAt,
+  userRole = "Operario",
+  error,
+  alertasActivas = null,
+  alertasError = null,
+  temperaturaPromedio = null,
+  temperaturaError = null,
+}: HomeDashboardProps) {
   const monitoring = useMonitoring()
   const production = useProductionData(runs, lastSyncAt, error)
   const currentRuns = production.runs
@@ -76,14 +78,21 @@ export function HomeDashboard({ runs, lastSyncAt, userRole = "Operario", error }
       return sum + Math.max(0, run.conteos.total - defects)
     }, 0)
     const wasteUnits = currentRuns.reduce((sum, run) => sum + (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0), 0)
-    const alerts = currentRuns.filter((run) => run.conteos.total > 0 && (run.conteos.quemado ?? 0) / run.conteos.total >= 0.05).length
-    const opportunityUnits = Math.round(wasteUnits * ESTIMATION.avoidableWasteRate)
     const hasData = currentRuns.length > 0
     // An all-null `quemado`+`crudo` must render "—" instead of a fabricated 0.0%
     // waste rate.
     const hasWaste = currentRuns.some((run) => run.conteos.quemado !== null || run.conteos.crudo !== null)
     // `quality` is null (renders "—") only when there is no unit to judge.
-    return { units, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: hasData && units ? qualityRate(correctos, units) : null, hasData, hasWaste }
+    const wasteRate = hasData && hasWaste && units > 0 ? wasteUnits / units : null
+    return {
+      units,
+      correctos,
+      wasteUnits,
+      wasteRate,
+      quality: hasData && units > 0 ? qualityRate(correctos, units) : null,
+      hasData,
+      hasWaste,
+    }
   }, [currentRuns])
 
   const sectionMetrics = {
@@ -116,15 +125,40 @@ export function HomeDashboard({ runs, lastSyncAt, userRole = "Operario", error }
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores operativos">
-        <Metric label="Temperatura promedio" value="—" hint="Sin medición" />
-        <Metric label="Alertas para revisar" value={!metrics.hasData ? "—" : String(metrics.alerts)} hint={!metrics.hasData ? "Sin datos para evaluar" : currentError ? "Sobre datos confirmados anteriores" : metrics.alerts ? "Requieren atención" : "Sin desvíos críticos"} emphasis={metrics.alerts > 0} />
+        <Metric
+          label="Temperatura promedio"
+          value={temperaturaPromedio === null ? "—" : formatTemp(temperaturaPromedio)}
+          hint={
+            temperaturaError
+              ? "No se pudo consultar la telemetría"
+              : currentError
+                ? "Sin datos de producción"
+                : temperaturaPromedio === null
+                  ? "Sin telemetría de la Pi"
+                  : "Última lectura por sector con lote abierto"
+          }
+        />
+        <Metric
+          label="Alertas para revisar"
+          value={alertasActivas === null ? "—" : String(alertasActivas)}
+          hint={
+            alertasError
+              ? "No se pudieron consultar"
+              : alertasActivas === null
+                ? "Sin datos"
+                : alertasActivas > 0
+                  ? "Activas en el backend"
+                  : "Sin alertas activas"
+          }
+          emphasis={(alertasActivas ?? 0) > 0}
+        />
         <Metric label="Conectividad" value={availabilityLabel(monitoring.backend.availability)} hint={monitoring.backend.detail} />
         <Metric label="Sincronización de lotes" value={freshnessLabel(monitoring.sync.lotes.freshness)} hint="Consulta o evento válido recibido" />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2" aria-label="Indicadores de impacto estimado">
-        <ImpactCard eyebrow="Proyección interna" title="Ahorro potencial estimado" value={metrics.hasData && metrics.hasWaste ? formatCurrency(metrics.projectedSavings) : "—"} detail={metrics.hasData && metrics.hasWaste ? `${formatNumber(metrics.opportunityUnits)} unidades recuperables` : "Sin datos para estimar"} note={`Calculado sobre el ${ESTIMATION.avoidableWasteRate * 100}% de la merma observada, a ${formatCurrency(ESTIMATION.replacementCostPerUnit)} por unidad.`} tone="text-success" />
-        <ImpactCard eyebrow="Oportunidad de mejora" title="Impacto estimado en merma" value={metrics.hasData && metrics.hasWaste ? `${ESTIMATION.avoidableWasteRate * 100}% menos` : "—"} detail={metrics.hasData && metrics.hasWaste ? `${formatNumber(metrics.opportunityUnits)} de ${formatNumber(metrics.wasteUnits)} unidades de merma` : "Sin datos para estimar"} note="Proyección orientativa sobre quemados y crudas registrados; no representa un resultado garantizado." tone="text-info" />
+      <section className="grid gap-4 md:grid-cols-2" aria-label="Merma observada">
+        <ImpactCard eyebrow="Dato observado" title="Merma registrada" value={metrics.hasData && metrics.hasWaste ? `${formatNumber(metrics.wasteUnits)} u` : "—"} detail={metrics.hasData && metrics.hasWaste ? "unidades quemadas o crudas" : "Sin conteos de merma"} note="Suma de los lotes consultados. No es una proyección económica ni incluye merma no detectada." tone="text-warning" />
+        <ImpactCard eyebrow="Dato observado" title="Tasa de merma" value={metrics.wasteRate === null ? "—" : formatPct(metrics.wasteRate)} detail={metrics.hasData ? `sobre ${formatNumber(metrics.units)} unidades registradas` : "Sin datos para calcular"} note="Derivada de los conteos del backend. Si un lote no reporta merma, no se estima." tone="text-info" />
       </section>
 
       <section aria-labelledby="modules-heading"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tu espacio de trabajo</p><h2 id="modules-heading" className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Accesos y estado</h2></div><span className="hidden text-xs text-muted-foreground sm:block">6 módulos disponibles</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{sections.map((section) => <SectionCard key={section.href} {...section} metric={sectionMetrics[section.href as keyof typeof sectionMetrics] ?? section.metric} />)}</div></section>

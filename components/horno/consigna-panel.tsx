@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { getConsignaHistorial } from "@/actions/api"
@@ -43,7 +43,7 @@ export function ConsignaPanel({
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const historialRequest = useRef(0)
 
-  const loadHistorial = async (id: string) => {
+  const loadHistorial = useCallback(async (id: string, silent = false) => {
     const requestId = ++historialRequest.current
 
     if (!id) {
@@ -52,7 +52,7 @@ export function ConsignaPanel({
       return
     }
 
-    setLoadingHistorial(true)
+    if (!silent) setLoadingHistorial(true)
     try {
       const data = await getConsignaHistorial(id)
       if (historialRequest.current !== requestId) return
@@ -65,9 +65,19 @@ export function ConsignaPanel({
         error instanceof Error ? error.message : "No se pudo cargar el historial.",
       )
     } finally {
-      if (historialRequest.current === requestId) setLoadingHistorial(false)
+      if (!silent && historialRequest.current === requestId) setLoadingHistorial(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!loteId || !historial.some((c) => c.estado === "PENDIENTE")) return
+
+    const interval = setInterval(() => {
+      void loadHistorial(loteId, true)
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [loteId, historial, loadHistorial])
 
   const handleLoteChange = (value: string) => {
     setLoteId(value)
@@ -81,23 +91,18 @@ export function ConsignaPanel({
 
   const loteSeleccionado = loteOptions.find((l) => l.id === loteId)
   const modoSeleccionado = loteSeleccionado?.modo ?? null
-  const hayLoteAutomatico = loteOptions.some(
-    (l) => l.modo === "SUPERVISION" || l.modo === "AUTOMATICO",
-  )
+  const sinLoteAbierto = loteOptions.length === 0
 
   const sinSectores = sectores.length === 0
-  const bloqueadaPorModo = sinSectores
-    ? true
-    : modoSeleccionado
-      ? modoSeleccionado === "SUPERVISION" || modoSeleccionado === "AUTOMATICO"
-      : hayLoteAutomatico
+  const bloqueadaPorModo =
+    sinSectores || sinLoteAbierto || modoSeleccionado !== "MANUAL"
   const motivoBloqueo = sinSectores
     ? "No hay sectores configurados. La consigna manual necesita al menos un sector con su horno."
-    : bloqueadaPorModo
-      ? modoSeleccionado
+    : sinLoteAbierto
+      ? "No hay un lote abierto en este sector. La consigna manual se aplica a un lote en modo MANUAL."
+      : modoSeleccionado && modoSeleccionado !== "MANUAL"
         ? `El lote seleccionado está en modo ${modoSeleccionado}. Cambialo a modo MANUAL desde Control del lote para enviar una consigna manual.`
-        : "Hay un lote abierto en modo SUPERVISION o AUTOMATICO. Elegí un lote en modo MANUAL o cambialo a MANUAL desde Control del lote para enviar una consigna manual."
-      : null
+        : null
 
   return (
     <div className="space-y-6">
@@ -119,7 +124,7 @@ export function ConsignaPanel({
             value={sectorId}
             sectores={sectores}
             onChange={(id) => router.push(`/horno/consigna?sector_id=${encodeURIComponent(id)}`)}
-            hint="Cada sector tiene su horno. La consigna se envía al horno del sector seleccionado."
+            hint="Cada sector tiene su horno. La consigna se encola para la Pi del sector seleccionado."
           />
         </div>
       )}

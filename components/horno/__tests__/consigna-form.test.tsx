@@ -2,7 +2,8 @@
 
 import React from "react"
 import { act, fireEvent, render, screen } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { toast } from "sonner"
 
 import type { Consigna, Producto, Sector } from "@/lib/production-data"
 import { ConsignaPanel } from "@/components/horno/consigna-panel"
@@ -65,6 +66,7 @@ function renderPanel(overrides: {
   loteOptions?: { id: string; label: string; modo?: "MANUAL" | "SUPERVISION" | "AUTOMATICO" }[]
   sectores?: Sector[]
   sectorId?: string
+  initialHistorial?: Consigna[]
 }): ReturnType<typeof render> {
   return render(
     <ConsignaPanel
@@ -75,7 +77,7 @@ function renderPanel(overrides: {
         overrides.loteOptions ?? [{ id: "l-1", label: "Pan · Sector 1", modo: overrides.modo }]
       }
       initialLoteId={overrides.loteId ?? "l-1"}
-      initialHistorial={[]}
+      initialHistorial={overrides.initialHistorial ?? []}
       hornoEstado={null}
     />,
   )
@@ -89,6 +91,8 @@ function consigna(id: string): Consigna {
     velocidadCintaObjetivo: 1.5,
     origen: "MANUAL",
     exitosa: true,
+    estado: "PENDIENTE",
+    decisionId: `${id}-decision-0000-000000000000`,
     creadaEn: "2026-01-01T10:00:00Z",
   }
 }
@@ -196,13 +200,23 @@ describe("ConsignaForm · bloqueo por modo del lote", () => {
     )
   })
 
-  it("bloquea «Sin lote» si hay un lote abierto en AUTOMATICO", () => {
-    renderPanel({ modo: "AUTOMATICO", loteId: "" })
+  it("bloquea el formulario cuando no hay un lote abierto", () => {
+    renderPanel({ modo: "MANUAL", loteId: "", loteOptions: [] })
 
     expect(screen.getByRole("alert").textContent).toContain("Consigna manual bloqueada")
     expect(screen.getByRole("alert").textContent).toContain(
-      "Hay un lote abierto en modo SUPERVISION o AUTOMATICO",
+      "No hay un lote abierto en este sector. La consigna manual se aplica a un lote en modo MANUAL.",
     )
+    expect(
+      (screen.getByLabelText("Temperatura objetivo") as HTMLInputElement).disabled,
+    ).toBe(true)
+    expect(
+      (screen.getByLabelText("Velocidad de cinta objetivo") as HTMLInputElement).disabled,
+    ).toBe(true)
+    expect((screen.getByRole("button", { name: "Enviar consigna" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect((screen.getByLabelText("Lote") as HTMLSelectElement).disabled).toBe(true)
   })
 })
 
@@ -223,14 +237,59 @@ describe("ConsignaForm · envío", () => {
 
     await act(() => Promise.resolve())
 
-    expect(mocks.enviarConsignaManual).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sectorId: sector.id,
-        productoId: producto.id,
-        temperaturaObjetivo: 210,
-        velocidadCintaObjetivo: 1.2,
-        loteId: "l-1",
-      }),
-    )
+    expect(mocks.enviarConsignaManual).toHaveBeenCalledWith({
+      sectorId: sector.id,
+      productoId: producto.id,
+      temperaturaObjetivo: 210,
+      velocidadCintaObjetivo: 1.2,
+      loteId: "l-1",
+    })
+    expect(toast.success).toHaveBeenCalledWith("Consigna encolada para la Pi.")
+  })
+})
+
+describe("ConsignaPanel · poll silencioso del historial", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("no hace polling cuando no hay consignas PENDIENTE", async () => {
+    renderPanel({
+      modo: "MANUAL",
+      initialHistorial: [{ ...consigna("c-1"), estado: "APLICADA" }],
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+
+    expect(mocks.getConsignaHistorial).not.toHaveBeenCalled()
+  })
+
+  it("refresca el historial cada 10 s mientras haya una consigna PENDIENTE", async () => {
+    mocks.getConsignaHistorial.mockResolvedValue([consigna("c-2")])
+
+    renderPanel({
+      modo: "MANUAL",
+      initialHistorial: [consigna("c-1")],
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+
+    expect(mocks.getConsignaHistorial).toHaveBeenCalledTimes(1)
+    expect(mocks.getConsignaHistorial).toHaveBeenLastCalledWith("l-1")
+    expect(screen.queryByText("Actualizando historial…")).toBeNull()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+
+    expect(mocks.getConsignaHistorial).toHaveBeenCalledTimes(2)
   })
 })

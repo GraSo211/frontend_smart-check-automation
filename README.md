@@ -27,10 +27,10 @@ es un servicio externo en Go; no forma parte de este proyecto.
 
 | Área | Funcionalidad actual |
 |---|---|
-| Operación | Dashboard con indicadores de producción, calidad, temperatura, conectividad y sincronización. |
+| Operación | Dashboard con indicadores de producción, calidad, merma observada, alertas activas, temperatura promedio real del horno, conectividad y sincronización. |
 | Supervisión | Lista y muestra la cámara de los dispositivos con tipo (entrada/salida) derivando la URL WHEP a partir del nombre, el tipo y `NEXT_PUBLIC_MEDIAMTX_URL`, con reconexión automática. Por capacidad de las Raspberry, cada dispositivo expone una sola cámara/stream. |
 | Lotes | Consulta de lotes, búsqueda por producto, filtro por estado y sector (en la URL), KPIs y tabla histórica. |
-| Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada opcionalmente a un lote abierto, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si el lote seleccionado está en `SUPERVISION` o `AUTOMATICO`, o si se elige «Sin lote» y hay un lote abierto automático; el selector de lote sigue habilitado para poder elegir uno en `MANUAL`. |
+| Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada a un lote abierto en modo `MANUAL`, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si no hay un lote abierto o si el lote está en `SUPERVISION` o `AUTOMATICO`; para enviar, el lote debe estar en `MANUAL` (se cambia desde Control del lote). El historial muestra `Pendiente` (encolada), `Aplicada` (confirmada por ack de la Pi) y `Rechazada` (no se pudo encolar), junto con el `decisionId` cuando existe; `exitosa` sigue presente por compatibilidad con respuestas viejas. |
 | Línea de producción | Vista por sector del lote abierto: modo de operación, setpoints contra el rango del producto, KPIs de calidad y alertas activas del sector. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
 | Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de dispositivos asignados. La gestión requiere rol Supervisor o Administrador. |
@@ -224,14 +224,14 @@ iniciando.
 
 | Ruta | Descripción |
 |---|---|
-| `/` | Dashboard operativo: métricas calculadas de los lotes, accesos a módulos y estado general. |
+| `/` | Dashboard operativo: métricas calculadas de los lotes, merma observada (unidades y tasa), alertas activas del backend, promedio de temperatura real por sector con lote abierto, accesos a módulos y estado general. |
 | `/login` | Inicio de sesión con email/contraseña o Google, según la configuración disponible. |
 | `/unauthorized` | Pantalla mostrada cuando el rol no alcanza la regla de acceso aplicada. |
 | `/usuarios` | Administración de usuarios, roles y estado activo. |
 | `/lotes` | Lotes y datos históricos con filtros locales, KPIs y tabla de supervisión. |
 | `/lotes/<id>/control` | Control automático/supervisión de un lote: modo (`MANUAL`, `SUPERVISION`, `AUTOMATICO`), Iniciar/Detener, estado del MPC, propuesta pendiente y confianza del modelo. |
 | `/linea-produccion` | Vista por sector del lote abierto: modo, setpoints, KPIs de calidad y alertas activas. |
-| `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto o sin lote, última telemetría real de la Pi por sector/lote e historial de consignas. |
+| `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto en modo `MANUAL`, última telemetría real de la Pi por sector/lote e historial de consignas. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
 | `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
@@ -295,7 +295,7 @@ especificación completa del backend.
 | `GET /api/v1/dispositivos/events` | SSE de estado y métricas de dispositivos. | `Accept: text/event-stream`. |
 | `GET /api/v1/horno` | Última telemetría real del horno de un sector en `/horno/consigna` (proyección de `metricas_horno`). | `sector_id` obligatorio; si el sector no existe (404), degrada a `null`. |
 | `GET /api/v1/horno/consigna/historial` | Historial de consignas del lote seleccionado. | `loteId` obligatorio; un 404 degrada a lista vacía. |
-| `POST /api/v1/horno/consigna` | Envío de una consigna manual al horno del sector; el campo `usuario` se completa desde la sesión. | JSON `{ sectorId, productoId, temperaturaObjetivo, velocidadCintaObjetivo, loteId?, usuario? }`. |
+| `POST /api/v1/horno/consigna` | Envío de una consigna manual al horno del sector. Requiere un lote abierto en modo `MANUAL`; el backend la encola para la Pi y la aplicación se confirma por ack en `decisiones_control`. El campo `usuario` se completa desde la sesión. | JSON `{ sectorId, productoId, temperaturaObjetivo, velocidadCintaObjetivo, loteId, usuario? }`. |
 | `GET /api/v1/alertas` | Listado de alertas en `/alertas` y alertas activas de `/linea-produccion`. | `estado=ACTIVA\|ACK\|RESUELTA`; un 404 degrada a lista vacía. |
 | `POST /api/v1/alertas/{id}/ack` | Acuse de recibo de una alerta. | Sin cuerpo; 409 si la alerta ya fue reconocida o resuelta. |
 
@@ -399,7 +399,7 @@ consultas tienen un timeout de 8 segundos y exponen el error si se agota.
 | Login Google no aparece o falla | Definir el `NEXT_PUBLIC_GOOGLE_CLIENT_ID` público correspondiente y reconstruir. El login local no depende de esa variable. |
 | Se cambió una variable en Vercel pero el cliente conserva el valor anterior | Las variables `NEXT_PUBLIC_*` del cliente se inlinéan en build: hacer un nuevo deploy/build, no solo reiniciar. |
 | Redirección inesperada a login o unauthorized | Revisar `session_token`, su expiración y el rol contenido en el payload. `/supervision` requiere `Supervisor` o `Administrador`. |
-| El formulario de consigna manual está bloqueado | El lote seleccionado —o algún lote abierto, si está en «Sin lote»— está en `SUPERVISION` o `AUTOMATICO`. Cambialo a `MANUAL` desde el control del lote. |
+| El formulario de consigna manual está bloqueado | No hay un lote abierto en el sector, o el lote seleccionado está en `SUPERVISION` o `AUTOMATICO`. Abrí un lote o cambialo a `MANUAL` desde el control del lote. |
 
 ## Despliegue
 

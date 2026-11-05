@@ -179,20 +179,37 @@ Definidas en `@layer components` de `app/globals.css`:
 
 ### Formulario de consigna bloqueado (`/horno/consigna`)
 
-Cuando el lote seleccionado está en `SUPERVISION` o `AUTOMATICO` —o cuando se
-elige «Sin lote» y hay un lote abierto automático— el formulario muestra un
-aviso y deshabilita la edición:
+Cuando no hay un lote abierto en el sector, o el lote seleccionado está en
+`SUPERVISION` o `AUTOMATICO`, el formulario muestra un aviso y deshabilita la
+edición:
 
 | Elemento | Tratamiento |
 |---|---|
 | Aviso | `role="alert"`, contenedor `rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning`, ícono `AlertTriangle`, título «Consigna manual bloqueada» y motivo en `text-warning/80`. |
 | Campos | Producto, temperatura y velocidad de cinta deshabilitados (`disabled:cursor-not-allowed disabled:opacity-60`). |
 | Botón «Enviar consigna» | Deshabilitado. |
-| Selector de lote | **Habilitado**, para poder elegir un lote en `MANUAL` sin salir de la página. |
+| Selector de lote | Habilitado, pero sólo muestra el lote abierto del sector. Si está en modo automático, cambialo desde Control del lote. |
 | Validación por campo | Mensaje en `text-destructive`; el rango permitido se muestra como ayuda en `text-xs text-muted-foreground`. |
-| Diálogo de confirmación | Ícono en `bg-warning/10 text-warning`; advierte que la consigna se envía al backend y la Raspberry la aplica en el próximo ciclo de control. |
+| Diálogo de confirmación | Ícono en `bg-warning/10 text-warning`; advierte que la consigna se encola para la Pi y la Pi la aplicará en el próximo ciclo, confirmando por ack. |
 
 El color de atención usa el token `warning`; no se introducen colores nuevos.
+
+### Badge de resultado en el historial de consignas (`/horno/consigna`)
+
+La tabla de historial usa el campo `estado` como fuente de verdad y conserva
+`exitosa` como fallback para respuestas legacy:
+
+| Estado | Badge | Color |
+|---|---|---|
+| `APLICADA` | «Aplicada» | `bg-success/10 text-success` con punto `bg-success`. |
+| `PENDIENTE` | «Pendiente» | `bg-warning/10 text-warning` con punto `bg-warning`. |
+| `RECHAZADA` | «Rechazada» | `bg-destructive/10 text-destructive` con punto `bg-destructive`. |
+| Sin `estado` y `exitosa=true` | «Enviada» | `bg-success/10 text-success` con punto `bg-success`. |
+| Sin `estado` y `exitosa=false` | «Rechazada» | `bg-destructive/10 text-destructive` con punto `bg-destructive`. |
+
+Debajo del badge se muestra, en `font-mono text-[10px] text-muted-foreground`,
+los primeros 8 caracteres del `decisionId` con `title` completo; si no hay
+`decisionId` se muestra `—`.
 
 ### Aprobación de propuesta del MPC (`ControlCard`, modo `SUPERVISION`)
 

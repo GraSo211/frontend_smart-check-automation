@@ -1746,13 +1746,15 @@ export type ConsignaManualInput = {
     productoId: string
     temperaturaObjetivo: number
     velocidadCintaObjetivo: number
-    loteId?: string
+    loteId: string
 }
 
 /**
  * POST /api/v1/horno/consigna — envía una consigna manual al horno del sector.
- * El backend requiere JWT cookie y acepta roles Operario/Supervisor/Admin. El
- * `usuario` se completa desde la sesión decodificada, no desde el formulario.
+ * Requiere un lote abierto en modo MANUAL; el backend la encola para la Pi y
+ * la aplicación se confirma por ack en `decisiones_control`. El backend requiere
+ * JWT cookie y acepta roles Operario/Supervisor/Admin. El `usuario` se completa
+ * desde la sesión decodificada, no desde el formulario.
  */
 export async function enviarConsignaManual(
     input: ConsignaManualInput,
@@ -1767,9 +1769,10 @@ export async function enviarConsignaManual(
         parse: parseConsigna,
         invalidMessage: "La API devolvió una consigna inválida.",
         statusMessages: {
-            404: "El horno no existe.",
+            404: "El lote no existe.",
+            409: "El lote no está abierto o no está en modo MANUAL.",
             422: "El producto no tiene parámetros o los valores están fuera del rango seguro.",
-            502: "El horno rechazó la consigna.",
+            502: "No se pudo encolar la consigna para la Pi.",
         },
         revalidatePaths: ["/horno/consigna", "/linea-produccion", "/lotes"],
     })

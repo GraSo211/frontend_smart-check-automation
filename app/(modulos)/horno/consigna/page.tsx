@@ -74,8 +74,8 @@ export default async function Page({ searchParams }: PageProps) {
         }
       }
     } catch {
-      // El lote abierto es opcional: si falla, se deja sin opción de lote
-      // pero el formulario sigue usable.
+      // El lote abierto es requerido en modo MANUAL: si falla, se deja sin
+      // opción de lote y el formulario queda bloqueado.
     }
   }
 
@@ -121,8 +121,8 @@ export default async function Page({ searchParams }: PageProps) {
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Elegí un sector: cada uno tiene su horno con telemetría de la Pi. La consigna de
-            temperatura y velocidad de cinta se envía al horno de ese sector y queda asociada al
-            lote que elijas.
+            temperatura y velocidad de cinta requiere un lote abierto en modo MANUAL; se encola
+            para la Pi y queda asociada a ese lote.
           </p>
         </header>
 

@@ -117,11 +117,11 @@ export function ConsignaForm({
       productoId: selectedProducto.id,
       temperaturaObjetivo: parseFloat(temp),
       velocidadCintaObjetivo: parseFloat(vel),
-      ...(loteId ? { loteId } : {}),
+      loteId,
     })
 
     if (result.ok) {
-      toast.success("Consigna enviada al horno.")
+      toast.success("Consigna encolada para la Pi.")
       setConfirmOpen(false)
     } else {
       const description = result.errors?.join(" · ") ?? "Ocurrió un error inesperado."
@@ -135,8 +135,8 @@ export function ConsignaForm({
   }
 
   const disableCampos = productos.length === 0 || isPending || Boolean(bloqueadaPorModo)
-  const disableLote = productos.length === 0 || isPending
-  const selectedLoteLabel = loteOptions.find((l) => l.id === loteId)?.label ?? "Sin lote"
+  const disableLote = productos.length === 0 || isPending || loteOptions.length === 0
+  const selectedLoteLabel = loteOptions.find((l) => l.id === loteId)?.label ?? "Sin lote abierto"
 
   return (
     <Card className="border-border bg-card">
@@ -147,8 +147,8 @@ export function ConsignaForm({
         </div>
         <CardTitle className="text-base font-semibold">Consigna manual del horno</CardTitle>
         <CardDescription>
-          Elegí producto, temperatura y velocidad de cinta. La consigna se envía al horno del sector
-          seleccionado; la telemetría de la Pi reflejará el valor aplicado por el controlador.
+          Elegí producto, temperatura y velocidad de cinta. La consigna se encola para la Pi del
+          sector seleccionado; la Pi la aplicará en el próximo ciclo y confirma por ack.
         </CardDescription>
       </CardHeader>
 
@@ -287,12 +287,15 @@ export function ConsignaForm({
                 disabled={disableLote}
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-8 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <option value="">Sin lote</option>
-                {loteOptions.map((lote) => (
-                  <option key={lote.id} value={lote.id}>
-                    {lote.label}
-                  </option>
-                ))}
+                {loteOptions.length === 0 ? (
+                  <option value="">Sin lote abierto</option>
+                ) : (
+                  loteOptions.map((lote) => (
+                    <option key={lote.id} value={lote.id}>
+                      {lote.label}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>
@@ -329,8 +332,8 @@ export function ConsignaForm({
               Confirmar envío
             </DialogTitle>
             <DialogDescription>
-              Esta acción se envía al horno del sector seleccionado. La telemetría de la Pi
-              reflejará el valor aplicado por el controlador.
+              Esta acción encola la consigna para la Pi del sector seleccionado. La Pi la aplicará
+              en el próximo ciclo y confirma por ack.
             </DialogDescription>
           </DialogHeader>
 

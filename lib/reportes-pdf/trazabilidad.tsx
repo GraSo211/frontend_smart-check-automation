@@ -437,6 +437,19 @@ function ConfianzaTable({ filas }: { filas: ReporteTrazabilidadConfianza[] }) {
   )
 }
 
+function formatoResultadoConsigna(fila: ReporteTrazabilidadConsigna): string {
+  switch (fila.estado) {
+    case "APLICADA":
+      return "Aplicada"
+    case "PENDIENTE":
+      return "Pendiente"
+    case "RECHAZADA":
+      return `Error: ${fila.motivo_error ?? "sin detalle"}`
+    default:
+      return fila.exitosa ? "Enviada" : `Error: ${fila.motivo_error ?? "sin detalle"}`
+  }
+}
+
 function ConsignasTable({ filas }: { filas: ReporteTrazabilidadConsigna[] }) {
   if (filas.length === 0) return <EmptyBlock />
   return (
@@ -458,9 +471,7 @@ function ConsignasTable({ filas }: { filas: ReporteTrazabilidadConsigna[] }) {
           <Text style={[styles.cell, styles.cellNum, { width: 74 }]}>
             {formatVel(fila.velocidad_cinta_objetivo)}
           </Text>
-          <Text style={[styles.cell, { width: 225 }]}>
-            {fila.exitosa ? "Exitosa" : `Error: ${fila.motivo_error ?? "sin detalle"}`}
-          </Text>
+          <Text style={[styles.cell, { width: 225 }]}>{formatoResultadoConsigna(fila)}</Text>
         </View>
       ))}
     </View>

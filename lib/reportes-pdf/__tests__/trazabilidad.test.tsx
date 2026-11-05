@@ -103,6 +103,8 @@ function buildData(): ReporteTrazabilidadData {
         origen: "MANUAL",
         usuario: "operario",
         exitosa: true,
+        estado: "APLICADA",
+        decision_id: "c1d2e3f4-5678-90ab-cdef-1234567890ab",
         motivo_error: null,
         temperatura_previa: 179,
         velocidad_cinta_previa: 0.19,

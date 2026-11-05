@@ -302,8 +302,12 @@ export type ProductoRequest = {
 }
 
 /**
- * Consigna aplicada al horno, manual o automática. El backend devuelve la
- * entidad en camelCase en POST /api/v1/horno/consigna y en el historial.
+ * Consigna manual o automática. El backend devuelve la entidad en camelCase en
+ * POST /api/v1/horno/consigna y en el historial.
+ * - `estado` es la fuente de verdad: `PENDIENTE` = encolada esperando ack de la
+ *   Pi; `APLICADA` = confirmada por ack de la Pi; `RECHAZADA` = no se pudo
+ *   encolar. `exitosa` queda por compatibilidad con backends previos.
+ * - `decisionId` es el UUID de la decisión encolada (null cuando no aplica).
  */
 export type Consigna = {
   id: string
@@ -314,7 +318,11 @@ export type Consigna = {
   velocidadCintaObjetivo: number
   origen: "MANUAL" | "AUTOMATICO"
   usuario?: string | null
+  /** Legacy/compatibility; prefer `estado`. */
   exitosa: boolean
+  /** `PENDIENTE` | `APLICADA` | `RECHAZADA` o un valor string de transición. */
+  estado?: "PENDIENTE" | "APLICADA" | "RECHAZADA" | string | null
+  decisionId?: string | null
   motivoError?: string | null
   temperaturaPrevia?: number | null
   velocidadCintaPrevia?: number | null

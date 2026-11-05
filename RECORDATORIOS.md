@@ -12,18 +12,29 @@
   204 limpia el estado (la Pi ya la aplicó) y el evento SSE `control.propuesta`
   también actualiza la propuesta.
 - **Bloqueo de consigna manual por modo**: `/horno/consigna` bloquea el envío
-  cuando el lote está en `SUPERVISION` o `AUTOMATICO`, y también con «Sin lote»
-  si hay un lote abierto automático, manteniendo habilitado el selector de lote.
+  cuando no hay un lote abierto en el sector o cuando el lote no está en
+  `MANUAL`. El selector de lote sólo muestra el lote abierto del sector.
   Cubierto por `components/horno/__tests__/consigna-form.test.tsx` y
   `lib/__tests__/consigna-validation.test.ts`.
 - **Documentación de instalación**: `MANUAL_INSTALACION.md` cubre requisitos,
-  variables de entorno, ejecución, despliegue y la verificación funcional de
-  `/horno/consigna`.
+  variables de entorno, ejecución y despliegue. La sección de verificación de
+  `/horno/consigna` fue removida; esa cobertura vive en los tests de la tarjeta
+  y del formulario.
 - **Telemetría real en `/horno/consigna`**: `GET /api/v1/horno` ahora proyecta
   `metricas_horno` en `HornoEstado`; la tarjeta muestra T1, velocidad de cinta,
   temperatura de combustión, humedades, objetivos y confianza, con estados
   `SIN_LOTE`, `SIN_TELEMETRIA`, `SIN_DATOS`, `DESACTUALIZADO` y `CONTROL_MANUAL`.
   El copy de consigna manual ya no habla de "horno simulado".
+- **KPIs reales en el home**: el dashboard ya no muestra "ahorro potencial" ni
+  un impacto estimado fijo del 15%. Ahora consulta `getAlertas(ACTIVA)` para
+  el conteo de alertas activas y `getHornoEstado` por sector con lote abierto
+  para el promedio de temperatura. La merma se presenta como dato observado
+  (unidades y tasa) sin proyección económica ni constantes inventadas.
+- **Estados del historial de consignas**: el badge de resultado ahora distingue
+  `Pendiente`/`Aplicada`/`Rechazada` usando el campo `estado`, muestra los
+  primeros 8 caracteres del `decisionId` bajo el badge, y conserva `exitosa`
+  como fallback para backends que todavía no envíen `estado`. Cubierto por
+  `components/horno/__tests__/consigna-historial.test.tsx`.
 
 ## Endpoints de control ya implementados en el backend Go
 
@@ -41,7 +52,7 @@ visión» en `ControlCard`) ya están en la UI y el backend los expone. El clien
 ## Pendientes
 
 - **Verificación visual en navegador real**: los estados de `/horno/consigna`
-  (aviso de bloqueo, campos deshabilitados, selector de lote habilitado) y del
+  (aviso de bloqueo, campos deshabilitados, selector con el lote abierto) y del
   `ControlCard` (sin propuesta / pendiente / aprobada esperando a la Pi) están
   cubiertos con tests jsdom y unitarios, pero falta revisarlos en un navegador
   con backend y Raspberry reales.

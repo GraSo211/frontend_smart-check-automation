@@ -66,10 +66,10 @@ describe("panel principal sin base evaluable", () => {
     )
 
     expect(html).toContain("consulta no disponible")
-    expect(html).toContain("Sin datos para evaluar")
-    expect(html).toContain("Consulta no disponible")
+    expect(html).toContain("Sin datos")
+    expect(html).toContain("Sin datos de producción")
     expect(html).not.toContain("0 unidades")
-    expect(html).not.toContain("Sin desvíos críticos")
+    expect(html).not.toContain("Sin alertas activas")
   })
 
   it("mantiene conteos cero para un vacío válido, pero no inventa alertas", () => {
@@ -83,27 +83,41 @@ describe("panel principal sin base evaluable", () => {
 
     expect(html).toContain(">0</strong> unidades")
     expect(html).toContain(">0</strong> lotes consultados")
-    expect(html).toContain("Sin datos para evaluar")
-    expect(html).not.toContain("Sin desvíos críticos")
+    expect(html).toContain("Sin datos")
+    expect(html).toContain("Sin telemetría de la Pi")
+    expect(html).not.toContain("Sin alertas activas")
   })
 
-  it("calcula los indicadores reales desde conteos y deja kg/temperatura como placeholder", () => {
+  it("calcula los indicadores reales desde conteos y refleja alertas y temperatura reales", () => {
     const runs = [lote()]
     monitoringMocks.useProductionData.mockReturnValue({ runs, lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
     const html = renderToStaticMarkup(
-      React.createElement(HomeDashboard, { runs, lastSyncAt: new Date().toISOString() }),
+      React.createElement(HomeDashboard, {
+        runs,
+        lastSyncAt: new Date().toISOString(),
+        alertasActivas: 1,
+        temperaturaPromedio: 200,
+      }),
     )
 
     // Real metrics derived from `conteos`.
     expect(html).toContain(">100</strong> unidades")
     expect(html).toContain(">1</strong> lotes consultados")
     expect(html).toContain("90.0%")
-    expect(html).toContain("Requieren atención")
+
+    // Real KPIs from the backend.
+    expect(html).toContain("Activas en el backend")
+    expect(html).toContain("200 °C")
+
+    // Observed waste (10 quemados + crudos sobre 100 units).
+    expect(html).toContain("10 u")
+    expect(html).toContain("10%")
 
     // kg is no longer provided: the hero must not fabricate a weight.
     expect(html).not.toContain("kg")
-    // Oven temperature is unavailable: it renders "—" with a "Sin medición" hint.
-    expect(html).toContain("Sin medición")
+    // No invented economic projection or fixed 15% assumption.
+    expect(html).not.toContain("15%")
+    expect(html).not.toContain("$")
   })
 
   it("trata un bucket nulo como ausente: no publica 0% de calidad", () => {
@@ -127,8 +141,10 @@ describe("panel principal sin base evaluable", () => {
     expect(html).toContain(">100</strong> unidades")
     // Sin bucket `ok` los correctos se derivan del total menos los defectos.
     expect(html).toContain("90.0%")
-    // The waste-based cards still have a real bucket to work with.
-    expect(html).toContain("unidades recuperables")
+    // The waste cards show the observed values, not a projection.
+    expect(html).toContain("10 u")
+    expect(html).toContain("10%")
+    expect(html).not.toContain("$")
   })
 
   it("no publica merma cuando ningún lote emite quemado ni crudo", () => {
@@ -140,6 +156,7 @@ describe("panel principal sin base evaluable", () => {
 
     expect(html).toContain("90.0%")
     expect(html).not.toContain("unidades recuperables")
-    expect(html).not.toContain("15% menos")
+    expect(html).not.toContain("15%")
+    expect(html).not.toContain("$")
   })
 })
