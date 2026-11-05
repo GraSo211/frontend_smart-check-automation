@@ -4,7 +4,7 @@ import { decodeSessionToken, isSessionExpired, ROLE_LEVEL, type UserRole } from 
 // ─── Configuración de rutas ───────────────────────────────────────────────────
 
 /** Rutas que NO requieren autenticación */
-const PUBLIC_PATHS = ['/login', '/unauthorized']
+const PUBLIC_PATHS = ['/login', '/unauthorized', '/inicio']
 
 /** Mínimo rol requerido por prefijo de ruta */
 const PROTECTED_ROUTES: Array<{ prefix: string; minRole: UserRole }> = [
@@ -38,6 +38,10 @@ export default function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value
 
   if (!token) {
+    // La home sin sesión es el landing público; se mantiene la URL "/".
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/inicio', request.url))
+    }
     return redirectToLogin(request)
   }
 
