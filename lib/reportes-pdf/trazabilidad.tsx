@@ -65,7 +65,7 @@ export function ReporteTrazabilidad({ data, generatedAt }: ReporteTrazabilidadPr
   return (
     <Document
       title={`Trazabilidad ${lote.id}`}
-      author="Fermar S.A. · Smart-Check Automation"
+      author="Fermar S.A. · SmartCheck Automation"
       subject="Trazabilidad de lote"
     >
       <Page size="A4" style={styles.page} wrap>
@@ -133,7 +133,7 @@ function PageHeader({
     <View style={styles.header}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={styles.brand}>Fermar S.A. · Smart-Check Automation</Text>
+          <Text style={styles.brand}>Fermar S.A. · SmartCheck Automation</Text>
           <Text style={styles.title}>Trazabilidad de lote</Text>
         </View>
         <View style={styles.headerRight}>

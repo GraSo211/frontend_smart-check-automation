@@ -3,7 +3,6 @@
 import { ImportacionCard } from "@/components/planificacion/importacion-card"
 import { PlanificacionDatos } from "@/components/planificacion/planificacion-datos"
 import type {
-  PlanificacionEnergiaItem,
   PlanificacionLista,
   PlanificacionParadaItem,
   PlanificacionPlanItem,
@@ -27,34 +26,25 @@ const TARJETAS: {
     description:
       "Eventos de parada de línea: mantenimiento, limpieza, cambios, etc. Pueden estar asociados a un lote o ser genéricos.",
   },
-  {
-    tipo: "energia",
-    title: "Energía",
-    description:
-      "Lecturas de consumo eléctrico (kWh) y gas (m³) por sector y período. Usadas para el cálculo de intensidad energética.",
-  },
 ]
 
 interface PlanificacionViewProps {
   plan: PlanificacionLista<PlanificacionPlanItem>
   paradas: PlanificacionLista<PlanificacionParadaItem>
-  energia: PlanificacionLista<PlanificacionEnergiaItem>
   errors: {
     plan?: string
     paradas?: string
-    energia?: string
   }
 }
 
 export function PlanificacionView({
   plan,
   paradas,
-  energia,
   errors,
 }: PlanificacionViewProps) {
   return (
     <div className="space-y-8">
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         {TARJETAS.map((tarjeta) => (
           <ImportacionCard key={tarjeta.tipo} {...tarjeta} />
         ))}
@@ -63,7 +53,6 @@ export function PlanificacionView({
       <PlanificacionDatos
         plan={plan}
         paradas={paradas}
-        energia={energia}
         errors={errors}
       />
     </div>

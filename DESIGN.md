@@ -1,4 +1,4 @@
-# Smart-Check Automation — Referencia de diseño
+# SmartCheck Automation — Referencia de diseño
 
 Sistema de diseño del panel de supervisión de producción de Fermar S.A. La
 interfaz usa un **sistema de temas dual**: la identidad **Fermar** (cálida, en

@@ -72,7 +72,7 @@ export function ReporteOperativo({
   return (
     <Document
       title="Reporte operativo"
-      author="Fermar S.A. · Smart-Check Automation"
+      author="Fermar S.A. · SmartCheck Automation"
       subject="Reporte operativo del período"
     >
       <Page size="A4" style={styles.page} wrap>
@@ -151,7 +151,7 @@ function PageHeader({
     <View style={styles.header}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={styles.brand}>Fermar S.A. · Smart-Check Automation</Text>
+          <Text style={styles.brand}>Fermar S.A. · SmartCheck Automation</Text>
           <Text style={styles.title}>Reporte operativo</Text>
         </View>
         <View style={styles.headerRight}>
@@ -608,20 +608,12 @@ function formatOEEMotivo(motivo: string): string {
       return "Sin plan de producción cargado"
     case "sin_produccion":
       return "Sin producción en el período"
-    case "sin_lecturas_energia":
-      return "Sin lecturas de energía"
     default:
       if (motivo.startsWith("sin_capacidad_producto:")) {
         return "Producto sin capacidad nominal configurada"
       }
       return motivo
   }
-}
-
-function formatUnit(value: number | null | undefined, unit: string): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—"
-  const formatted = value.toLocaleString("es-AR", { maximumFractionDigits: 3 })
-  return unit ? `${formatted} ${unit}` : formatted
 }
 
 function OEECallout({ motivos, title }: { motivos: string[]; title: string }) {
@@ -648,18 +640,17 @@ function OEEPage({ oee }: { oee: ReporteOEE | null }) {
   if (!oee) {
     return (
       <View>
-        <SectionTitle>OEE y energía</SectionTitle>
+        <SectionTitle>OEE</SectionTitle>
         <OEECallout title="OEE no disponible" motivos={[]} />
       </View>
     )
   }
 
   const { global } = oee
-  const energy = global.energy
 
   return (
     <View>
-      <SectionTitle>OEE y energía</SectionTitle>
+      <SectionTitle>OEE</SectionTitle>
       {!global.calculable ? (
         <OEECallout title="OEE no calculable" motivos={global.motivos} />
       ) : null}
@@ -710,14 +701,6 @@ function OEEPage({ oee }: { oee: ReporteOEE | null }) {
         </View>
       </View>
 
-      <SectionTitle>Energía</SectionTitle>
-      <View style={styles.kpiGridSmall}>
-        <Kpi compact label="Consumo" value={formatUnit(energy?.kwh, "kWh")} />
-        <Kpi compact label="Gas" value={formatUnit(energy?.gas_m3, "m³")} />
-        <Kpi compact label="kWh / kg OK" value={formatUnit(energy?.kwh_por_kg_ok, "kWh/kg")} />
-        <Kpi compact label="m³ / kg OK" value={formatUnit(energy?.gas_m3_por_kg_ok, "m³/kg")} />
-      </View>
-
       <SectionTitle>OEE por sector</SectionTitle>
       {oee.por_sector.length === 0 ? (
         <EmptyBlock message="Sin sectores con datos de OEE en el período" />
@@ -729,7 +712,6 @@ function OEEPage({ oee }: { oee: ReporteOEE | null }) {
             <Text style={[styles.cell, styles.cellNum, { width: 62 }]}>A</Text>
             <Text style={[styles.cell, styles.cellNum, { width: 62 }]}>P</Text>
             <Text style={[styles.cell, styles.cellNum, { width: 62 }]}>Q</Text>
-            <Text style={[styles.cell, styles.cellNum, { width: 80 }]}>kWh/kg OK</Text>
           </View>
           {oee.por_sector.map((row) => (
             <View key={row.sector_id} style={styles.tableRow}>
@@ -747,9 +729,6 @@ function OEEPage({ oee }: { oee: ReporteOEE | null }) {
               </Text>
               <Text style={[styles.cell, styles.cellNum, { width: 62 }]}>
                 {formatPercent(row.quality_pct)}
-              </Text>
-              <Text style={[styles.cell, styles.cellNum, { width: 80 }]}>
-                {formatUnit(row.energy?.kwh_por_kg_ok, "")}
               </Text>
             </View>
           ))}

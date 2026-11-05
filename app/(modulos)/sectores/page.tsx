@@ -7,7 +7,7 @@ import type { Sector } from "@/lib/production-data"
 import { SectorManagement } from "@/components/sectores/sector-management"
 
 export const metadata: Metadata = {
-  title: "Sectores | Smart-Check Automation",
+  title: "Sectores | SmartCheck Automation",
   description: "Administración de los sectores productivos y su relación con los dispositivos.",
 }
 

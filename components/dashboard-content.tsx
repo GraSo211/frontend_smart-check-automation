@@ -107,7 +107,7 @@ export function HomeDashboard({
         <div>
           <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-primary"><Factory className="size-4" aria-hidden="true" /> Centro de operaciones</p>
           <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Buen día, equipo</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Todo lo importante de Smart-Check Automation, en un solo lugar.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Todo lo importante de SmartCheck Automation, en un solo lugar.</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground/60" /> Monitoreo: {availabilityLabel(monitoring.overall.availability)} · {monitoring.overall.detail} · {userRole}</div>
       </header>

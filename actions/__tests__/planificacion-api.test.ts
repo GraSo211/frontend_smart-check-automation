@@ -75,7 +75,7 @@ describe("listado de planificación del backend", () => {
 
     it("rechaza envelopes e items inválidos", async () => {
         fetchMock.mockResolvedValue(json({ success: false, message: "nope" }))
-        await expect(api.getPlanificacionLista("energia")).rejects.toThrow(
+        await expect(api.getPlanificacionLista("paradas")).rejects.toThrow(
             "La API devolvió una lista de planificación inválida.",
         )
 
@@ -83,7 +83,7 @@ describe("listado de planificación del backend", () => {
             success: true,
             data: { total: 1, truncada: false, items: [{ id: "x" }] },
         }))
-        await expect(api.getPlanificacionLista("energia")).rejects.toThrow(
+        await expect(api.getPlanificacionLista("paradas")).rejects.toThrow(
             "La API devolvió una lista de planificación inválida.",
         )
     })

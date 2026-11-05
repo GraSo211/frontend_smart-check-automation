@@ -24,20 +24,20 @@ export function Footer() {
         <div className="flex items-center justify-center gap-4">
           <Image
             src="/sca/logo_horizontal.svg"
-            alt="Smart-Check Automation"
+            alt="SmartCheck Automation"
             width={100}
             height={44}
             className="h-10 w-auto shrink-0"
           />
           <Image
             src="/fermar/imagotipo-principal.webp"
-            alt="Smart-Check Automation"
+            alt="SmartCheck Automation"
             width={100}
             height={44}
             className="h-10 w-auto shrink-0"
           />
           <p className="text-xs text-sidebar-foreground/65">
-            Smart-Check Automation © 2026 | Desarrollado por SmarTeam – Sistema 
+            SmartCheck Automation © 2026 | Desarrollado por SmarTeam – Sistema 
             de Control de Calidad Industrial.
           </p>
         </div>

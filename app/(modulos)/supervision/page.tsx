@@ -5,7 +5,7 @@ import type { Sector } from "@/lib/production-data"
 import SupervisionView from "@/components/supervision/supervision-view"
 
 export const metadata: Metadata = {
-  title: "Supervisión en Vivo | Smart-Check Automation",
+  title: "Supervisión en Vivo | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

@@ -1,6 +1,6 @@
-# Smart-Check Automation
+# SmartCheck Automation
 
-Frontend de **Smart-Check Automation** para la supervisión de producción de la
+Frontend de **SmartCheck Automation** para la supervisión de producción de la
 panificadora industrial **Fermar S.A.**. Centraliza el estado de la operación,
 los lotes, la telemetría IoT Edge, los parámetros de producto, los usuarios y la
 supervisión de video en vivo.
@@ -37,7 +37,7 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Dispositivos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y baja de dispositivos. La URL WHEP de la cámara se deriva del nombre y el tipo y es de solo lectura en el panel; el nombre se sincroniza con la Raspberry, que es la fuente de verdad. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
 | Alertas | Listado de alertas operativas con filtro por estado (`ACTIVA`, `ACK`, `RESUELTA`, `TODAS`) y acuse de recibo para Supervisor y Administrador. |
-| Reportes | Centro de reportes con KPIs de producción, calidad, proceso, alertas, MPC y OEE (A/P/Q + energía). Filtros por rango de fechas (ART), sector, producto y turno; descarga del detalle en CSV, CSV para Excel es-AR, JSON y PDF operativo, alertas del período en CSV/JSON, y PDF/CSV de trazabilidad por lote con métricas, consignas, alertas y decisiones MPC. |
+| Reportes | Centro de reportes con KPIs de producción, calidad, proceso, alertas, MPC y OEE (A/P/Q). Filtros por rango de fechas (ART), sector, producto y turno; descarga del detalle en CSV, CSV para Excel es-AR, JSON y PDF operativo, alertas del período en CSV/JSON, y PDF/CSV de trazabilidad por lote con métricas, consignas, alertas y decisiones MPC. |
 
 ## Stack y servicios
 
@@ -235,8 +235,8 @@ iniciando.
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
 | `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
-| `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE/energía, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
-| `/planificacion` | Importación CSV de plan de producción, paradas y lecturas de energía para habilitar OEE; rechaza planes solapados por sector, lista lo cargado con eliminación y permite editar reimportando el CSV (upsert). Requiere Supervisor o Administrador. |
+| `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
+| `/planificacion` | Importación CSV de plan de producción y paradas para habilitar OEE; rechaza planes solapados por sector, lista lo cargado con eliminación y permite editar reimportando el CSV (upsert). Requiere Supervisor o Administrador. |
 | `/supervision` | Lista los dispositivos con cámara derivada, permite cambiar de dispositivo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
 | `/dispositivos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de dispositivos y vista de solo lectura de la URL WHEP derivada. |
 
@@ -319,9 +319,9 @@ servidor.
 | `GET /api/reportes/lotes` | Genera CSV/JSON/PDF a partir de `GET /api/v1/reportes/resumen` y `GET /api/v1/reportes/lotes`; el PDF se renderiza con `@react-pdf/renderer` |
 | `GET /api/reportes/trazabilidad` | Genera el PDF de trazabilidad de un lote, o CSV de `dataset=proceso|alertas|decisiones|consignas`, a partir de `GET /api/v1/reportes/trazabilidad?lote_id=...` |
 | `GET /api/reportes/alertas` | Genera CSV/JSON de alertas del período desde `GET /api/v1/reportes/alertas` |
-| `GET /api/reportes/oee` | Consume `GET /api/v1/reportes/oee` para el bloque OEE/energía del panel y del PDF |
-| `POST /api/planificacion/[tipo]/import` | Reenvía el CSV multipart a `POST /api/v1/planificacion/{plan,paradas,energia}/import` |
-| `GET /api/planificacion/[tipo]` | Lista lo importado desde `GET /api/v1/planificacion/{plan,paradas,energia}` |
+| `GET /api/reportes/oee` | Consume `GET /api/v1/reportes/oee` para el bloque OEE del panel y del PDF |
+| `POST /api/planificacion/[tipo]/import` | Reenvía el CSV multipart a `POST /api/v1/planificacion/{plan,paradas}/import` |
+| `GET /api/planificacion/[tipo]` | Lista lo importado desde `GET /api/v1/planificacion/{plan,paradas}` |
 | `DELETE /api/planificacion/[tipo]/[id]` | Elimina una fila importada vía `DELETE /api/v1/planificacion/{tipo}/{id}` |
 | `GET /api/system-status` | `GET /health` |
 

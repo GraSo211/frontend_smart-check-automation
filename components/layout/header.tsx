@@ -20,7 +20,7 @@ export function Header() {
           <div className="flex size-14 items-center justify-center rounded-xl bg-primary/20 p-1 shadow-sm">
             <Image
               src="/sca/logo_image_only.svg"
-              alt="Smart-Check Automation"
+              alt="SmartCheck Automation"
               width={40}
               height={40}
               className="h-full w-full "
@@ -28,7 +28,7 @@ export function Header() {
           </div>
           <Image
             src="/sca/logo_title.svg"
-            alt="Smart-Check Automation"
+            alt="SmartCheck Automation"
             width={120}
             height={42}
             className="h-10 w-auto"

@@ -1,6 +1,6 @@
 // Contrato de GET /api/v1/reportes/oee.
 // Tasas y promedios viajan como `null` cuando no hay datos; los arrays llegan
-// siempre como `[]` y `energy` puede faltar en respuestas viejas.
+// siempre como `[]`.
 
 export type ReporteOEEPeriodo = {
     desde: string
@@ -10,13 +10,6 @@ export type ReporteOEEPeriodo = {
 
 export type ReporteOEEFiltros = {
     sector_id: string | null
-}
-
-export type ReporteOEEEnergia = {
-    kwh: number | null
-    gas_m3: number | null
-    kwh_por_kg_ok: number | null
-    gas_m3_por_kg_ok: number | null
 }
 
 export type ReporteOEEResumen = {
@@ -36,7 +29,6 @@ export type ReporteOEEResumen = {
     kg_producidos: number
     kg_ok: number
     capacidad_teorica_kg: number
-    energy?: ReporteOEEEnergia
 }
 
 export type ReporteOEE = {

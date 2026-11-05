@@ -27,7 +27,7 @@ export async function POST(
 ) {
     const { tipo } = await context.params
     if (!isTipoImportacion(tipo)) {
-        return errorResponse("Tipo de importación inválido. Usá plan, paradas o energia.", 400)
+        return errorResponse("Tipo de importación inválido. Usá plan o paradas.", 400)
     }
 
     let form: FormData

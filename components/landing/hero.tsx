@@ -42,7 +42,7 @@ export function Hero() {
         <h1
           className="font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl"
         >
-          Smart-Check Automation
+          SmartCheck Automation
         </h1>
 
         {/* Slogan */}

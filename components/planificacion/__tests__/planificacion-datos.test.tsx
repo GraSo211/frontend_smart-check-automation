@@ -44,7 +44,6 @@ describe("PlanificacionDatos", () => {
       ],
     },
     paradas: { total: 0, truncada: false, items: [] },
-    energia: { total: 0, truncada: false, items: [] },
     errors: {},
   }
 
@@ -55,7 +54,6 @@ describe("PlanificacionDatos", () => {
       screen.getByRole("tab", { name: /Plan de producción/i }),
     ).toBeTruthy()
     expect(screen.getByRole("tab", { name: /Paradas/i })).toBeTruthy()
-    expect(screen.getByRole("tab", { name: /Energía/i })).toBeTruthy()
     expect(screen.getByText("Sector 1")).toBeTruthy()
     expect(screen.getByText("Producto 1")).toBeTruthy()
     expect(screen.getByText("1.200")).toBeTruthy()

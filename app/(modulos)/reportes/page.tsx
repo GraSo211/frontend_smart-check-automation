@@ -10,7 +10,7 @@ import type { ReporteResumen } from "@/lib/reportes-types"
 import { parseReporteSearchParams } from "@/lib/reportes"
 
 export const metadata: Metadata = {
-  title: "Reportes | Smart-Check Automation",
+  title: "Reportes | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

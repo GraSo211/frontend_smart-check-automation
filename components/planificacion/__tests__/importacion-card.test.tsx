@@ -63,14 +63,14 @@ describe("ImportacionCard", () => {
 
     render(
       <ImportacionCard
-        tipo="energia"
-        title="Energía"
+        tipo="paradas"
+        title="Paradas"
         description="Desc"
       />,
     )
 
     const input = screen.getByLabelText(/Archivo CSV/i)
-    const file = new File(["csv"], "energia.csv", { type: "text/csv" })
+    const file = new File(["csv"], "paradas.csv", { type: "text/csv" })
     fireEvent.change(input, { target: { files: [file] } })
 
     fireEvent.click(screen.getByRole("button", { name: /^Importar$/i }))

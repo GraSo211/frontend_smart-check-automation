@@ -27,7 +27,6 @@ const resumen = {
     kg_producidos: 600,
     kg_ok: 570,
     capacidad_teorica_kg: 700,
-    energy: { kwh: 300, gas_m3: null, kwh_por_kg_ok: 0.526, gas_m3_por_kg_ok: null },
 }
 
 const payload = {
@@ -80,16 +79,5 @@ describe("getReporteOEE", () => {
         )
 
         await expect(getReporteOEE()).rejects.toThrow("OEE inválido")
-    })
-
-    it("acepta respuestas sin energy", async () => {
-        const sinEnergy = { ...resumen } as Record<string, unknown>
-        delete sinEnergy.energy
-        fetchMock.mockResolvedValue(
-            Response.json({ ...payload, data: { ...payload.data, global: sinEnergy } }),
-        )
-
-        const result = await getReporteOEE()
-        expect(result.global.energy).toBeUndefined()
     })
 })

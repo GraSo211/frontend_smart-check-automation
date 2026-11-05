@@ -26,7 +26,7 @@ export async function GET(
 ) {
     const { tipo } = await context.params
     if (!isTipoImportacion(tipo)) {
-        return errorResponse("Tipo de planificación inválido. Usá plan, paradas o energia.", 400)
+        return errorResponse("Tipo de planificación inválido. Usá plan o paradas.", 400)
     }
 
     const token = (await cookies()).get("session_token")?.value

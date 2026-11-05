@@ -944,23 +944,12 @@ function TypeDistributionCard({
   )
 }
 
-function formatEnergy(
-  value: number | null | undefined,
-  unit: string,
-): string {
-  return value === null || value === undefined
-    ? "—"
-    : `${value.toLocaleString("es-AR", { maximumFractionDigits: 3 })} ${unit}`
-}
-
 function formatOEEMotivo(motivo: string): string {
   switch (motivo) {
     case "sin_plan_produccion":
       return "Sin plan de producción cargado"
     case "sin_produccion":
       return "Sin producción en el período"
-    case "sin_lecturas_energia":
-      return "Sin lecturas de energía"
     default:
       if (motivo.startsWith("sin_capacidad_producto:")) {
         return "Producto sin capacidad nominal configurada"
@@ -1010,7 +999,6 @@ function OEECallout({ motivos }: { motivos: string[] }) {
 
 function OEEDashboard({ oee }: { oee: ReporteOEE }) {
   const global = oee.global
-  const energy = global.energy
 
   return (
     <div className="space-y-6">
@@ -1047,7 +1035,7 @@ function OEEDashboard({ oee }: { oee: ReporteOEE }) {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Tiempos y producción</CardTitle>
@@ -1115,40 +1103,6 @@ function OEEDashboard({ oee }: { oee: ReporteOEE }) {
             </dl>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Energía</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt className="text-xs text-muted-foreground">Consumo kWh</dt>
-                <dd className="font-mono font-medium text-foreground">
-                  {formatEnergy(energy?.kwh, "kWh")}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Gas m³</dt>
-                <dd className="font-mono font-medium text-foreground">
-                  {formatEnergy(energy?.gas_m3, "m³")}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">kWh / kg OK</dt>
-                <dd className="font-mono font-medium text-foreground">
-                  {formatEnergy(energy?.kwh_por_kg_ok, "kWh/kg")}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">m³ / kg OK</dt>
-                <dd className="font-mono font-medium text-foreground">
-                  {formatEnergy(energy?.gas_m3_por_kg_ok, "m³/kg")}
-                </dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
@@ -1194,15 +1148,9 @@ function OEEDashboard({ oee }: { oee: ReporteOEE }) {
                     </th>
                     <th
                       scope="col"
-                      className="py-2 pr-4 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                    >
-                      Q
-                    </th>
-                    <th
-                      scope="col"
                       className="py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground"
                     >
-                      kWh/kg OK
+                      Q
                     </th>
                   </tr>
                 </thead>
@@ -1224,11 +1172,8 @@ function OEEDashboard({ oee }: { oee: ReporteOEE }) {
                       <td className="py-2 pr-4 text-right font-mono tabular-nums text-muted-foreground">
                         {formatPercent(row.performance_pct)}
                       </td>
-                      <td className="py-2 pr-4 text-right font-mono tabular-nums text-muted-foreground">
-                        {formatPercent(row.quality_pct)}
-                      </td>
                       <td className="py-2 text-right font-mono tabular-nums text-muted-foreground">
-                        {formatEnergy(row.energy?.kwh_por_kg_ok, "kWh/kg")}
+                        {formatPercent(row.quality_pct)}
                       </td>
                     </tr>
                   ))}

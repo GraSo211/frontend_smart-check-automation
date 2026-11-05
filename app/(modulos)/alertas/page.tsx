@@ -6,7 +6,7 @@ import type { AlertaEstado } from "@/lib/production-data"
 import { AlertasView } from "@/components/alertas/alertas-view"
 
 export const metadata: Metadata = {
-    title: "Manejo de Alertas | Smart-Check Automation",
+    title: "Manejo de Alertas | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

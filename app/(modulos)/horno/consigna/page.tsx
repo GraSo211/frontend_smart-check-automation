@@ -11,7 +11,7 @@ import { ConsignaPanel } from "@/components/horno/consigna-panel"
 import type { Consigna, HornoEstado, LoteSector, Producto, Sector } from "@/lib/production-data"
 
 export const metadata: Metadata = {
-  title: "Consigna Manual | Smart-Check Automation",
+  title: "Consigna Manual | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

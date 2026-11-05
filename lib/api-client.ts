@@ -1,5 +1,5 @@
 /**
- * Cliente HTTP centralizado para el frontend de Smart-Check Automation.
+ * Cliente HTTP centralizado para el frontend de SmartCheck Automation.
  *
  * Expone `ApiError`, el error tipado que usan las server actions para propagar
  * la sesión expirada (401) y otros fallos del backend Go, y `getBackendUrl()`,

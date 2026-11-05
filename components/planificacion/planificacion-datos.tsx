@@ -20,7 +20,6 @@ import {
   type TipoImportacion,
 } from "@/lib/planificacion"
 import type {
-  PlanificacionEnergiaItem,
   PlanificacionLista,
   PlanificacionParadaItem,
   PlanificacionPlanItem,
@@ -29,24 +28,20 @@ import type {
 interface PlanificacionDatosProps {
   plan: PlanificacionLista<PlanificacionPlanItem>
   paradas: PlanificacionLista<PlanificacionParadaItem>
-  energia: PlanificacionLista<PlanificacionEnergiaItem>
   errors: {
     plan?: string
     paradas?: string
-    energia?: string
   }
 }
 
 const TABS: { id: TipoImportacion; label: string }[] = [
   { id: "plan", label: "Plan de producción" },
   { id: "paradas", label: "Paradas" },
-  { id: "energia", label: "Energía" },
 ]
 
 export function PlanificacionDatos({
   plan,
   paradas,
-  energia,
   errors,
 }: PlanificacionDatosProps) {
   const [activeTab, setActiveTab] = useState<TipoImportacion>("plan")
@@ -103,9 +98,6 @@ export function PlanificacionDatos({
             ) : null}
             {activeTab === "paradas" ? (
               <ParadasTable data={paradas} error={errors.paradas} />
-            ) : null}
-            {activeTab === "energia" ? (
-              <EnergiaTable data={energia} error={errors.energia} />
             ) : null}
           </div>
         </CardContent>
@@ -342,127 +334,6 @@ function ParadasTable({
                       type="button"
                       onClick={() => setConfirmId(item.id)}
                       aria-label={`Eliminar parada ${item.id}`}
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/40 px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                      Eliminar
-                    </button>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function EnergiaTable({
-  data,
-  error,
-}: {
-  data: PlanificacionLista<PlanificacionEnergiaItem>
-  error?: string
-}) {
-  const router = useRouter()
-  const [confirmId, setConfirmId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  async function eliminar(id: string) {
-    setDeletingId(id)
-    try {
-      const response = await fetch(buildPlanificacionItemUrl("energia", id), {
-        method: "DELETE",
-      })
-      const body = (await response.json().catch(() => null)) as unknown
-      if (!response.ok) {
-        toast.error(
-          extraerMensajeEliminacion(response.status, body) ||
-            "No se pudo eliminar la lectura.",
-        )
-        return
-      }
-      toast.success("Lectura eliminada.")
-      router.refresh()
-    } catch {
-      toast.error("Error de red al eliminar la lectura.")
-    } finally {
-      setDeletingId(null)
-      setConfirmId(null)
-    }
-  }
-
-  if (error) return <ErrorState message={error} />
-  if (data.items.length === 0) return <EmptyState />
-
-  return (
-    <div>
-      <p className="mb-3 text-xs text-muted-foreground">
-        Total: {" "}
-        <span className="font-medium text-foreground">
-          {data.total.toLocaleString("es-AR")}
-        </span>
-        {data.truncada ? " · Lista truncada a 100 registros" : null}
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">Lecturas de energía cargadas</caption>
-          <thead>
-            <tr className="border-b border-border text-left">
-              <Th>Sector</Th>
-              <Th>Período</Th>
-              <Th className="text-right">kWh</Th>
-              <Th className="text-right">Gas m³</Th>
-              <Th className="text-right">Acciones</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((item) => (
-              <tr
-                key={item.id}
-                className="border-b border-border/70 last:border-0"
-              >
-                <Td>{item.sector_nombre || item.sector_id}</Td>
-                <Td className="font-mono text-xs">
-                  {formatWindow(item.periodo_inicio, item.periodo_fin)}
-                </Td>
-                <Td className="text-right font-mono tabular-nums">
-                  {item.kwh.toLocaleString("es-AR")}
-                </Td>
-                <Td className="text-right font-mono tabular-nums">
-                  {item.gas_m3?.toLocaleString("es-AR") ?? "—"}
-                </Td>
-                <Td className="text-right">
-                  {confirmId === item.id ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        ¿Eliminar?
-                      </span>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="xs"
-                        onClick={() => eliminar(item.id)}
-                        disabled={deletingId === item.id}
-                      >
-                        {deletingId === item.id ? "..." : "Sí"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setConfirmId(null)}
-                        disabled={deletingId === item.id}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmId(item.id)}
-                      aria-label={`Eliminar lectura de energía ${item.id}`}
                       className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/40 px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Trash2 className="size-3.5" aria-hidden="true" />

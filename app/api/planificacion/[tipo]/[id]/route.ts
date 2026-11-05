@@ -19,7 +19,7 @@ function errorResponse(message: string, status: number): Response {
 
 // DELETE /api/planificacion/[tipo]/[id]
 //
-// Borra un ítem de plan/paradas/energía. Propaga 200/400/404/500 del backend;
+// Borra un ítem de plan/paradas. Propaga 200/400/404/500 del backend;
 // un fallo de red se traduce a 502.
 export async function DELETE(
     _request: Request,
@@ -27,7 +27,7 @@ export async function DELETE(
 ) {
     const { tipo, id } = await context.params
     if (!isTipoImportacion(tipo)) {
-        return errorResponse("Tipo de planificación inválido. Usá plan, paradas o energia.", 400)
+        return errorResponse("Tipo de planificación inválido. Usá plan o paradas.", 400)
     }
     if (!isLoteUUID(id)) {
         return errorResponse("El id debe ser un UUID válido.", 400)

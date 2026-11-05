@@ -7,7 +7,7 @@ import DevicesState from "@/components/dispositivos/devices-state"
 import { Lock } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Estado de los Dispositivos | Smart-Check Automation",
+  title: "Estado de los Dispositivos | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

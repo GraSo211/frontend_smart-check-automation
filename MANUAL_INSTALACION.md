@@ -1,7 +1,7 @@
 # Manual de instalación y despliegue
 
 Guía para instalar, configurar, ejecutar y desplegar el frontend de
-**Smart-Check Automation** (Next.js 16, App Router).
+**SmartCheck Automation** (Next.js 16, App Router).
 
 Este repositorio contiene **solo el frontend**. La API de negocio es un servicio
 externo en Go; sin ese backend el panel no muestra datos. El frontend no

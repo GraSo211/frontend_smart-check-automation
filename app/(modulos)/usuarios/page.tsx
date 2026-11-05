@@ -4,7 +4,7 @@ import type { UserDTO } from '@/actions/users'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Gestión de Usuarios y Roles | Smart-Check Automation',
+  title: 'Gestión de Usuarios y Roles | SmartCheck Automation',
   description: 'Panel de administración de usuarios corporativos y control de acceso (RBAC).',
 }
 

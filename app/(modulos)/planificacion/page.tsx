@@ -6,14 +6,13 @@ import { getSession, hasMinRole } from "@/lib/auth"
 import { PlanificacionView } from "@/components/planificacion/planificacion-view"
 import { getDefaultReporteDateRange } from "@/lib/reportes"
 import type {
-  PlanificacionEnergiaItem,
   PlanificacionLista,
   PlanificacionParadaItem,
   PlanificacionPlanItem,
 } from "@/lib/planificacion-types"
 
 export const metadata: Metadata = {
-  title: "Planificación | Smart-Check Automation",
+  title: "Planificación | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"
@@ -36,15 +35,9 @@ export default async function Page() {
     items: [],
   }
   let paradasError: string | undefined
-  let energia: PlanificacionLista<PlanificacionEnergiaItem> = {
-    total: 0,
-    truncada: false,
-    items: [],
-  }
-  let energiaError: string | undefined
 
   if (canAccess) {
-    const [planResult, paradasResult, energiaResult] =
+    const [planResult, paradasResult] =
       await Promise.allSettled([
         getPlanificacionLista("plan", {
           desde,
@@ -52,11 +45,6 @@ export default async function Page() {
           limite: 100,
         }),
         getPlanificacionLista("paradas", {
-          desde,
-          hasta,
-          limite: 100,
-        }),
-        getPlanificacionLista("energia", {
           desde,
           hasta,
           limite: 100,
@@ -80,15 +68,6 @@ export default async function Page() {
           ? paradasResult.reason.message
           : "No se pudieron cargar las paradas."
     }
-
-    if (energiaResult.status === "fulfilled") {
-      energia = energiaResult.value
-    } else {
-      energiaError =
-        energiaResult.reason instanceof Error
-          ? energiaResult.reason.message
-          : "No se pudieron cargar las lecturas de energía."
-    }
   }
 
   return (
@@ -108,9 +87,9 @@ export default async function Page() {
                 Importación de planificación
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Cargá el plan de producción, las paradas de línea y las lecturas
-                de energía mediante archivos CSV. Las filas válidas se importan;
-                las inválidas se listan para corrección.
+                Cargá el plan de producción y las paradas de línea mediante
+                archivos CSV. Las filas válidas se importan; las inválidas se
+                listan para corrección.
               </p>
             </div>
             {!canAccess ? (
@@ -126,8 +105,7 @@ export default async function Page() {
           <PlanificacionView
             plan={plan}
             paradas={paradas}
-            energia={energia}
-            errors={{ plan: planError, paradas: paradasError, energia: energiaError }}
+            errors={{ plan: planError, paradas: paradasError }}
           />
         ) : (
           <div

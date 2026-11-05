@@ -10,7 +10,7 @@ import type { Alerta, LoteSector, Producto, Sector } from "@/lib/production-data
 import { LineaProduccionView } from "@/components/linea-produccion/linea-produccion-view"
 
 export const metadata: Metadata = {
-    title: "Línea de Producción | Smart-Check Automation",
+    title: "Línea de Producción | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

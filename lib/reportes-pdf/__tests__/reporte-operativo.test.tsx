@@ -111,12 +111,6 @@ function buildOEE(calculable = true): ReporteOEE {
     kg_producidos: 1400,
     kg_ok: 1346,
     capacidad_teorica_kg: 1600,
-    energy: {
-      kwh: 620.5,
-      gas_m3: 310.4,
-      kwh_por_kg_ok: 0.46,
-      gas_m3_por_kg_ok: 0.23,
-    },
   }
   return {
     periodo: {

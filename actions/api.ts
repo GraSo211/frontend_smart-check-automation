@@ -1780,7 +1780,7 @@ export async function enviarConsignaManual(
 
 // ─── Planificación (GET /api/v1/planificacion/{tipo}) ───────────────────────
 //
-// Listado de plan / paradas / energía con filtros opcionales. Comparte el
+// Listado de plan / paradas con filtros opcionales. Comparte el
 // envelope `{success,message,data:{total,truncada,items}}` de reportes.
 
 function isPlanificacionItem(value: unknown): value is Record<string, unknown> {

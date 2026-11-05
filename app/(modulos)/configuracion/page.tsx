@@ -7,7 +7,7 @@ import type { LoteSector, Producto, Sector } from "@/lib/production-data"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Parámetros de Configuración | Smart-Check Automation",
+  title: "Parámetros de Configuración | SmartCheck Automation",
 }
 
 export const dynamic = "force-dynamic"

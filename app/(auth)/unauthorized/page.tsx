@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { ShieldX, ArrowLeft } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Acceso Denegado | Smart-Check Automation',
+  title: 'Acceso Denegado | SmartCheck Automation',
   description: 'No tenés permisos para acceder a esta sección.',
 }
 

@@ -3,7 +3,7 @@
 
 import type { PlanificacionListaFiltros } from "@/lib/planificacion-types"
 
-export type TipoImportacion = "plan" | "paradas" | "energia"
+export type TipoImportacion = "plan" | "paradas"
 
 type PlantillaCsv = { headers: readonly string[]; ejemplo: readonly string[] }
 
@@ -15,10 +15,6 @@ const PLANTILLAS: Record<TipoImportacion, PlantillaCsv> = {
     paradas: {
         headers: ["sector_id", "lote_id", "causa_codigo", "tipo", "inicio", "fin", "notas"],
         ejemplo: ["s1", "", "MANTENIMIENTO", "NO_PLANIFICADA", "2026-11-01T10:00:00-03:00", "2026-11-01T11:00:00-03:00", "cambio de cinta"],
-    },
-    energia: {
-        headers: ["sector_id", "lote_id", "periodo_inicio", "periodo_fin", "kwh", "gas_m3"],
-        ejemplo: ["s1", "", "2026-11-01T06:00:00-03:00", "2026-11-01T14:00:00-03:00", "120.5", "30.2"],
     },
 }
 
