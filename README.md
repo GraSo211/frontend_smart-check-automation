@@ -102,10 +102,19 @@ Las variables reconocidas por el código son:
 
 | Variable | Uso | Requerida |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Configurarla siempre, incluso cuando algunas acciones de autenticación y usuarios tienen un default de producción. |
+| `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Es obligatoria para todas las actions; si falta, la action falla con un error de configuración en vez de usar un fallback. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID público de Google para mostrar y utilizar el login con Google. No es un client secret. | Solo para login con Google. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | Base pública del servidor MediaMTX (sin path final). El front arma la URL WHEP de cada dispositivo como `<base>/<slug(nombre)>-<entrada|salida>/whep`. | Sí, para que `/supervision` pueda reproducir video. |
+| `JWT_SECRET` | Secreto de firma del JWT interno. Debe coincidir con el `JWT_SECRET` del backend Go. Se usa en el servidor (`proxy.ts` y server components) para verificar la cookie de sesión; no debe llevar prefijo `NEXT_PUBLIC_`. | Sí. |
 | `NODE_ENV` | Controla, entre otras cosas, la analítica de producción y el atributo `Secure` de la cookie. Next.js lo establece según el modo de ejecución. | No se configura manualmente para el uso normal. |
+
+`JWT_SECRET` se lee en el servidor (incluido el proxy) y debe estar definida en
+el entorno de build/ejecución (por ejemplo, Vercel) con el mismo valor que el
+backend Go. Si falta, el proxy falla en vez de aceptar sesiones sin verificar.
+
+`next.config.mjs` agrega headers de seguridad base: `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS y una CSP
+mínima (`frame-ancestors`, `base-uri`, `form-action`).
 
 Las variables `NEXT_PUBLIC_CAMERA_NODES`, `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`,
 `NEXT_PUBLIC_MEDIAMTX_WHEP_URL_ENTRADA` y `NEXT_PUBLIC_MEDIAMTX_WHEP_URL_SALIDA`
@@ -128,6 +137,7 @@ Crear `.env.local` en la raíz, sin subirlo al repositorio:
 ```dotenv
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+JWT_SECRET=your-jwt-signing-secret-minimum-32-characters
 ```
 
 El backend local confirmado para desarrollo es `http://localhost:8080`.
@@ -376,7 +386,7 @@ datos cuando corresponda:
 | `/dispositivos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
 | `/horno/consigna` | Productos, sectores, lote abierto, estado del horno e historial se consultan por separado; el error de cada bloque se muestra sin bloquear el resto de la página. |
 | Historial de telemetría | `getDeviceHistoryPage()` propaga el error e informa que el historial no está disponible. |
-| Usuarios y autenticación | Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
+| Usuarios y autenticación | Devuelven un error de conexión o de autenticación. `NEXT_PUBLIC_API_URL` es obligatoria: no hay fallback a Render. |
 | Video | Se listan los dispositivos cuya URL WHEP se pudo derivar; el dispositivo con la cámara seleccionada se conecta y, ante una falla, intenta reconectar. Sin ninguna cámara disponible se muestra un estado vacío con acceso a `/dispositivos`. |
 
 Los streams SSE de lotes, control de lote y dispositivos se conectan desde el

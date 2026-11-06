@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { decodeSessionToken, isSessionExpired, ROLE_LEVEL, type UserRole } from '@/lib/auth'
+import { decodeSessionToken, ROLE_LEVEL, type UserRole } from '@/lib/auth'
 
 // ─── Configuración de rutas ───────────────────────────────────────────────────
 
@@ -17,15 +17,11 @@ const SESSION_COOKIE = 'session_token'
 
 // ─── Proxy (reemplaza al middleware en Next.js 16) ───────────────────────────
 
-export default function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Ignorar rutas de archivos estáticos y API interna de Next.js
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.includes('.')
-  ) {
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api')) {
     return NextResponse.next()
   }
 
@@ -45,13 +41,9 @@ export default function proxy(request: NextRequest) {
     return redirectToLogin(request)
   }
 
-  const session = decodeSessionToken(token)
+  const session = await decodeSessionToken(token)
 
   if (!session) {
-    return redirectToLogin(request)
-  }
-
-  if (isSessionExpired(session)) {
     return redirectToLogin(request)
   }
 

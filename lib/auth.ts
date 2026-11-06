@@ -1,4 +1,4 @@
-import { decodeJwt } from 'jose'
+import { jwtVerify } from 'jose'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -29,69 +29,78 @@ export function hasMinRole(role: UserRole, minRole: UserRole): boolean {
 // ─── Helpers de sesión ───────────────────────────────────────────────────────
 
 const SESSION_COOKIE = 'session_token'
+const JWT_ISSUER = 'smart-check-automation'
+const JWT_ALGORITHM = 'HS256'
+const ROLES: readonly UserRole[] = ['Administrador', 'Supervisor', 'Operario']
+
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error(
+      'JWT_SECRET no está definida. Configurá la misma clave que usa el backend Go.',
+    )
+  }
+  return new TextEncoder().encode(secret)
+}
+
+function isUserRole(value: unknown): value is UserRole {
+  return typeof value === 'string' && (ROLES as readonly string[]).includes(value)
+}
 
 /**
- * Lee y decodifica la sesión desde las cookies del servidor (Server Components / layouts).
- * NO verifica la firma — el backend de Go rechaza tokens falsos en cada request.
- * Retorna null si no hay cookie o el payload es inválido.
+ * Verifica firma, issuer y expiración del JWT y normaliza el payload al
+ * contrato interno (`nombre`/`rol`). Devuelve null si el token es inválido.
+ */
+async function verifySessionToken(token: string): Promise<SessionPayload | null> {
+  const secret = getJwtSecret()
+
+  try {
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: [JWT_ALGORITHM],
+      issuer: JWT_ISSUER,
+      requiredClaims: ['exp'],
+    })
+
+    const email = typeof payload.email === 'string' ? payload.email : ''
+    const nombre =
+      typeof payload.nombre === 'string'
+        ? payload.nombre
+        : typeof payload.name === 'string'
+          ? payload.name
+          : ''
+    const rol = payload.rol ?? payload.role
+
+    if (!email || !nombre || !isUserRole(rol)) return null
+
+    return {
+      email,
+      nombre,
+      rol,
+      exp: payload.exp,
+      iat: payload.iat,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Lee y verifica la sesión desde las cookies del servidor (Server Components /
+ * layouts). Lanza si falta `JWT_SECRET`; devuelve null si el token es inválido.
  */
 export async function getSession(): Promise<SessionPayload | null> {
-  try {
-    const { cookies } = await import('next/headers')
-    const cookieStore = await cookies()
-    const token = cookieStore.get(SESSION_COOKIE)?.value
-    if (!token) return null
+  const { cookies } = await import('next/headers')
+  const cookieStore = await cookies()
+  const token = cookieStore.get(SESSION_COOKIE)?.value
+  if (!token) return null
 
-    const payload = decodeJwt(token)
-
-    const email = (payload.email as string) || ''
-    const nombre = (payload.nombre as string) || (payload.name as string) || ''
-    const rol = (payload.rol as UserRole) || (payload.role as UserRole) || ''
-
-    if (!email || !nombre || !rol) return null
-
-    return {
-      email,
-      nombre,
-      rol,
-      exp: payload.exp,
-      iat: payload.iat,
-    }
-  } catch {
-    return null
-  }
+  return verifySessionToken(token)
 }
 
 /**
- * Decodifica un token JWT raw (string).
- * Usada desde el middleware de Edge donde no se tiene acceso a `cookies()`.
+ * Verifica un token JWT raw (string).
+ * Usada desde el proxy de Next.js, donde no se tiene acceso a `cookies()`.
  */
-export function decodeSessionToken(token: string): SessionPayload | null {
-  try {
-    const payload = decodeJwt(token)
-
-    const email = (payload.email as string) || ''
-    const nombre = (payload.nombre as string) || (payload.name as string) || ''
-    const rol = (payload.rol as UserRole) || (payload.role as UserRole) || ''
-
-    if (!email || !nombre || !rol) return null
-
-    return {
-      email,
-      nombre,
-      rol,
-      exp: payload.exp,
-      iat: payload.iat,
-    }
-  } catch {
-    return null
-  }
-}
-
-/**
- * Verifica si la sesión está expirada comparando `exp` con la hora actual.
- */
-export function isSessionExpired(session: SessionPayload): boolean {
-  if (!session.exp) return false
-  return Date.now() / 1000 > session.exp
+export async function decodeSessionToken(token: string): Promise<SessionPayload | null> {
+  return verifySessionToken(token)
 }

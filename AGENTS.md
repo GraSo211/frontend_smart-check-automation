@@ -34,6 +34,7 @@ Tests use Vitest (`pnpm test` → `vitest run`). `vitest.config.mts` defaults to
 | `NEXT_PUBLIC_API_URL` | server + client bundle | Go API base; required. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | client bundle | Optional Google login. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | client bundle | Public MediaMTX base used by `/supervision`. |
+| `JWT_SECRET` | server only | Same value as the Go backend's `JWT_SECRET`; used to verify the session cookie in `proxy.ts` and server components. |
 
 `NEXT_PUBLIC_*` values are inlined at build time; changing one requires a rebuild.
 
@@ -129,7 +130,7 @@ lib/
 hooks/
   use-mobile.ts           Viewport breakpoint hook (shadcn sidebar)
 public/                   Static logos and icons
-proxy.ts                  Next 16 proxy (middleware): route protection + session headers
+proxy.ts                  Next 16 proxy (middleware): route protection + JWT verification
 ```
 
 Data flow: the backend contract is the **sector/lotes** one. `actions/api.ts` exposes `getSectores()` (`GET /api/v1/sectores`), `getProductos()` (`GET /api/v1/productos`), `getLotes(sectorId, { productoId?, limite?, antesDe? })` (`GET /api/v1/lotes`, cursor-paginated via `siguiente_cursor`; `sector_id` is required with OAuth), `getAllLotes()` (walks every sector in parallel, following each cursor, deduplicated by id), and `getLoteAbierto(sectorId)` (`GET /api/v1/lotes/abierto`, `lote:null` when there is none). All use an 8s `AbortController` timeout and `cache: "no-store"`, and forward the OAuth `session_token` cookie via `getSessionHeaders()`.
@@ -159,7 +160,7 @@ Lote control (`components/lotes/control-card.tsx`, `/lotes/[id]/control`): mode 
 - `next.config.mjs` only sets `output: "standalone"` and `images.unoptimized: true`. It does **not** set `typescript.ignoreBuildErrors`, so `pnpm build` fails on type errors. Run `pnpm exec tsc --noEmit` to see them in isolation.
 - `lucide-react` is pinned at `^1.16.0` and `next` at `16.2.6` (pinned exact, no caret). Don't bump either casually — other deps assume these versions.
 - `pnpm dev` uses Turbopack by default in Next 16. Page shells and KPI cards are server components; the header, footer, sidebar and most interactive modules are client components (`"use client"`).
-- `package.json` `name` is still the default `my-project` — it is not the source of truth for the project name (use `app/layout.tsx` metadata / footer string `SmartCheck Automation`).
+- `package.json` `name` is `smartcheck-automation-frontend`; the display name still comes from `app/layout.tsx` metadata and the footer string `SmartCheck Automation`.
 - Build-time static generation of `/` used to time out (>60 s) on Vercel because the server component fetched the Render backend during prerender (Render free-tier cold-start). Fixed with `export const dynamic = "force-dynamic"` in `app/(modulos)/page.tsx` + the 8s `AbortController` timeout in `actions/api.ts`. Do NOT remove either, or the Vercel build will break again when Render is cold.
 - The SSE `EventSource` in `components/lotes/dashboard-content.tsx` (via the `/api/lotes/events` proxy) also hits Render; a cold backend there will keep the client retrying silently. Tolerated for now — see the backend note under "Data flow".
 - `package.json` runs Vitest through `pnpm test`; don't assume Jest by default.

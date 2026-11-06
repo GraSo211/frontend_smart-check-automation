@@ -2,19 +2,31 @@
  * Cliente HTTP centralizado para el frontend de SmartCheck Automation.
  *
  * Expone `ApiError`, el error tipado que usan las server actions para propagar
- * la sesión expirada (401) y otros fallos del backend Go, y `getBackendUrl()`,
- * la resolución compartida de la URL base del backend.
+ * la sesión expirada (401) y otros fallos del backend Go, y la resolución
+ * compartida de la URL base del backend.
  */
-
-const FALLBACK_BACKEND_URL =
-  'https://backend-smart-check-automation-go.onrender.com'
 
 /**
- * URL base del backend Go. Usa `NEXT_PUBLIC_API_URL` y cae al backend de Render
- * cuando la variable no está definida.
+ * URL base del backend Go. Requiere `NEXT_PUBLIC_API_URL` para evitar que un
+ * deploy mal configurado caiga silenciosamente contra otro entorno.
  */
 export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || FALLBACK_BACKEND_URL
+  const url = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
+  if (!url) {
+    throw new Error(
+      'NEXT_PUBLIC_API_URL no está definida. Configurala en .env.local o en el entorno de despliegue.',
+    )
+  }
+  return url
+}
+
+/**
+ * Variante no-throwing para helpers de mutación que traducen una configuración
+ * faltante a `{ ok: false }` en lugar de lanzar.
+ */
+export function getBackendUrlOrNull(): string | null {
+  const url = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
+  return url || null
 }
 
 export class ApiError extends Error {

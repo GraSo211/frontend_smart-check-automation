@@ -34,7 +34,7 @@ import {
     parseRegistrationRejection,
     parseRegistrationRequests,
 } from "@/lib/registration";
-import { ApiError } from "@/lib/api-client"
+import { ApiError, getBackendUrl, getBackendUrlOrNull } from "@/lib/api-client"
 import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
 import { LOTE_PAGE_SIZE, walkLoteSectors } from "@/lib/lotes-cursor-walk"
@@ -61,20 +61,6 @@ import type {
 
 const SESSION_COOKIE = "session_token"
 
-function getApiUrl(): string {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")
-    if (!apiUrl) {
-        throw new Error("NEXT_PUBLIC_API_URL no está definida. Crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://tu-host")
-    }
-    return apiUrl
-}
-
-// Non-throwing base URL resolution for the mutation helpers, which translate a
-// missing configuration into an `{ ok: false }` result instead of throwing.
-function getApiUrlOrNull(): string | null {
-    return process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || null
-}
-
 /** Forward the incoming browser session to the Go API from server actions. */
 async function getSessionHeaders(): Promise<HeadersInit> {
     const token = (await cookies()).get(SESSION_COOKIE)?.value
@@ -96,7 +82,7 @@ async function withBackendFetch<T>(options: {
     timeoutMs?: number
     handle: (response: Response) => Promise<T>
 }): Promise<T> {
-    const apiUrl = getApiUrl()
+    const apiUrl = getBackendUrl()
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000);
@@ -854,7 +840,7 @@ interface DeviceMutationOptions<T> {
 // revalidates the configured routes on success and translates the error
 // envelope. DELETE requests never carry a body.
 async function deviceMutation<T>(options: DeviceMutationOptions<T>): Promise<DeviceActionResult<T>> {
-    const apiUrl = getApiUrlOrNull()
+    const apiUrl = getBackendUrlOrNull()
     if (!apiUrl) {
         return { ok: false, errors: ["NEXT_PUBLIC_API_URL no está definida."] };
     }

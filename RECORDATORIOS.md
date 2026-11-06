@@ -1,5 +1,8 @@
 # Recordatorios / deuda técnica
 
+> Las secciones «Resuelto recientemente» y «Endpoints de control ya
+> implementados» son histórico. La deuda vigente está en «Pendientes».
+
 ## Resuelto recientemente
 
 - **Aprobación de propuesta del MPC**: el botón «Aprobar propuesta pendiente» de

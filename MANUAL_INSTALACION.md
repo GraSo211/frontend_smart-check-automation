@@ -75,9 +75,18 @@ expuestos al navegador.
 | `NEXT_PUBLIC_API_URL` | Sí | URL base de la API Go, sin path final. En desarrollo `http://localhost:8080`; en producción, la URL del servicio en Render. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Solo para login con Google | Client ID **público** de Google OAuth. No es un client secret. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | Solo para `/supervision` | Base pública de MediaMTX, sin path final. Si no hay un proxy delante, incluir el puerto WHEP (por defecto `8889`). |
+| `JWT_SECRET` | Sí | Secreto de firma del JWT interno; debe coincidir con el `JWT_SECRET` del backend Go. Se usa en el servidor (`proxy.ts` y server components) para verificar la cookie de sesión. No usar el prefijo `NEXT_PUBLIC_`. |
 
 `NODE_ENV` lo establece Next.js según el modo de ejecución; no se configura a
 mano para el uso normal.
+
+`JWT_SECRET` debe estar definida en el entorno donde corre Next.js (build y
+runtime) y coincidir con la del backend. Si falta, el proxy falla en vez de
+aceptar sesiones sin verificar.
+
+`next.config.mjs` agrega headers de seguridad base: `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS y una CSP
+mínima (`frame-ancestors`, `base-uri`, `form-action`).
 
 Ejemplo de `.env.local` para desarrollo:
 
@@ -85,6 +94,7 @@ Ejemplo de `.env.local` para desarrollo:
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 # NEXT_PUBLIC_MEDIAMTX_URL=https://mediamtx.example.com:8889
+JWT_SECRET=your-jwt-signing-secret-minimum-32-characters
 ```
 
 Con `NEXT_PUBLIC_GOOGLE_CLIENT_ID` comentada, el login con Google queda
