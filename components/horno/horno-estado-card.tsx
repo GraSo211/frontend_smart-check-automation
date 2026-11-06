@@ -33,14 +33,6 @@ function estadoBadge(estado: string) {
       </span>
     )
   }
-  if (upper === "CONTROL_MANUAL") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
-        <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />
-        Control manual
-      </span>
-    )
-  }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
       <span className="size-1.5 rounded-full bg-muted-foreground" aria-hidden="true" />
@@ -92,11 +84,6 @@ function mensajeEstado(estado: HornoEstado): { texto: string; variante: "muted" 
         variante: "warning",
       }
     }
-    case "CONTROL_MANUAL":
-      return {
-        texto: "El backend no pudo confirmar el enlace con el controlador; revisá las alertas.",
-        variante: "warning",
-      }
     default:
       return null
   }

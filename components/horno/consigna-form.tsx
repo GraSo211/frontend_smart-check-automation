@@ -128,8 +128,8 @@ export function ConsignaForm({
       toast.error("No se pudo enviar la consigna", { description })
     }
 
-    // También en el rechazo el backend audita el intento (y puede forzar
-    // CONTROL_MANUAL): refrescar historial y estado, no solo en éxito.
+    // También en el rechazo el backend audita el intento: refrescar historial
+    // y estado, no solo en éxito.
     onSent?.(loteId)
     setIsPending(false)
   }

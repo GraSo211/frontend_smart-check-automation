@@ -186,4 +186,25 @@ describe("AlertasView", () => {
         expect(screen.getAllByText("Activa")).toHaveLength(1)
         expect(screen.getAllByText("Reconocida")).toHaveLength(1)
     })
+
+    it("muestra etiquetas amigables para los tipos de alerta conocidos", () => {
+        render(
+            <AlertasView
+                initialAlertas={[
+                    alerta({ id: "a-1", tipo: "TEMPERATURA_HORNO" }),
+                    alerta({ id: "a-2", tipo: "PORCENTAJE_QUEMADOS_ALTO" }),
+                    alerta({ id: "a-3", tipo: "NUEVO_TIPO" }),
+                ]}
+                initialEstado="TODAS"
+                error={null}
+                canAck
+            />,
+        )
+
+        expect(screen.getByText(/Temperatura de horno/)).toBeTruthy()
+        expect(screen.getByText(/Alto porcentaje de quemados/)).toBeTruthy()
+        expect(screen.getByText(/NUEVO TIPO/)).toBeTruthy()
+        // El tipo crudo sigue disponible como tooltip/title.
+        expect(screen.getByTitle("TEMPERATURA_HORNO")).toBeTruthy()
+    })
 })

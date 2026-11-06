@@ -26,7 +26,7 @@
 - **Telemetría real en `/horno/consigna`**: `GET /api/v1/horno` ahora proyecta
   `metricas_horno` en `HornoEstado`; la tarjeta muestra T1, velocidad de cinta,
   temperatura de combustión, humedades, objetivos y confianza, con estados
-  `SIN_LOTE`, `SIN_TELEMETRIA`, `SIN_DATOS`, `DESACTUALIZADO` y `CONTROL_MANUAL`.
+  `SIN_LOTE`, `SIN_TELEMETRIA`, `SIN_DATOS` y `DESACTUALIZADO`.
   El copy de consigna manual ya no habla de "horno simulado".
 - **KPIs reales en el home**: el dashboard ya no muestra "ahorro potencial" ni
   un impacto estimado fijo del 15%. Ahora consulta `getAlertas(ACTIVA)` para

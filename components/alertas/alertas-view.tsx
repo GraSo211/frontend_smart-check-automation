@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { ackAlerta } from "@/actions/api"
 import { cn } from "@/lib/utils"
 import { formatDate, formatTime } from "@/lib/format"
+import { etiquetaTipoAlerta } from "@/lib/alertas"
 import type { Alerta, AlertaEstado } from "@/lib/production-data"
 
 interface AlertasViewProps {
@@ -177,8 +178,11 @@ function AlertaItem({
                     <SeveridadIcon severidad={alerta.severidad} className={cn("size-5", tone.fg)} />
                 </span>
                 <div className="min-w-0">
-                    <p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {alerta.tipo}
+                    <p
+                        className="font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        title={alerta.tipo}
+                    >
+                        {etiquetaTipoAlerta(alerta.tipo)}
                         {alerta.sector_id ? ` · ${alerta.sector_id}` : ""}
                     </p>
                     <p className="mt-0.5 text-sm font-medium text-foreground">

@@ -1,4 +1,5 @@
 import {
+  Bell,
   CalendarClock,
   Database,
   Eye,
@@ -33,6 +34,7 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
       { href: "/lotes", label: "Lotes y Datos Históricos", icon: Database },
       { href: "/linea-produccion", label: "Línea de Producción", icon: Factory },
       { href: "/horno/consigna", label: "Consigna Manual", icon: Flame },
+      { href: "/alertas", label: "Manejo de Alertas", icon: TriangleAlert },
       { href: "/supervision", label: "Supervisión en Vivo", icon: Eye },
       { href: "/reportes", label: "Reportes", icon: FileBarChart },
     ],
@@ -41,9 +43,9 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
     label: "Sistema",
     items: [
       { href: "/configuracion", label: "Parámetros de Configuración", icon: SlidersHorizontal },
+      { href: "/configuracion/notificaciones", label: "Notificaciones", icon: Bell },
       { href: "/planificacion", label: "Planificación", icon: CalendarClock },
       { href: "/sectores", label: "Sectores", icon: MapPin },
-      { href: "/alertas", label: "Manejo de Alertas", icon: TriangleAlert },
       { href: "/dispositivos", label: "Estado de los Dispositivos", icon: Cpu },
       { href: "/usuarios", label: "Usuarios y Roles", icon: Users },
     ],

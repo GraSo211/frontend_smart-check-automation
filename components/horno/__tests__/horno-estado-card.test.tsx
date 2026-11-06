@@ -148,27 +148,6 @@ describe("HornoEstadoCard", () => {
     expect(screen.getByText(/La última muestra tiene 12 s/)).toBeTruthy()
   })
 
-  it("CONTROL_MANUAL muestra advertencia y no bloquea las lecturas", () => {
-    render(
-      <HornoEstadoCard
-        estado={estado({
-          estado: "CONTROL_MANUAL",
-          fuente: "telemetria",
-          ultimo_check: "2026-11-04T18:00:00Z",
-          temperatura: 195.0,
-          velocidad_cinta: 0.28,
-        })}
-      />,
-    )
-
-    expect(screen.getByText("Control manual")).toBeTruthy()
-    expect(
-      screen.getByText("El backend no pudo confirmar el enlace con el controlador; revisá las alertas."),
-    ).toBeTruthy()
-    expect(screen.getByText("195 °C")).toBeTruthy()
-    expect(screen.getByText("0,28 m/s")).toBeTruthy()
-  })
-
   it("estado null muestra el mensaje de error o el estado vacío por defecto", () => {
     render(<HornoEstadoCard estado={null} error="Timeout consultando la Pi." />)
 

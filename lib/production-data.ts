@@ -230,6 +230,7 @@ export type Alerta = {
   id: string
   sector_id?: string | null
   lote_id?: string | null
+  dispositivo_id?: string | null
   /** Tipo libre (`umbral_quemado`, `nodo_offline`, `temp_fuera_rango`, etc.). */
   tipo: string
   severidad: AlertaSeveridad

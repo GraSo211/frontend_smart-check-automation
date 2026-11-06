@@ -33,6 +33,7 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada a un lote abierto en modo `MANUAL`, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si no hay un lote abierto o si el lote está en `SUPERVISION` o `AUTOMATICO`; para enviar, el lote debe estar en `MANUAL` (se cambia desde Control del lote). El historial muestra `Pendiente` (encolada), `Aplicada` (confirmada por ack de la Pi) y `Rechazada` (no se pudo encolar), junto con el `decisionId` cuando existe; `exitosa` sigue presente por compatibilidad con respuestas viejas. |
 | Línea de producción | Vista por sector del lote abierto: modo de operación, setpoints contra el rango del producto, KPIs de calidad y alertas activas del sector. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
+| Notificaciones | Configuración de canales de alerta (Email/Resend y Telegram) y preferencias por usuario. Requiere rol Administrador. Los secretos de los proveedores se configuran únicamente en el backend. |
 | Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de dispositivos asignados. La gestión requiere rol Supervisor o Administrador. |
 | Dispositivos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y baja de dispositivos. La URL WHEP de la cámara se deriva del nombre y el tipo y es de solo lectura en el panel; el nombre se sincroniza con la Raspberry, que es la fuente de verdad. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
@@ -128,7 +129,10 @@ lee en código de servidor, por lo que debe estar disponible en el entorno de
 ejecución.
 
 No colocar contraseñas, tokens privados ni otros secretos en variables
-`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador.
+`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador. Las claves de
+los proveedores de notificaciones (`RESEND_API_KEY`, `NOTIFICACIONES_EMAIL_FROM`,
+`TELEGRAM_BOT_TOKEN`) se leen y almacenan únicamente en el backend; el frontend
+solo muestra el estado de configuración y los nombres de las variables.
 
 ### Ejemplo local
 
@@ -243,6 +247,7 @@ iniciando.
 | `/linea-produccion` | Vista por sector del lote abierto: modo, setpoints, KPIs de calidad y alertas activas. |
 | `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto en modo `MANUAL`, última telemetría real de la Pi por sector/lote e historial de consignas. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
+| `/configuracion/notificaciones` | Canales de notificación (Email/Resend y Telegram) y preferencias por usuario. Requiere rol Administrador. |
 | `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
 | `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
@@ -301,6 +306,9 @@ especificación completa del backend.
 | `GET /api/v1/admin/usuarios` | Listado de usuarios en `/usuarios`. | Sin query relevante. |
 | `POST /api/v1/admin/usuarios` | Alta de usuario corporativo. | JSON con `email`, `nombre`, `rol` y `password` opcional. |
 | `PATCH /api/v1/admin/usuarios/{id}` | Cambio de nombre, rol o estado. | JSON con `nombre`, `rol` y/o `activo`. |
+| `GET /api/v1/admin/notificaciones` | Estado de canales y destinatarios de `/configuracion/notificaciones`. | Responde `canales` (email/telegram) y `destinatarios`. |
+| `PATCH /api/v1/admin/notificaciones/{usuarioID}` | Actualiza chat ID de Telegram y/o toggles de email/Telegram de un usuario. | JSON opcional `{ telegram_chat_id, notificar_email, notificar_telegram }`. |
+| `POST /api/v1/admin/notificaciones/test` | Envía un mensaje de prueba por el canal indicado. | JSON `{ canal: "EMAIL" \| "TELEGRAM", usuario_id }`. |
 | `GET /api/v1/lotes/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
 | `GET /api/v1/dispositivos/events` | SSE de estado y métricas de dispositivos. | `Accept: text/event-stream`. |
 | `GET /api/v1/horno` | Última telemetría real del horno de un sector en `/horno/consigna` (proyección de `metricas_horno`). | `sector_id` obligatorio; si el sector no existe (404), degrada a `null`. |

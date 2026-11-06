@@ -9,6 +9,7 @@ const PUBLIC_PATHS = ['/login', '/unauthorized', '/inicio']
 /** Mínimo rol requerido por prefijo de ruta */
 const PROTECTED_ROUTES: Array<{ prefix: string; minRole: UserRole }> = [
   { prefix: '/usuarios', minRole: 'Administrador' },
+  { prefix: '/configuracion/notificaciones', minRole: 'Administrador' },
   { prefix: '/supervision', minRole: 'Supervisor' },
   { prefix: '/sectores', minRole: 'Supervisor' },
 ]
