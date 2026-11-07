@@ -35,11 +35,17 @@ Tests use Vitest (`pnpm test` → `vitest run`). `vitest.config.mts` defaults to
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | client bundle | Optional Google login. |
 | `NEXT_PUBLIC_MEDIAMTX_URL` | client bundle | Public MediaMTX base used by `/supervision`. |
 | `JWT_SECRET` | server only | Same value as the Go backend's `JWT_SECRET`; used to verify the session cookie in `proxy.ts` and server components. |
+| `NOTIFICACIONES_EMAIL_PROVIDER` | backend only | Selects the email provider (Resend or Gmail API). Never referenced by the frontend. |
 | `RESEND_API_KEY` | backend only | API key for Resend email notifications. Never referenced by the frontend. |
+| `GMAIL_CLIENT_ID` | backend only | Gmail API OAuth client ID. Never referenced by the frontend. |
+| `GMAIL_CLIENT_SECRET` | backend only | Gmail API OAuth client secret. Never referenced by the frontend. |
+| `GMAIL_REFRESH_TOKEN` | backend only | Gmail API OAuth refresh token. Never referenced by the frontend. |
 | `NOTIFICACIONES_EMAIL_FROM` | backend only | Sender address for email notifications. Never referenced by the frontend. |
 | `TELEGRAM_BOT_TOKEN` | backend only | Telegram bot token. Never referenced by the frontend. |
 
 `NEXT_PUBLIC_*` values are inlined at build time; changing one requires a rebuild.
+
+The email provider is chosen in the backend via `NOTIFICACIONES_EMAIL_PROVIDER`; the frontend only displays whether each channel is configured.
 
 ## Documentation
 
@@ -83,6 +89,7 @@ app/                      Next.js App Router
 actions/
   api.ts                  Server data fetchers + mutations (lotes, control, horno/consigna, sectores, dispositivos, alertas, parámetros, registro). See "Data flow".
   auth.ts                 Login/logout server actions
+  notifications.ts        Admin notification settings/preferences/test server actions
   reports.ts              Lote report building (CSV/Excel/JSON)
   users.ts                Admin user server actions
 components/
@@ -94,6 +101,7 @@ components/
   lotes/                  dashboard-content, kpi-cards, supervision-table, filters-bar, lote-abierto-card, control-card
   horno/                  consigna-panel, consigna-form, horno-estado-card, consigna-historial
   configuracion/          product-card, product-parameters, parameters-history
+  notificaciones/         notification-settings (channels, recipient preferences, test send)
   dispositivos/           device-card, devices-state, device-history, device-actions-menu, telemetry-dashboard, pending-registration-requests
   sectores/               sector-management
   linea-produccion/       linea-produccion-view
@@ -117,7 +125,9 @@ lib/
   reportes-pdf/           @react-pdf/renderer operational + per-lote traceability reports (A4, Helvetica, SVG charts)
   production-data.ts      LoteSector/Sector/Producto/Conteos API contract types + validateConsignaInput
   devices-data.ts         Device, telemetry and registration-request types
-  auth.ts                 Session cookie decode/expiry + role levels (proxy + server)
+  alertas.ts              Alert type → readable label map (unknown types fall back to underscores → spaces)
+  notification-settings.ts  Notification settings types, backend parsers and Telegram chat ID validation
+  auth.ts                 Session cookie verify/expiry + role levels (proxy + server)
   auth-redirect.ts        Safe callbackUrl validation
   auth-validation.ts      Login form validation
   api-client.ts           `ApiError` shared by server actions

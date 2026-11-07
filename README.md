@@ -33,7 +33,7 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada a un lote abierto en modo `MANUAL`, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si no hay un lote abierto o si el lote está en `SUPERVISION` o `AUTOMATICO`; para enviar, el lote debe estar en `MANUAL` (se cambia desde Control del lote). El historial muestra `Pendiente` (encolada), `Aplicada` (confirmada por ack de la Pi) y `Rechazada` (no se pudo encolar), junto con el `decisionId` cuando existe; `exitosa` sigue presente por compatibilidad con respuestas viejas. |
 | Línea de producción | Vista por sector del lote abierto: modo de operación, setpoints contra el rango del producto, KPIs de calidad y alertas activas del sector. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
-| Notificaciones | Configuración de canales de alerta (Email/Resend y Telegram) y preferencias por usuario. Requiere rol Administrador. Los secretos de los proveedores se configuran únicamente en el backend. |
+| Notificaciones | Configuración de canales de alerta (email con Resend o Gmail API, y Telegram) y preferencias por usuario. Requiere rol Administrador. Los secretos de los proveedores se configuran únicamente en el backend. |
 | Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de dispositivos asignados. La gestión requiere rol Supervisor o Administrador. |
 | Dispositivos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y baja de dispositivos. La URL WHEP de la cámara se deriva del nombre y el tipo y es de solo lectura en el panel; el nombre se sincroniza con la Raspberry, que es la fuente de verdad. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
@@ -129,10 +129,13 @@ lee en código de servidor, por lo que debe estar disponible en el entorno de
 ejecución.
 
 No colocar contraseñas, tokens privados ni otros secretos en variables
-`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador. Las claves de
-los proveedores de notificaciones (`RESEND_API_KEY`, `NOTIFICACIONES_EMAIL_FROM`,
+`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador. La
+configuración y los secretos de los proveedores de notificaciones
+(`NOTIFICACIONES_EMAIL_PROVIDER`, `RESEND_API_KEY`, `GMAIL_CLIENT_ID`,
+`GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `NOTIFICACIONES_EMAIL_FROM`,
 `TELEGRAM_BOT_TOKEN`) se leen y almacenan únicamente en el backend; el frontend
-solo muestra el estado de configuración y los nombres de las variables.
+solo muestra el estado de configuración y los nombres de las variables. El
+proveedor de email (Resend o Gmail API) se elige en el backend.
 
 ### Ejemplo local
 
@@ -223,7 +226,7 @@ ejecutá `pnpm exec tsc --noEmit`.
 5. Para video, el navegador no pasa por una action de Next: negocia WHEP
    directamente con MediaMTX usando la URL derivada del dispositivo
    seleccionado en `/supervision` (`<NEXT_PUBLIC_MEDIAMTX_URL>/<slug(nombre)>-<entrada|salida>/whep`).
-6. El proxy de Next aplica la comprobación de presencia, decodificación y
+6. El proxy de Next comprueba la presencia, la firma HS256, el issuer y la
    expiración de la sesión antes de las páginas protegidas. Las APIs externas
    siguen siendo responsables de validar la sesión en cada request.
 
@@ -238,7 +241,8 @@ iniciando.
 
 | Ruta | Descripción |
 |---|---|
-| `/` | Dashboard operativo: métricas calculadas de los lotes, merma observada (unidades y tasa), alertas activas del backend, promedio de temperatura real por sector con lote abierto, accesos a módulos y estado general. |
+| `/` | Dashboard operativo: métricas calculadas de los lotes, merma observada (unidades y tasa), alertas activas del backend, promedio de temperatura real por sector con lote abierto, accesos a módulos y estado general. Con sesión muestra el dashboard; un acceso anónimo reescribe a `/inicio`. |
+| `/inicio` | Landing pública de presentación; no requiere sesión. |
 | `/login` | Inicio de sesión con email/contraseña o Google, según la configuración disponible. |
 | `/unauthorized` | Pantalla mostrada cuando el rol no alcanza la regla de acceso aplicada. |
 | `/usuarios` | Administración de usuarios, roles y estado activo. |
@@ -247,7 +251,7 @@ iniciando.
 | `/linea-produccion` | Vista por sector del lote abierto: modo, setpoints, KPIs de calidad y alertas activas. |
 | `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto en modo `MANUAL`, última telemetría real de la Pi por sector/lote e historial de consignas. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
-| `/configuracion/notificaciones` | Canales de notificación (Email/Resend y Telegram) y preferencias por usuario. Requiere rol Administrador. |
+| `/configuracion/notificaciones` | Canales de notificación (email con Resend o Gmail API, y Telegram) y preferencias por usuario. Requiere rol Administrador. |
 | `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
 | `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
 | `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
@@ -362,14 +366,15 @@ seleccionado en `/supervision`:
 - La sesión del navegador se guarda en la cookie `session_token`, `HttpOnly`,
   `SameSite=Strict`, con `Secure` en producción y duración local configurada
   para ocho horas al recibir la cookie del backend.
-- `/login` y `/unauthorized` son las rutas públicas. Las demás páginas pasan
-  por `proxy.ts`, que redirige a `/login` si no hay cookie, el payload no se
-  puede leer o la sesión está vencida.
-- El frontend decodifica el payload del token para conocer `email`, `nombre`,
-  `rol` y `exp`, pero **no verifica criptográficamente su firma**. La API Go
-  debe rechazar tokens falsos en cada request.
-- La regla configurada para `/usuarios` exige como mínimo el rol
-  `Administrador`.
+- `/login`, `/unauthorized` e `/inicio` son las rutas públicas. Un acceso
+  anónimo a `/` reescribe a `/inicio`; el resto pasa por `proxy.ts`, que redirige
+  a `/login` si no hay cookie o la sesión no es válida.
+- El frontend verifica la cookie `session_token` con `lib/auth.ts`: firma HS256
+  con `JWT_SECRET`, issuer `smart-check-automation` y expiración (`exp`
+  obligatorio). Un token que no verifica se trata como sesión ausente; la API Go
+  sigue validando la sesión en cada request.
+- Las reglas configuradas para `/usuarios` y `/configuracion/notificaciones`
+  exigen como mínimo el rol `Administrador`.
 - La ruta `/supervision` exige como mínimo el rol `Supervisor`; también puede
   acceder `Administrador`.
 - En `/configuracion`, la interfaz deja editar parámetros a `Supervisor` y

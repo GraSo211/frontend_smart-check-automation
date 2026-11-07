@@ -129,8 +129,9 @@ Si el frontend corre en otro puerto u origen, agregalo a `FRONTEND_ORIGINS`
 la consola de OAuth.
 
 El backend es el responsable de validar la sesión en cada request. El frontend
-solo decodifica el payload de la cookie para conocer `email`, `nombre`, `rol` y
-`exp`; **no verifica criptográficamente la firma**.
+también verifica la cookie `session_token` con `lib/auth.ts`: firma HS256 con
+`JWT_SECRET`, issuer `smart-check-automation` y expiración (`exp` obligatorio).
+Un token que no verifica se trata como sesión ausente.
 
 ### MediaMTX (video)
 
@@ -218,13 +219,19 @@ images: { unoptimized: true }
   `SameSite=Strict`, `Secure` en producción).
 - El login puede ser con **credenciales locales** (`POST /api/v1/auth/login`) o
   con **Google** (`POST /api/v1/auth/google`), siempre validado por el backend.
-- `/login` y `/unauthorized` son las únicas rutas públicas. El resto pasa por
-  `proxy.ts`, que redirige a `/login` si falta la cookie, el payload no se puede
-  decodificar o la sesión está vencida.
+- `/login`, `/unauthorized` e `/inicio` son las rutas públicas. Un acceso anónimo
+  a `/` reescribe a `/inicio`; el resto pasa por `proxy.ts`, que redirige a
+  `/login` si falta la cookie o la sesión no es válida.
 - Roles: `Administrador`, `Supervisor`, `Operario`.
-  - `/usuarios` requiere `Administrador`.
+  - `/usuarios` y `/configuracion/notificaciones` requieren `Administrador`.
   - `/supervision` y `/sectores` requieren `Supervisor` o superior.
 - Si el rol no alcanza, el proxy redirige a `/unauthorized`.
+- Los canales de notificación (email con Resend o Gmail API, y Telegram) se
+  configuran en el backend; el frontend no necesita variables nuevas. Los
+  secretos (`RESEND_API_KEY`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
+  `GMAIL_REFRESH_TOKEN`, `NOTIFICACIONES_EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`) y la
+  elección del proveedor (`NOTIFICACIONES_EMAIL_PROVIDER`) viven solo en el
+  servidor.
 
 Sin backend no hay login ni datos: las pantallas muestran error o estado vacío.
 
@@ -237,8 +244,9 @@ Sin backend no hay login ni datos: las pantallas muestran error o estado vacío.
 | `NEXT_PUBLIC_API_URL no está definida` | Crear `.env.local` con `NEXT_PUBLIC_API_URL=http://localhost:8080` y reiniciar `pnpm dev`. |
 | El panel no carga datos / error de conexión | Backend caído, URL incorrecta o CORS. Verificar que `FRONTEND_ORIGINS` incluya el origen exacto del front. |
 | Timeout o primera carga lenta en producción | Cold start de Render. Reintentar; las consultas cortan a los 8 s. |
-| `401` o redirección a `/login` | Cookie `session_token` ausente, vencida o inválida. Volver a iniciar sesión; el backend valida la firma. |
-| Redirección a `/unauthorized` | Rol insuficiente para `/usuarios`, `/supervision` o `/sectores`. |
+| `401` o redirección a `/login` | Cookie `session_token` ausente, vencida o inválida. Volver a iniciar sesión; el frontend verifica firma, issuer y expiración, y el backend valida la sesión en cada request. |
+| Redirección a `/unauthorized` | Rol insuficiente para `/usuarios`, `/configuracion/notificaciones`, `/supervision` o `/sectores`. |
+| Un canal de notificaciones figura «Sin configurar» | Falta configurar ese proveedor en el backend. El frontend solo muestra el estado: definí `NOTIFICACIONES_EMAIL_PROVIDER` y las variables del email (`RESEND_API_KEY` o `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/`GMAIL_REFRESH_TOKEN`, más `NOTIFICACIONES_EMAIL_FROM`) para email, o `TELEGRAM_BOT_TOKEN` para Telegram. |
 | Cambié una variable y el cliente usa el valor viejo | Las `NEXT_PUBLIC_*` se inlinéan en build: hacer un nuevo build/deploy, no solo reiniciar. |
 | `/supervision` muestra "Sin cámaras disponibles" | Falta `NEXT_PUBLIC_MEDIAMTX_URL` o los dispositivos no tienen tipo `ENTRADA_HORNO`/`SALIDA_HORNO`. |
 | WHEP responde pero no hay video | Revisar la URL derivada, CORS de MediaMTX, HTTPS e ICE. El path debe coincidir con el que publica la Raspberry. |
