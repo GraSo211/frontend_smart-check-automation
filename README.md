@@ -25,6 +25,11 @@ es un servicio externo en Go; no forma parte de este proyecto.
 
 ## Alcance funcional
 
+El panel y los reportes incluyen el **impacto económico de las mermas en ARS**,
+calculado con el costo unitario actual de cada variedad, configurable en
+`/configuracion`. Incluye estados de información incompleta y exportaciones.
+Ver [configuración y criterio de cálculo](docs/impacto-economico-mermas.md).
+
 | Área | Funcionalidad actual |
 |---|---|
 | Operación | Dashboard con indicadores de producción, calidad, merma observada, alertas activas, temperatura promedio real del horno, conectividad y sincronización. |

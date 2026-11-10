@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import Link from "next/link"
+import { ImpactoEconomicoCard } from "@/components/reportes/impacto-economico"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { APP_TIME_ZONE } from "@/lib/format"
@@ -58,6 +59,8 @@ export function ReportesDashboard({
   return (
     <div className="space-y-8">
       <NavAnchors />
+
+      <ImpactoEconomicoCard data={resumen.impacto_economico} periodo={`${resumen.periodo.desde.split("-").reverse().join("/")} al ${resumen.periodo.hasta.split("-").reverse().join("/")} · filtros del reporte`} />
 
       <section id="resumen">
         <h2 className="mb-4 font-heading text-lg font-semibold text-foreground">

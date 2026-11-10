@@ -1,5 +1,5 @@
 import { HomeDashboard } from "@/components/dashboard-content"
-import { getAllLotes, getAlertas, getHornoEstado } from "@/actions/api"
+import { getAllLotes, getAlertas, getHornoEstado, getImpactoEconomico } from "@/actions/api"
 import { getSession } from "@/lib/auth"
 import type { LoteSector } from "@/lib/production-data"
 
@@ -17,9 +17,10 @@ export default async function Page() {
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
 
-  const [lotesResult, alertasResult] = await Promise.allSettled([
+  const [lotesResult, alertasResult, economiaResult] = await Promise.allSettled([
     getAllLotes(),
     getAlertas({ estado: "ACTIVA" }),
+    getImpactoEconomico(),
   ])
 
   if (lotesResult.status === "fulfilled") {
@@ -63,6 +64,8 @@ export default async function Page() {
   return (
     <main className="flex-1 bg-background">
       <HomeDashboard
+        economia={economiaResult.status === "fulfilled" ? economiaResult.value : null}
+        economiaError={economiaResult.status === "rejected" ? "No se pudo consultar el impacto económico." : null}
         runs={runs}
         lastSyncAt={lastSyncAt}
         userRole={userRole}

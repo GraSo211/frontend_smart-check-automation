@@ -1,3 +1,5 @@
+import type { ImpactoEconomico } from "@/lib/economia-merma"
+
 // Contrato de GET /api/v1/reportes/{resumen,lotes}
 // (backend_smart-check-automation_go/docs/api-endpoints.md §31 y §32).
 // Las tasas, promedios y duraciones viajan como `null` cuando no hay datos;
@@ -13,6 +15,12 @@ export type ReporteFiltrosAplicados = {
     sector_id: string | null
     producto_id: string | null
     turno: string | null
+}
+
+export type ReporteEconomico = {
+    periodo: ReportePeriodo
+    filtros: ReporteFiltrosAplicados
+    impacto_economico: ImpactoEconomico
 }
 
 export type ReporteGrupo = {
@@ -111,6 +119,8 @@ export type ReporteAutomatizacion = {
 }
 
 export type ReporteResumen = {
+    /** Opcional para admitir un backend anterior durante el despliegue. */
+    impacto_economico?: ImpactoEconomico
     periodo: ReportePeriodo
     filtros: ReporteFiltrosAplicados
     produccion: ReporteProduccion
@@ -136,6 +146,8 @@ export type ReporteKg = {
 }
 
 export type ReporteLote = {
+    costo_fabricacion_unitario_ars?: number | null
+    perdida_merma_ars?: number | null
     id: string
     sector_id: string
     sector_nombre: string

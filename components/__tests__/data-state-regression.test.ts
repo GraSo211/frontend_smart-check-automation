@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getProductos: vi.fn(),
   getAlertas: vi.fn(),
   getHornoEstado: vi.fn(),
+  getImpactoEconomico: vi.fn(),
 }))
 
 vi.mock("@/actions/api", () => mocks)

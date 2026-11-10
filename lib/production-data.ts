@@ -262,6 +262,8 @@ export type UpdateSectorRequest = {
 // control (antes separados en `parametros_producto` en el backend).
 // GET /api/v1/productos devuelve esta entidad completa.
 export type Producto = {
+  /** Costo actual por pieza; null/ausente significa sin configurar. */
+  costoFabricacionUnitarioArs?: number | null
   id: string
   nombre: string
   activo: boolean
@@ -285,6 +287,7 @@ export type Producto = {
 
 /** Body for `POST /api/v1/productos` and `PUT /api/v1/productos/{id}`. */
 export type ProductoRequest = {
+  costoFabricacionUnitarioArs?: number | null
   nombre: string
   pesoReferenciaKg: number
   toleranciaPesoPct: number
@@ -375,6 +378,11 @@ export type ProductoErrores = Partial<Record<keyof ProductoRequest, string>>
  */
 export function validateProducto(values: ProductoRequest): ProductoErrores {
   const errors: ProductoErrores = {}
+
+  const costo = values.costoFabricacionUnitarioArs
+  if (costo != null && (!Number.isFinite(costo) || costo < 0 || costo > 9999999999.99 || costo !== Math.round(costo * 100) / 100)) {
+    errors.costoFabricacionUnitarioArs = "Ingresá un importe entre 0 y 9.999.999.999,99 ARS, con hasta 2 decimales."
+  }
 
   const nombre = values.nombre?.trim() ?? ""
   if (!nombre) {

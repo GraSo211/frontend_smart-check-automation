@@ -35,6 +35,8 @@ import {
     parseRegistrationRequests,
 } from "@/lib/registration";
 import { ApiError, getBackendUrl, getBackendUrlOrNull } from "@/lib/api-client"
+import { isImpactoEconomico, isReporteEconomico } from "@/lib/economia-merma"
+import type { ReporteEconomico } from "@/lib/reportes-types"
 import { parseBackendPage } from "@/lib/pagination"
 import { isRecord } from "@/lib/is-record"
 import { LOTE_PAGE_SIZE, walkLoteSectors } from "@/lib/lotes-cursor-walk"
@@ -151,12 +153,14 @@ function isProducto(value: unknown): value is Producto {
         // Respuestas viejas no traen el campo: se acepta ausente y se normaliza a null.
         (value.capacidadNominalKgH === undefined ||
             value.capacidadNominalKgH === null ||
-            typeof value.capacidadNominalKgH === "number");
+            typeof value.capacidadNominalKgH === "number") &&
+        (value.costoFabricacionUnitarioArs == null ||
+            (typeof value.costoFabricacionUnitarioArs === "number" && Number.isFinite(value.costoFabricacionUnitarioArs) && value.costoFabricacionUnitarioArs >= 0));
 }
 
 function parseProducto(data: unknown): Producto | null {
     return isProducto(data)
-        ? { ...data, capacidadNominalKgH: data.capacidadNominalKgH ?? null }
+        ? { ...data, capacidadNominalKgH: data.capacidadNominalKgH ?? null, costoFabricacionUnitarioArs: data.costoFabricacionUnitarioArs ?? null }
         : null;
 }
 
@@ -314,7 +318,28 @@ export async function getReporteResumen(filtros: ReporteFiltros = {}): Promise<R
             if (!isRecord(alertas.por_severidad) || !isRecord(automatizacion.modo_pct)) {
                 throw reportInvalidResponse("La API devolvió un resumen de reporte inválido.")
             }
+            if (data.impacto_economico !== undefined && !isImpactoEconomico(data.impacto_economico)) {
+                throw reportInvalidResponse("La API devolvió un impacto económico inválido.")
+            }
             return data as unknown as ReporteResumen
+        },
+    })
+}
+
+export async function getImpactoEconomico(filtros: ReporteFiltros = {}): Promise<ReporteEconomico> {
+    const query = buildReporteQuery(filtros)
+    return withBackendFetch({
+        path: `/api/v1/reportes/impacto-economico${query ? `?${query}` : ""}`,
+        timeoutMs: 8000,
+        timeoutMessage: "El backend no respondió a tiempo. El impacto económico no está disponible.",
+        handle: async (response) => {
+            if (response.status === 400) throw new ApiError(400, "Los filtros del impacto económico son inválidos.")
+            if (!response.ok) throw new Error(`La API respondió con ${response.status}: ${response.statusText}`)
+            const payload: unknown = await response.json()
+            if (!isSuccessfulRecordResponse(payload) || !isReporteEconomico(payload.data)) {
+                throw reportInvalidResponse("La API devolvió un impacto económico inválido.")
+            }
+            return payload.data as unknown as ReporteEconomico
         },
     })
 }
@@ -652,7 +677,7 @@ const PRODUCTO_STATUS_MESSAGES: Record<number, string> = {
     401: "Sesión expirada o no autenticado",
 };
 
-const PRODUCTO_REVALIDATE_PATHS = ["/configuracion"];
+const PRODUCTO_REVALIDATE_PATHS = ["/configuracion", "/reportes", "/"];
 
 export async function getProductos(): Promise<Producto[]> {
     return withBackendFetch({
@@ -674,6 +699,7 @@ export async function getProductos(): Promise<Producto[]> {
             return result.data.map((producto) => ({
                 ...producto,
                 capacidadNominalKgH: producto.capacidadNominalKgH ?? null,
+                costoFabricacionUnitarioArs: producto.costoFabricacionUnitarioArs ?? null,
             }));
         },
     })

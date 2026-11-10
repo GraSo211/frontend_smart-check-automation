@@ -35,3 +35,12 @@ describe("validateProducto: capacidad nominal", () => {
     )
   })
 })
+
+describe("validateProducto: costo de fabricación", () => {
+  it.each([undefined, null, 0, 0.1, 125.50, 9999999999.99])("acepta %s", (costoFabricacionUnitarioArs) => {
+    expect(validateProducto(request({ costoFabricacionUnitarioArs })).costoFabricacionUnitarioArs).toBeUndefined()
+  })
+  it.each([-1, 0.001, 10000000000, Number.NaN, Infinity])("rechaza %s", (costoFabricacionUnitarioArs) => {
+    expect(validateProducto(request({ costoFabricacionUnitarioArs })).costoFabricacionUnitarioArs).toBeDefined()
+  })
+})

@@ -68,6 +68,7 @@ describe("server actions de datos del backend", () => {
     velocidadCintaMin: 1,
     velocidadCintaMax: 2,
     capacidadNominalKgH: null,
+    costoFabricacionUnitarioArs: null,
   }
   const validProductoRequest = {
     nombre: "Producto real",

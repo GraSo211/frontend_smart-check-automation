@@ -18,10 +18,14 @@ import {
 import { formatNumber, formatPct, formatTemp, qualityRate } from "@/lib/format"
 import type { UserRole } from "@/lib/auth"
 import type { LoteSector } from "@/lib/production-data"
+import type { ReporteEconomico } from "@/lib/reportes-types"
+import { EconomicImpactLive } from "@/components/economic-impact-live"
 import { useMonitoring, useProductionData } from "@/components/monitoring-provider"
 import { availabilityLabel } from "@/components/layout/monitoring-status"
 
 interface HomeDashboardProps {
+  economia?: ReporteEconomico | null
+  economiaError?: string | null
   runs: LoteSector[]
   lastSyncAt: string | null
   userRole?: UserRole
@@ -53,6 +57,8 @@ function freshnessLabel(freshness: "fresh" | "stale" | "never") {
 }
 
 export function HomeDashboard({
+  economia,
+  economiaError,
   runs,
   lastSyncAt,
   userRole = "Operario",
@@ -160,6 +166,8 @@ export function HomeDashboard({
         <ImpactCard eyebrow="Dato observado" title="Merma registrada" value={metrics.hasData && metrics.hasWaste ? `${formatNumber(metrics.wasteUnits)} u` : "—"} detail={metrics.hasData && metrics.hasWaste ? "unidades quemadas o crudas" : "Sin conteos de merma"} note="Suma de los lotes consultados. No es una proyección económica ni incluye merma no detectada." tone="text-warning" />
         <ImpactCard eyebrow="Dato observado" title="Tasa de merma" value={metrics.wasteRate === null ? "—" : formatPct(metrics.wasteRate)} detail={metrics.hasData ? `sobre ${formatNumber(metrics.units)} unidades registradas` : "Sin datos para calcular"} note="Derivada de los conteos del backend. Si un lote no reporta merma, no se estima." tone="text-info" />
       </section>
+
+      <EconomicImpactLive initial={economia} initialError={economiaError} refreshKey={monitoring.sync.lotes.lastConfirmedAt} />
 
       <section aria-labelledby="modules-heading"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tu espacio de trabajo</p><h2 id="modules-heading" className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Accesos y estado</h2></div><span className="hidden text-xs text-muted-foreground sm:block">6 módulos disponibles</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{sections.map((section) => <SectionCard key={section.href} {...section} metric={sectionMetrics[section.href as keyof typeof sectionMetrics] ?? section.metric} />)}</div></section>
     </div>

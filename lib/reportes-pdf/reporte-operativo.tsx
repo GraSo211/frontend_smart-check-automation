@@ -1,4 +1,5 @@
 import React from "react"
+import { formatARS, formatImpactoMerma, REFERENCIA_COSTO_MERMA } from "@/lib/economia-merma"
 import {
   Document,
   Line,
@@ -95,6 +96,12 @@ export function ReporteOperativo({
           sectorNombre={sectorNombre}
           productoNombre={productoNombre}
         />
+        <EconomiaPage resumen={resumen} />
+        <PageFooter />
+      </Page>
+
+      <Page size="A4" style={styles.page} wrap>
+        <PageHeader resumen={resumen} filtros={filtros} generatedAt={generatedAt} sectorNombre={sectorNombre} productoNombre={productoNombre} />
         <ProcesoPage resumen={resumen} />
         <PageFooter />
       </Page>
@@ -214,6 +221,28 @@ function Kpi({
       {hint ? <Text style={styles.kpiHint}>{hint}</Text> : null}
     </View>
   )
+}
+
+function EconomiaPage({ resumen }: { resumen: ReporteResumen }) {
+  const data = resumen.impacto_economico
+  return <View>
+    <SectionTitle>Impacto económico de la merma</SectionTitle>
+    <Text style={{ fontSize: 22, marginBottom: 12, color: palette.danger }}>{formatImpactoMerma(data)}</Text>
+    <Text style={styles.note}>{REFERENCIA_COSTO_MERMA}</Text>
+    {!data ? <Text style={styles.note}>Impacto económico no disponible.</Text> : <>
+      <Text style={styles.note}>{formatNumber(data.unidades_merma)} piezas de merma · {formatNumber(data.unidades_sin_costo)} sin costo · {formatNumber(data.lotes_sin_conteos)} lotes sin conteos.</Text>
+      {data.perdida_ars === null && <Text style={styles.note}>Cálculo incompleto. El subtotal incluye únicamente las mermas que se pudieron valorizar.</Text>}
+      <View style={[styles.tableRow, styles.tableHead]}>
+        <Text style={{ width: 200 }}>Producto</Text><Text style={{ width: 115 }}>Costo por pieza (ARS)</Text><Text style={{ width: 70 }}>Merma (u)</Text><Text style={{ width: 150 }}>Pérdida (ARS)</Text>
+      </View>
+      {data.por_producto.map((p) => <View key={p.producto_id} style={styles.tableRow} wrap={false}>
+        <Text style={{ width: 200 }}>{p.nombre}{p.lotes_sin_conteos > 0 ? ` (${p.lotes_sin_conteos} lotes sin conteos)` : ""}</Text>
+        <Text style={{ width: 115 }}>{p.costo_unitario_ars == null ? "Sin configurar" : formatARS(p.costo_unitario_ars)}</Text>
+        <Text style={{ width: 70 }}>{formatNumber(p.unidades_merma)}</Text>
+        <Text style={{ width: 150 }}>{formatARS(p.perdida_ars)}</Text>
+      </View>)}
+    </>}
+  </View>
 }
 
 function ProduccionPage({ resumen }: { resumen: ReporteResumen }) {

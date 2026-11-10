@@ -32,7 +32,7 @@ function csvLines(body: string): string[] {
 }
 
 describe("buildLotesReport (CSV)", () => {
-    it("incluye BOM UTF-8, CRLF y las 25 columnas del contrato", () => {
+    it("incluye BOM UTF-8, CRLF y las columnas productivas y económicas", () => {
         const report = buildLotesReport([lote()], { format: "csv" })
         expect(report.body.charCodeAt(0)).toBe(0xfeff)
         expect(report.body).toContain("\r\n")
@@ -45,6 +45,7 @@ describe("buildLotesReport (CSV)", () => {
             "total", "ok", "crudo", "quemado", "kg_ok", "kg_crudo", "kg_quemado",
             "kg_total", "kg_merma", "confianza_promedio", "duracion_min", "fpy_pct",
             "crudo_pct", "quemado_pct",
+            "costo_fabricacion_unitario_ars", "perdida_merma_ars", "referencia_costo_merma",
         ])
     })
 
@@ -69,7 +70,8 @@ describe("buildLotesReport (CSV)", () => {
         expect(row[8]).toBe("")
         expect(row[9]).toBe("")
         expect(row[10]).toBe("")
-        expect(row.slice(15)).toEqual(Array(10).fill(""))
+        expect(row.slice(15, 27)).toEqual(Array(12).fill(""))
+        expect(row[27]).toBe("actual_producto")
     })
 
     it("escapa comas y comillas según RFC 4180", () => {

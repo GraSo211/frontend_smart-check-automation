@@ -83,6 +83,22 @@ describe("reportes del backend", () => {
         fetchMock.mockReset()
     })
 
+    it("consulta el KPI completo con filtros, cookie y sin caché", async () => {
+        const data = { periodo: { desde: "2026-11-01", hasta: "2026-11-10", timezone: "America/Argentina/Buenos_Aires" }, filtros: { sector_id: null, producto_id: null, turno: null },
+            impacto_economico: { moneda: "ARS", referencia_costo: "actual_producto", perdida_ars: 1255, perdida_valorizada_ars: 1255, unidades_merma: 10, unidades_sin_costo: 0, lotes_sin_conteos: 0, por_producto: [] } }
+        fetchMock.mockResolvedValue(json({ success: true, data }))
+        await expect(api.getImpactoEconomico({ desde: "2026-11-01", turno: "mañana" })).resolves.toEqual(data)
+        expect(fetchMock.mock.calls[0][0]).toContain("/api/v1/reportes/impacto-economico?desde=2026-11-01&turno=ma%C3%B1ana")
+        expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store", headers: { Cookie: "session_token=jwt-token" } })
+    })
+
+    it("rechaza un KPI incompleto y propaga la sesión expirada", async () => {
+        fetchMock.mockResolvedValueOnce(json({ success: true, data: { impacto_economico: { perdida_ars: 0 } } }))
+        await expect(api.getImpactoEconomico()).rejects.toThrow("impacto económico inválido")
+        fetchMock.mockResolvedValueOnce(json({}, 401))
+        await expect(api.getImpactoEconomico()).rejects.toMatchObject({ status: 401 })
+    })
+
     it("buildReporteQuery serializa los filtros a snake_case y omite vacíos", () => {
         expect(buildReporteQuery()).toBe("")
         expect(buildReporteQuery({

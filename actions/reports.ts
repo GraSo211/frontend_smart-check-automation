@@ -55,6 +55,9 @@ const CSV_HEADER = [
     "fpy_pct",
     "crudo_pct",
     "quemado_pct",
+    "costo_fabricacion_unitario_ars",
+    "perdida_merma_ars",
+    "referencia_costo_merma",
 ] as const
 
 /**
@@ -73,6 +76,8 @@ export function buildLotesReport(
             {
                 generated_at: generatedAt,
                 total: lotes.length,
+                moneda: "ARS",
+                referencia_costo_merma: "actual_producto",
                 filtros: {
                     desde: filters.desde ?? null,
                     hasta: filters.hasta ?? null,
@@ -141,6 +146,9 @@ function buildRow(
         num(l.fpy_pct),
         num(l.crudo_pct),
         num(l.quemado_pct),
+        num(l.costo_fabricacion_unitario_ars ?? null),
+        num(l.perdida_merma_ars ?? null),
+        "actual_producto",
     ]
 }
 

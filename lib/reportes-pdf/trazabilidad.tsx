@@ -1,4 +1,5 @@
 import React from "react"
+import { formatARS } from "@/lib/economia-merma"
 import {
   Document,
   Line,
@@ -260,6 +261,7 @@ function KpiGrid({
         hint={formatPercent(lote.quemado_pct)}
       />
       <Kpi label="FPY" value={formatPercent(lote.fpy_pct)} hint="First pass yield" />
+      <Kpi label="Pérdida por merma (ARS)" value={formatARS(lote.perdida_merma_ars)} hint={`Costo actual por pieza: ${formatARS(lote.costo_fabricacion_unitario_ars)}`} />
       <Kpi
         label="kg estimados"
         value={formatKg(lote.kg.total)}

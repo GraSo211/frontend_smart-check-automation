@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState, type FormEvent } from "react"
-import { Gauge, Loader2, Scale, Target, Thermometer } from "lucide-react"
+import { Banknote, Gauge, Loader2, Scale, Target, Thermometer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +32,18 @@ interface FieldGroup {
 }
 
 const GROUPS: FieldGroup[] = [
+  {
+    titulo: "Costo de fabricación",
+    icono: Banknote,
+    campos: [{
+      key: "costoFabricacionUnitarioArs",
+      label: "Costo unitario de fabricación",
+      unidad: "ARS / pieza",
+      min: 0,
+      placeholder: "ej: 125,50",
+      helper: "Opcional, hasta 2 decimales. Vacío = sin configurar; 0 = costo cero. Cambiarlo recalcula la merma de los reportes al costo actual.",
+    }],
+  },
   {
     titulo: "Horno",
     icono: Thermometer,
@@ -112,6 +124,7 @@ const ORDERED_FIELDS: FieldKey[] = [
 function toFormValues(initial?: Producto): FormValues {
   return {
     nombre: initial?.nombre ?? "",
+    costoFabricacionUnitarioArs: initial?.costoFabricacionUnitarioArs != null ? String(initial.costoFabricacionUnitarioArs) : "",
     pesoReferenciaKg: initial ? String(initial.pesoReferenciaKg) : "",
     toleranciaPesoPct: initial ? String(initial.toleranciaPesoPct) : "",
     dimensionBaseCm: initial ? String(initial.dimensionBaseCm) : "",
@@ -138,6 +151,7 @@ export function toRequest(values: FormValues): ProductoRequest {
 
   const request: ProductoRequest = {
     nombre: values.nombre.trim(),
+    costoFabricacionUnitarioArs: optionalNum(values.costoFabricacionUnitarioArs ?? "") ?? null,
     pesoReferenciaKg: num(values.pesoReferenciaKg),
     toleranciaPesoPct: num(values.toleranciaPesoPct),
     dimensionBaseCm: num(values.dimensionBaseCm),
@@ -339,6 +353,7 @@ export default function ProductForm({
                 id={`producto-${campo.key}`}
                 label={campo.label}
                 unidad={campo.unidad}
+                step={campo.key === "costoFabricacionUnitarioArs" ? "0.01" : "any"}
                 min={campo.min}
                 placeholder={campo.placeholder}
                 helper={campo.helper}
@@ -433,6 +448,7 @@ function NumberField({
   id,
   label,
   unidad,
+  step = "any",
   min,
   placeholder,
   helper,
@@ -447,6 +463,7 @@ function NumberField({
   id: string
   label: string
   unidad: string
+  step?: string
   min?: number
   placeholder: string
   helper?: string
@@ -481,7 +498,7 @@ function NumberField({
         id={id}
         ref={inputRef}
         type="number"
-        step="any"
+        step={step}
         min={min}
         inputMode="decimal"
         placeholder={placeholder}
