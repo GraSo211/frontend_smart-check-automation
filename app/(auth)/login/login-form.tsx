@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'
 import { loginWithGoogleAction, loginWithLocalAction } from '@/actions/auth'
 import { validateEmail, validatePassword } from '@/lib/auth-validation'
+import { getSafeInternalRedirect } from '@/lib/auth-redirect'
 import { AlertCircle, Loader2, ShieldCheck, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -13,7 +14,7 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ''
 
 // ─── Formulario de Login Local (Email / Password) ─────────────────────────────
 
-function LocalLoginForm() {
+function LocalLoginForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +23,7 @@ function LocalLoginForm() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault()
     setGeneralError(null)
 
@@ -45,7 +46,7 @@ function LocalLoginForm() {
       const result = await loginWithLocalAction(email, password)
 
       if (result.ok) {
-        router.replace('/')
+        router.replace(redirectTo)
       } else if (result.errors) {
         setFieldErrors(result.errors)
       } else {
@@ -161,7 +162,7 @@ function LocalLoginForm() {
 
 // ─── Componente Google Login ──────────────────────────────────────────────────
 
-function GoogleLoginContainer() {
+function GoogleLoginContainer({ redirectTo }: { redirectTo: string }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -174,7 +175,7 @@ function GoogleLoginContainer() {
       const result = await loginWithGoogleAction(googleToken)
 
       if (result.ok) {
-        router.replace('/')
+        router.replace(redirectTo)
       } else {
         setError(result.message ?? 'Error al iniciar sesión. Intentá nuevamente.')
       }
@@ -228,7 +229,9 @@ function GoogleLoginContainer() {
 
 // ─── Componente Principal LoginForm ──────────────────────────────────────────
 
-export function LoginForm() {
+export function LoginForm({ redirectTo = '/' }: { redirectTo?: string }) {
+  const safeRedirectTo = getSafeInternalRedirect(redirectTo)
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <div className="w-full max-w-md">
@@ -238,11 +241,11 @@ export function LoginForm() {
           <div className="mb-6 flex flex-col items-center gap-3 text-center">
             <div className="flex size-20 items-center justify-center rounded-2xl bg-muted/60 p-3 shadow-sm ring-1 ring-border/80 transition-colors">
               <Image
-                src="/sca/logo.svg"
-                alt="Smart-Check Automation"
-                width={64}
-                height={64}
-                className="size-full object-contain dark:brightness-0 dark:invert transition-all"
+                src="/fermar/isotipo-icono.webp"
+                alt="SmartCheck Automation"
+                width={36}
+                height={48}
+                className="h-full w-auto object-contain dark:brightness-0 dark:invert transition-all"
                 priority
               />
             </div>
@@ -261,7 +264,7 @@ export function LoginForm() {
           </div>
 
           {/* Formulario Local */}
-          <LocalLoginForm />
+          <LocalLoginForm redirectTo={safeRedirectTo} />
 
           {/* Separador */}
           <div className="relative my-6 flex items-center justify-center">
@@ -272,18 +275,18 @@ export function LoginForm() {
           </div>
 
           {/* Login de Google */}
-          <GoogleLoginContainer />
+          <GoogleLoginContainer redirectTo={safeRedirectTo} />
 
           {/* Nota de seguridad */}
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+            <ShieldCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
             <span>Acceso seguro mediante JWT y cookies corporativas.</span>
           </div>
         </div>
 
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Smart-Check Automation · Fermar S.A.
+          © {new Date().getFullYear()} SmartCheck Automation · Fermar S.A.
         </p>
       </div>
     </GoogleOAuthProvider>

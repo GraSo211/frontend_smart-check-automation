@@ -1,16 +1,11 @@
-let lastSyncISO: string | null = null
-const listeners = new Set<() => void>()
+import type { SourceSync } from '@/lib/monitoring-types'
+import { confirmDataEvent, confirmQuery } from '@/lib/monitoring-store'
 
-export function setLastSync(iso: string) {
-  lastSyncISO = iso
-  listeners.forEach((l) => l())
+/** Pure sync transitions shared by the monitoring provider and data hooks. */
+export function recordSourceQuery(sync: SourceSync, at: string): SourceSync {
+  return confirmQuery(sync, at)
 }
 
-export function getLastSync(): string | null {
-  return lastSyncISO
-}
-
-export function subscribeToLastSync(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+export function recordSourceDataEvent(sync: SourceSync, at: string): SourceSync {
+  return confirmDataEvent(sync, at)
 }

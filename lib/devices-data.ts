@@ -1,24 +1,58 @@
-export type DeviceResponse = {
-    success: boolean;
-    message: string;
-    data: Device[];
+/**
+ * Estado de la credencial del dispositivo. Es independiente de la conectividad
+ * (`estado`): un dispositivo deshabilitado puede tener un heartbeat reciente pero no
+ * puede autenticarse para reportar.
+ */
+export type AuthStatus = "unenrolled" | "active" | "disabled" | "revoked";
+
+export const AUTH_STATUS_LABELS: Record<AuthStatus, string> = {
+    unenrolled: "Sin enrolar",
+    active: "Activo",
+    disabled: "Deshabilitado",
+    revoked: "Revocado",
 };
 
-export type CreateDispositivoRequest = {
-    nombre: string;
-    ubicacion: string;
+/** Resuelve el estado de credencial de un dispositivo, con "unenrolled" como heredado. */
+export function deviceAuthStatus(device: Pick<Device, "authStatus">): AuthStatus {
+    return device.authStatus ?? "unenrolled";
+}
+
+/** Estado de una solicitud de registro de dispositivo enviada por un dispositivo. */
+export type RegistrationRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+/** Solicitud de registro pendiente de aprobación/rechazo (panel). */
+export type RegistrationRequest = {
+    requestId: string;
+    hostname: string;
+    status: RegistrationRequestStatus;
+    deviceId?: string;
+    createdAt: string;
+    expiresAt: string;
 };
 
-export type UpdateDispositivoRequest = {
-    dispositivoId: string;
-    nombre: string;
-    ubicacion: string;
+/** Resultado normalizado de aprobar una solicitud (el backend lo envía en snake_case). */
+export type RegistrationApproval = {
+    requestId: string;
+    status: "APPROVED";
+    deviceId: string;
 };
+
+/** Resultado normalizado de rechazar una solicitud. */
+export type RegistrationRejection = {
+    requestId: string;
+    status: "REJECTED";
+};
+
+/** Rol funcional del dispositivo dentro de un sector (entrada/salida del horno). */
+export type DeviceType = "ENTRADA_HORNO" | "SALIDA_HORNO";
 
 export type Device = {
     dispositivoId: string;
     nombre: string;
-    ubicacion: string;
+    /** Rol funcional del dispositivo en su sector. Opcional (eventos SSE pueden omitirlo). */
+    type?: DeviceType;
+    /** Sector al que pertenece el dispositivo. Opcional. */
+    sectorId?: string;
     estado: "online" | "offline";
     ultimaMetrica?: {
         id: string;
@@ -33,15 +67,29 @@ export type Device = {
         receivedAt: string;
     };
     lastSeen: string;
+    /**
+     * Campos de seguridad del catálogo. Opcionales porque los eventos SSE de
+     * telemetría no los incluyen; el backend los devuelve siempre en GET.
+     */
+    authStatus?: AuthStatus;
+    /** Indica si el dispositivo ya posee un secreto de autenticación provisionado. */
+    hasSecret?: boolean;
+    authUpdatedAt?: string | null;
 };
 
-export type DeviceHistoryResponse = {
-    success: boolean;
-    message: string;
-    data: SpecificDevice[];
-    total: number;
-    page: number;
-    pageSize: number;
+export type UpdateDispositivoRequest = {
+    dispositivoId: string;
+    /**
+     * El nombre es inmutable desde el panel: solo la propia Raspberry lo cambia
+     * vía su endpoint autenticado. La actualización del panel maneja únicamente
+     * el sector. Enviar `nombre` al backend provoca un 400.
+     */
+    /**
+     * Sector destino; `null` desasigna el dispositivo de su sector. Es obligatorio:
+     * el backend interpreta la ausencia de la clave igual que `null`, así que
+     * exigirlo evita desasignaciones accidentales al editar solo el sector.
+     */
+    sectorId: string | null;
 };
 
 export type SpecificDevice = {
@@ -57,114 +105,3 @@ export type SpecificDevice = {
     aiProcessorPct: number;
     receivedAt: string;
 };
-
-// Device fleet metadata. Ids are short, readable and stable so the truncated
-// id shown on each card stays meaningful.
-const NODES: Array<Pick<Device, "dispositivoId" | "nombre" | "ubicacion">> = [
-    { dispositivoId: "raspi-horno-01", nombre: "Nodo Horno 1", ubicacion: "Línea A — Sector Horneado" },
-    { dispositivoId: "raspi-horno-02", nombre: "Nodo Horno 2", ubicacion: "Línea B — Sector Horneado" },
-    { dispositivoId: "raspi-amasa-01", nombre: "Nodo Amasadora", ubicacion: "Línea A — Sector Amasado" },
-    { dispositivoId: "raspi-camara-01", nombre: "Nodo Cámara Fría", ubicacion: "Planta — Cámara de frío" },
-    { dispositivoId: "raspi-empaq-01", nombre: "Nodo Empaque", ubicacion: "Planta — Línea de empaque" },
-    { dispositivoId: "raspi-centro-01", nombre: "Nodo Distribución", ubicacion: "Depósito Central" },
-];
-
-// Deterministic pseudo-random generator so the dataset is stable across renders.
-function seeded(seed: number) {
-    let value = seed
-    return () => {
-        value = (value * 9301 + 49297) % 233280
-        return value / 233280
-    }
-}
-
-function hashString(str: string): number {
-    let hash = 0
-    for (let i = 0; i < str.length; i++) {
-        hash = (hash * 31 + str.charCodeAt(i)) % 233280
-    }
-    return hash || 1
-}
-
-function round1(n: number): number {
-    return Math.round(n * 10) / 10
-}
-
-// Builds a realistic, stable snapshot of the device fleet. Two nodes are
-// offline so the state-dependent icons can be exercised.
-function buildDevices(): Device[] {
-    const now = Date.now()
-    return NODES.map((node, i) => {
-        const rand = seeded(100 + i)
-        const offline = i === 4 || i === 5
-        const cpuPct = round1(10 + rand() * 75)
-        const memRamDisponibleMb = Math.round(900 + rand() * 2900)
-        const tempChip = round1(38 + rand() * 22)
-        const aiProcessorPct = round1(5 + rand() * 90)
-        const receivedAt = new Date(
-            now - (offline ? 45 + Math.floor(rand() * 300) : Math.floor(rand() * 50)) * 60000,
-        ).toISOString()
-
-        return {
-            dispositivoId: node.dispositivoId,
-            nombre: node.nombre,
-            ubicacion: node.ubicacion,
-            estado: offline ? "offline" : "online",
-            ultimaMetrica: {
-                id: `metric-${node.dispositivoId}`,
-                dispositivoId: node.dispositivoId,
-                cpuPct,
-                memRamDisponibleMb,
-                tempChip,
-                aiProcessorPct,
-                receivedAt,
-            },
-            lastSeen: receivedAt,
-        }
-    })
-}
-
-export const DEVICES: Device[] = buildDevices();
-
-// Builds historical telemetry rows for a device, most recent first, at
-// five-minute intervals over the last `count` measurements.
-function buildDeviceHistory(dispositivoId: string, nombre: string, count: number): SpecificDevice[] {
-    const rand = seeded(hashString(dispositivoId))
-    const now = Date.now()
-    const rows: SpecificDevice[] = []
-
-    for (let i = 0; i < count; i++) {
-        rows.push({
-            id: `hist-${dispositivoId}-${i}`,
-            dispositivoId,
-            nombre,
-            cpuPct: round1(10 + rand() * 75),
-            memRamDisponibleMb: Math.round(900 + rand() * 2900),
-            tempChip: round1(38 + rand() * 22),
-            aiProcessorPct: round1(5 + rand() * 90),
-            receivedAt: new Date(now - i * 5 * 60000).toISOString(),
-        })
-    }
-
-    return rows
-}
-
-// Simulates a paginated API response from the in-memory history dataset.
-export function getDeviceHistoryPage(
-    dispositivoId: string,
-    page: number,
-    pageSize: number,
-): DeviceHistoryResponse {
-    const device = DEVICES.find((d) => d.dispositivoId === dispositivoId)
-    const rows = buildDeviceHistory(dispositivoId, device?.nombre ?? "Nodo", 60)
-    const start = (page - 1) * pageSize
-
-    return {
-        success: true,
-        message: "Historial de telemetría simulado",
-        data: rows.slice(start, start + pageSize),
-        total: rows.length,
-        page,
-        pageSize,
-    }
-}

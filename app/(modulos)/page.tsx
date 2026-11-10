@@ -1,57 +1,80 @@
-import { DashboardContent } from "@/components/dashboard-content"
-import { getAllProductionRuns } from "@/actions/api"
+import { HomeDashboard } from "@/components/dashboard-content"
+import { getAllLotes, getAlertas, getHornoEstado, getImpactoEconomico } from "@/actions/api"
 import { getSession } from "@/lib/auth"
-import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
-import { AlertCircle } from "lucide-react"
+import type { LoteSector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
 export default async function Page() {
-  let runs: ProductionRun[] = []
+  let runs: LoteSector[] = []
   let error: string | null = null
   let lastSyncAt: string | null = null
+  let alertasActivas: number | null = null
+  let alertasError: string | null = null
+  let temperaturaPromedio: number | null = null
+  let temperaturaError: string | null = null
 
   const session = await getSession()
   const userRole = session?.rol ?? "Operario"
 
-  try {
-    const apiRuns = await getAllProductionRuns()
-    runs = apiRuns.length > 0 ? apiRuns : PRODUCTION_RUNS
+  const [lotesResult, alertasResult, economiaResult] = await Promise.allSettled([
+    getAllLotes(),
+    getAlertas({ estado: "ACTIVA" }),
+    getImpactoEconomico(),
+  ])
+
+  if (lotesResult.status === "fulfilled") {
+    runs = lotesResult.value
     lastSyncAt = new Date().toISOString()
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Error desconocido"
-    runs = PRODUCTION_RUNS
+  } else {
+    error = lotesResult.reason instanceof Error ? lotesResult.reason.message : "Error desconocido"
+    runs = []
+  }
+
+  if (alertasResult.status === "fulfilled") {
+    alertasActivas = alertasResult.value.length
+  } else {
+    alertasError = alertasResult.reason instanceof Error ? alertasResult.reason.message : "Error desconocido"
+  }
+
+  const sectoresAbiertos = Array.from(
+    new Set(runs.filter((r) => r.estado === "ABIERTO").map((r) => r.sector_id)),
+  )
+
+  if (sectoresAbiertos.length > 0) {
+    const hornoResultados = await Promise.allSettled(
+      sectoresAbiertos.map((id) => getHornoEstado(id)),
+    )
+    const temperaturas: number[] = []
+    let algunRechazado = false
+    for (const res of hornoResultados) {
+      if (res.status === "fulfilled" && res.value !== null && typeof res.value.temperatura === "number") {
+        temperaturas.push(res.value.temperatura)
+      } else if (res.status === "rejected") {
+        algunRechazado = true
+      }
+    }
+    if (temperaturas.length > 0) {
+      temperaturaPromedio = temperaturas.reduce((a, b) => a + b, 0) / temperaturas.length
+    } else if (algunRechazado) {
+      temperaturaError = "No se pudo consultar la telemetría del horno."
+    }
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
-            <span className="inline-block size-1.5 rounded-full bg-accent" aria-hidden="true" />
-            Dashboard
-          </div>
-          <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Dashboard de Producción
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Resumen de telemetría, calidad y rendimiento de las líneas de producción en tiempo
-            real.
-          </p>
-        </header>
-
-        {error && (
-          <div
-            role="alert"
-            className="mb-8 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} />
-      </main>
-    </div>
+    <main className="flex-1 bg-background">
+      <HomeDashboard
+        economia={economiaResult.status === "fulfilled" ? economiaResult.value : null}
+        economiaError={economiaResult.status === "rejected" ? "No se pudo consultar el impacto económico." : null}
+        runs={runs}
+        lastSyncAt={lastSyncAt}
+        userRole={userRole}
+        error={error}
+        alertasActivas={alertasActivas}
+        alertasError={alertasError}
+        temperaturaPromedio={temperaturaPromedio}
+        temperaturaError={temperaturaError}
+      />
+    </main>
   )
 }

@@ -1,28 +1,80 @@
-
-import { DashboardContent } from "@/components/lotes/dashboard-content"
-import { getAllProductionRuns } from "@/actions/api"
-import { PRODUCTION_RUNS, type ProductionRun } from "@/lib/production-data"
+import { LotesDashboard } from "@/components/lotes/dashboard-content"
+import { getAllLotes, getControlEstado, getLoteAbierto, getSectores } from "@/actions/api"
+import { getSession, hasMinRole } from "@/lib/auth"
+import type { ControlEstado, LoteSector, Sector } from "@/lib/production-data"
 
 export const dynamic = "force-dynamic"
 
-export default async function Page() {
-  let runs: ProductionRun[] = []
+interface PageProps {
+  searchParams: Promise<{ sector_id?: string | string[] }>
+}
+
+function firstParam(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw && raw !== "" ? raw : null
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams
+  const requestedSectorId = firstParam(params.sector_id)
+
+  // El rol viaja desde la sesión para habilitar el acceso directo al detalle
+  // de control por lote (link en la tabla). El proxy ya exige autenticación;
+  // caemos a "Operario" si la cookie no se pudo decodificar.
+  const session = await getSession()
+  const userRole = session?.rol ?? "Operario"
+
+  let sectores: Sector[] = []
+  let sectoresError: string | null = null
+  try {
+    sectores = await getSectores()
+  } catch (e) {
+    sectoresError = e instanceof Error ? e.message : "Error desconocido"
+    sectores = []
+  }
+
+  let runs: LoteSector[] = []
   let error: string | null = null
   let lastSyncAt: string | null = null
 
   try {
-    const response = await getAllProductionRuns()
-    if (Array.isArray(response)) {
-      runs = response
-    } else if (response && Array.isArray((response as any).data)) {
-      runs = (response as any).data
-    } 
-
+    runs = await getAllLotes()
     lastSyncAt = new Date().toISOString()
   } catch (e) {
     error = e instanceof Error ? e.message : "Error desconocido"
-    runs = PRODUCTION_RUNS
+    runs = []
   }
+
+  if (!error && sectoresError) error = sectoresError
+
+  // A valid `sector_id` in the URL wins; otherwise default to the first sector.
+  let selectedSectorId: string | null
+  if (requestedSectorId && sectores.some((sector) => sector.id === requestedSectorId)) {
+    selectedSectorId = requestedSectorId
+  } else {
+    selectedSectorId = sectores[0]?.id ?? null
+  }
+
+  // A missing/failed open lote is a valid state: the card falls back to the
+  // live SSE-derived value, so this never blocks the page.
+  let initialLoteAbierto: LoteSector | null = null
+  if (selectedSectorId) {
+    try {
+      initialLoteAbierto = await getLoteAbierto(selectedSectorId)
+    } catch {
+      initialLoteAbierto = null
+    }
+  }
+
+  // El estado del loop (loop_activo + modo) lo consulta sólo si hay un lote
+  // abierto. Falla de forma silenciosa: la UI asume "no activo" cuando el
+  // endpoint no existe o devuelve error, y en ese caso NO muestra el CTA.
+  let initialControlEstado: ControlEstado | null = null
+  if (initialLoteAbierto) {
+    initialControlEstado = await getControlEstado(initialLoteAbierto.id)
+  }
+
+  const canControl = hasMinRole(userRole, "Supervisor")
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -36,20 +88,21 @@ export default async function Page() {
             Supervisión de Producción
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Información de telemetría y calidad en todas las líneas de producción.
+            Supervisión por sector: lote abierto, conteos en tiempo real y el historial de producción.
           </p>
         </header>
 
-        {error && (
-          <div
-            role="alert"
-            className="mb-8 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
-
-        <DashboardContent runs={runs} lastSyncAt={lastSyncAt} />
+        <LotesDashboard
+          runs={runs}
+          lastSyncAt={lastSyncAt}
+          initialError={error}
+          sectores={sectores}
+          selectedSectorId={selectedSectorId}
+          initialLoteAbierto={initialLoteAbierto}
+          userRole={userRole}
+          canControl={canControl}
+          initialControlEstado={initialControlEstado}
+        />
       </main>
     </div>
   )

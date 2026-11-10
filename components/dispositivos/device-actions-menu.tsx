@@ -1,0 +1,308 @@
+"use client"
+
+import { useRef, useState, useTransition, type FormEvent } from "react"
+import { useRouter } from "next/navigation"
+import { Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { SectorSelect } from "@/components/shared/sector-select"
+import { deleteDispositivo, renameDispositivo, updateDispositivo } from "@/actions/api"
+import type { Device } from "@/lib/devices-data"
+import type { Sector } from "@/lib/production-data"
+import { deviceWhepUrl } from "@/lib/camera-sources"
+
+interface DeviceActionsMenuProps {
+  device: Device
+  /** Sectores disponibles para asignar al dispositivo. */
+  sectores?: Sector[]
+  /** Si la carga de sectores falló, se deshabilita la asignación para no perder la actual. */
+  sectoresError?: string | null
+}
+
+// Cuts React synthetic bubbling from the portaled dialog up to DeviceCard's
+// role="button" handlers. The card listens for click and Enter/Space keydown on
+// the whole card, and since synthetic events bubble through the component tree
+// (not the DOM), Space typed in a dialog input would reach it, get swallowed by
+// preventDefault and toggle the selection. base-ui keeps its own popup logic
+// untouched: those handlers run in the same merged listener, right after this
+// one, and don't check isPropagationStopped.
+function stopPropagation(e: { stopPropagation: () => void }) {
+  e.stopPropagation()
+}
+
+// Per-card actions. The new backend no longer exposes the credential lifecycle
+// (disable / enable / revoke / reprovision), so the remaining actions are the
+// metadata edit (PUT /api/v1/dispositivos) and the destructive delete.
+export function DeviceActionsMenu({
+  device,
+  sectores = [],
+  sectoresError = null,
+}: DeviceActionsMenuProps) {
+  const [editOpen, setEditOpen] = useState(false)
+  const [nombre, setNombre] = useState(device.nombre)
+  const [nombreError, setNombreError] = useState<string | null>(null)
+  const [sectorId, setSectorId] = useState(device.sectorId ?? "")
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  // Confirmación de borrado.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const deletingRef = useRef(false)
+
+  const derivedWhepUrl = deviceWhepUrl({ nombre: nombre.trim() || device.nombre, type: device.type })
+
+  const openEditDialog = () => {
+    setNombre(device.nombre)
+    setNombreError(null)
+    setSectorId(device.sectorId ?? "")
+    setEditOpen(true)
+  }
+
+  const handleEditSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    const trimmedNombre = nombre.trim()
+    if (!trimmedNombre) {
+      setNombreError("El nombre no puede quedar vacío.")
+      return
+    }
+    setNombreError(null)
+
+    const nombreCambio = trimmedNombre !== device.nombre
+
+    startTransition(async () => {
+      if (nombreCambio) {
+        const renameResult = await renameDispositivo(device.dispositivoId, trimmedNombre)
+        if (!renameResult.ok) {
+          toast.error("No se pudo renombrar el dispositivo", {
+            description: renameResult.errors.join(" · "),
+          })
+          return
+        }
+      }
+
+      const result = await updateDispositivo({
+        dispositivoId: device.dispositivoId,
+        sectorId: sectorId === "" ? null : sectorId,
+      })
+
+      if (result.ok) {
+        toast.success("Dispositivo actualizado.")
+        setEditOpen(false)
+        router.refresh()
+      } else {
+        const mensaje = nombreCambio
+          ? "Se actualizó el nombre pero no se pudo guardar el sector"
+          : "No se pudo actualizar el dispositivo"
+        toast.error(mensaje, {
+          description: result.errors.join(" · "),
+        })
+      }
+    })
+  }
+
+  const handleDelete = async () => {
+    if (deletingRef.current) return
+    deletingRef.current = true
+    setIsDeleting(true)
+    try {
+      const result = await deleteDispositivo(device.dispositivoId)
+      if (result.ok) {
+        toast.success("Dispositivo dado de baja.")
+        setDeleteOpen(false)
+        router.refresh()
+      } else {
+        toast.error("No se pudo dar de baja el dispositivo", {
+          description: result.errors.join(" · "),
+        })
+      }
+    } catch (error) {
+      toast.error("No se pudo dar de baja el dispositivo", {
+        description: error instanceof Error ? error.message : "No se pudo dar de baja el dispositivo.",
+      })
+    } finally {
+      deletingRef.current = false
+      setIsDeleting(false)
+    }
+  }
+
+  const whepHint = derivedWhepUrl
+    ? "Se arma automáticamente a partir del nombre y el tipo. No es editable."
+    : device.type
+      ? "Falta o es inválida la variable NEXT_PUBLIC_MEDIAMTX_URL (debe ser http(s)://); sin ella no se puede armar la URL."
+      : "El dispositivo no tiene tipo (entrada/salida) definido; no se puede derivar la URL."
+
+  const whepValue = derivedWhepUrl ?? (device.type ? "URL no disponible" : "Sin tipo de dispositivo")
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+        aria-label="Editar dispositivo"
+        title="Editar dispositivo"
+        onClick={(e) => {
+          e.stopPropagation()
+          openEditDialog()
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Pencil className="size-4" aria-hidden="true" />
+      </Button>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-destructive/15 hover:text-destructive"
+        aria-label="Eliminar dispositivo"
+        title="Eliminar dispositivo"
+        onClick={(e) => {
+          e.stopPropagation()
+          setDeleteOpen(true)
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Trash2 className="size-4" aria-hidden="true" />
+      </Button>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent onClick={stopPropagation} onKeyDown={stopPropagation} onKeyUp={stopPropagation}>
+          <DialogHeader>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
+              <Pencil className="size-5" aria-hidden="true" />
+            </span>
+            <DialogTitle>Editar dispositivo</DialogTitle>
+            <DialogDescription>Actualizá el nombre y el sector del dispositivo. La URL de la cámara se deriva automáticamente.</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditSubmit} noValidate className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="editar-dispositivo-nombre">Nombre</Label>
+              <Input
+                id="editar-dispositivo-nombre"
+                value={nombre}
+                onChange={(e) => {
+                  setNombre(e.target.value)
+                  if (nombreError) setNombreError(null)
+                }}
+                aria-invalid={nombreError ? true : undefined}
+                aria-describedby={nombreError ? "editar-dispositivo-nombre-error" : undefined}
+              />
+              {nombreError && (
+                <p id="editar-dispositivo-nombre-error" className="mt-1 text-xs text-destructive">
+                  {nombreError}
+                </p>
+              )}
+            </div>
+
+            <SectorSelect
+              id="editar-dispositivo-sector"
+              label="Sector"
+              value={sectorId}
+              onChange={setSectorId}
+              sectores={sectores}
+              allowEmpty
+              emptyOptionLabel="Sin sector"
+              disabled={Boolean(sectoresError)}
+              error={sectoresError ? "No se pudieron cargar los sectores." : null}
+              hint={
+                !sectoresError && sectores.length === 0
+                  ? "Todavía no hay sectores definidos."
+                  : undefined
+              }
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="editar-dispositivo-whep">URL WHEP (cámara)</Label>
+              <Input
+                id="editar-dispositivo-whep"
+                type="text"
+                value={whepValue}
+                readOnly
+                aria-readonly="true"
+                aria-describedby="editar-dispositivo-whep-hint"
+              />
+              <p id="editar-dispositivo-whep-hint" className="mt-1 text-xs text-muted-foreground">
+                {whepHint}
+              </p>
+            </div>
+
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button type="button" variant="outline">
+                    Cancelar
+                  </Button>
+                }
+              />
+              <Button type="submit" disabled={pending}>
+                {pending ? "Guardando…" : "Guardar cambios"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de borrado */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !deletingRef.current) setDeleteOpen(false)
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          onClick={stopPropagation}
+          onKeyDown={stopPropagation}
+          onKeyUp={stopPropagation}
+        >
+          <DialogHeader>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+              <TriangleAlert className="size-5" aria-hidden="true" />
+            </span>
+            <DialogTitle>Eliminar dispositivo</DialogTitle>
+            <DialogDescription>
+              {`¿Confirmás que querés eliminar el dispositivo "${device.nombre}" de la flota? Se revocará su credencial y se desasignará del sector; el historial de telemetría se conserva. El dispositivo deberá registrarse de nuevo.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" disabled={isDeleting} />}>
+              Cancelar
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Eliminando…
+                </>
+              ) : (
+                "Eliminar dispositivo"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

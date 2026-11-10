@@ -1,7 +1,8 @@
 {
-  "name": "my-project",
+  "name": "smartcheck-automation-frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.26.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,6 +13,7 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@react-oauth/google": "^0.13.5",
+    "@react-pdf/renderer": "4.9.0",
     "@vercel/analytics": "1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -28,11 +30,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.2.6",
+    "jsdom": "^30.0.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "typescript": "5.7.3",

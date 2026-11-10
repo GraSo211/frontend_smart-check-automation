@@ -1,35 +1,40 @@
 import { Boxes, ShieldCheck, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatKg, formatNumber } from "@/lib/format"
-import type { ProductionRun } from "@/lib/production-data"
+import { formatNumber, formatTemp } from "@/lib/format"
+import type { LoteSector } from "@/lib/production-data"
 
 interface KpiCardsProps {
-  runs: ProductionRun[]
+  runs: LoteSector[]
 }
 
-// Computes the top-row summary metrics across the full production dataset.
-function computeMetrics(runs: ProductionRun[]) {
-  const totalKg = runs.reduce(
-    (sum, r) => sum + r.correctosKg + r.quemadosKg + (r.crudosKg ?? 0),
+// F-F3: el backend expone `temp1_objetivo` y `vel_objetivo` por lote.
+// Promediamos los valores presentes por card. Una métrica con todas sus
+// observaciones ausentes se mantiene como "—" para no publicar un 0 fabricado.
+function computeMetrics(runs: LoteSector[]) {
+  const totalUnits = runs.reduce((sum, run) => sum + run.conteos.total, 0)
+  const totalOk = runs.reduce((sum, run) => sum + (run.conteos.ok ?? 0), 0)
+  const totalDefects = runs.reduce(
+    (sum, run) => sum + (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0),
     0,
   )
-  const totalCorrect = runs.reduce((sum, r) => sum + r.correctos, 0)
-  const totalUnits = runs.reduce((sum, r) => sum + r.totalUnidades, 0)
-  const totalBurnt = runs.reduce((sum, r) => sum + r.quemados, 0)
-  const avgTemp = runs.length
-    ? runs.reduce((sum, r) => sum + (r.tempHorno1 + r.tempHorno2) / 2, 0) / runs.length
-    : 0
-  const avgSpeed = runs.length
-    ? runs.reduce((sum, r) => sum + r.velocidadCinta, 0) / runs.length
-    : 0
+
+  const temp1: number[] = []
+  const vel: number[] = []
+  for (const run of runs) {
+    if (typeof run.temp1_objetivo === "number") temp1.push(run.temp1_objetivo)
+    if (typeof run.vel_objetivo === "number") vel.push(run.vel_objetivo)
+  }
+
+  const avg = (xs: number[]) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length)
 
   return {
-    totalKg,
     totalUnits,
-    qualityRate: totalUnits ? (totalCorrect / totalUnits) * 100 : 0,
-    defectRate: totalUnits ? (totalBurnt / totalUnits) * 100 : 0,
-    avgTemp,
-    avgSpeed,
+    qualityRate: totalUnits ? (totalOk / totalUnits) * 100 : 0,
+    defectRate: totalUnits ? (totalDefects / totalUnits) * 100 : 0,
+    avgTemp1: avg(temp1),
+    avgVel: avg(vel),
+    samplesTemp: temp1.length,
+    samplesVel: vel.length,
   }
 }
 
@@ -37,34 +42,48 @@ function computeMetrics(runs: ProductionRun[]) {
 export function KpiCards({ runs }: KpiCardsProps) {
   const m = computeMetrics(runs)
 
+  const hasData = runs.length > 0
+  const hasUnits = hasData && m.totalUnits > 0
+  // A bucket the model never emits stays null: an all-null `ok` (or all-null
+  // `quemado`+`crudo`) must render "—" instead of a fabricated 0.0% rate.
+  const hasOk = runs.some((run) => run.conteos.ok !== null)
+  const hasWaste = runs.some(
+    (run) => run.conteos.quemado !== null || run.conteos.crudo !== null,
+  )
+
+  const tempObjetivo = m.avgTemp1 !== null ? formatTemp(m.avgTemp1) : null
+
   const cards = [
     {
-      label: "Unidades procesadas totales en Kg",
-      value: formatKg(m.totalKg),
+      label: "Unidades procesadas",
+      value: hasUnits ? formatNumber(m.totalUnits) : "—",
       hint: `${runs.length} lotes de producción`,
       icon: Boxes,
       accent: "bg-primary/10 text-primary",
     },
     {
       label: "Tasa de calidad general",
-      value: `${m.qualityRate.toFixed(1)}%`,
+      value: hasUnits && hasOk ? `${m.qualityRate.toFixed(1)}%` : "—",
       hint: "Correctos vs unidades totales",
       icon: ShieldCheck,
-      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      accent: "bg-success/10 text-success",
     },
     {
       label: "Tasa de merma",
-      value: `${m.defectRate.toFixed(1)}%`,
-      hint: "Unidades quemadas / total",
+      value: hasUnits && hasWaste ? `${m.defectRate.toFixed(1)}%` : "—",
+      hint: "Quemados y crudos vs total",
       icon: Flame,
       accent: "bg-destructive/10 text-destructive",
     },
     {
-      label: "Promedio de hornos",
-      value: `${Math.round(m.avgTemp)}°C`,
-      hint: `Velocidad cinta ${m.avgSpeed.toFixed(1)} m/min`,
+      label: "Temperatura objetivo (T1)",
+      value: tempObjetivo ?? "—",
+      hint:
+        m.avgVel !== null
+          ? `Cinta objetivo ${m.avgVel.toLocaleString("es-AR", { maximumFractionDigits: 2 })} m/s · ${m.samplesTemp} muestras`
+          : `Cinta objetivo — · ${m.samplesTemp} muestras`,
       icon: Gauge,
-      accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      accent: "bg-warning/10 text-warning",
     },
   ]
 

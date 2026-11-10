@@ -4,7 +4,6 @@ import {
   buildDashboardSamples,
   levelFor,
   mergeDeviceUpdate,
-  mergeIncomingTelemetrySamples,
   mergeTelemetrySamples,
   percent,
   ramUsedMb,
@@ -32,7 +31,6 @@ function device(dispositivoId: string, receivedAt: string, cpuPct: number): Devi
   return {
     dispositivoId,
     nombre: dispositivoId,
-    ubicacion: "Planta",
     estado: "online",
     ultimaMetrica: metric,
     lastSeen: receivedAt,
@@ -41,6 +39,7 @@ function device(dispositivoId: string, receivedAt: string, cpuPct: number): Devi
 
 describe("telemetry thresholds and fallbacks", () => {
   it("classifies values at warning and critical boundaries", () => {
+    expect(levelFor(0, 70, 80)).toBe("normal")
     expect(levelFor(69.9, 70, 80)).toBe("normal")
     expect(levelFor(70, 70, 80)).toBe("warning")
     expect(levelFor(80, 70, 80)).toBe("critical")
@@ -51,6 +50,11 @@ describe("telemetry thresholds and fallbacks", () => {
     expect(ramUsedMb(undefined, 1024)).toBeUndefined()
     expect(percent(3072, 4096)).toBe(75)
     expect(percent(10, undefined)).toBeUndefined()
+    expect(levelFor(undefined, 70, 80)).toBe("unknown")
+    expect(levelFor(Number.NaN, 70, 80)).toBe("unknown")
+    expect(ramUsedMb(Number.NaN, 1024)).toBeUndefined()
+    expect(percent(Number.NaN, 4096)).toBeUndefined()
+    expect(percent(10, Number.NaN)).toBeUndefined()
   })
 
   it("deduplicates by device and report time while retaining live samples", () => {
@@ -72,11 +76,40 @@ describe("telemetry thresholds and fallbacks", () => {
     expect(samples.at(-2)?.cpuPct).toBe(10)
   })
 
-  it("lets a corrected SSE sample win at the same timestamp", () => {
-    const existing = sample("n1", "2026-01-01T00:01:00.000Z", 20)
-    const corrected = sample("n1", "2026-01-01T00:01:00.000Z", 30)
+  it("deduplicates by id while retaining distinct ids at the same timestamp", () => {
+    const first = { ...sample("n1", "2026-01-01T00:01:00.000Z", 20), id: "metric-1" }
+    const corrected = { ...first, cpuPct: 30 }
+    const distinct = { ...first, id: "metric-2", cpuPct: 40 }
 
-    expect(mergeIncomingTelemetrySamples([existing], [corrected])).toEqual([corrected])
+    expect(mergeTelemetrySamples([first], [corrected, distinct])).toEqual([corrected, distinct])
+  })
+
+  it("colapsa la misma muestra cuando el SSE llega sin id y el historial HTTP con id", () => {
+    // El SSE difunde `ultimaMetrica.id` vacío y `receivedAt` con nanosegundos;
+    // PostgreSQL devuelve el id real y `receivedAt` con microsegundos.
+    const httpRow = { ...sample("n1", "2026-01-01T00:01:00.123456Z", 20), id: "metric-1" }
+    const liveRow = { ...sample("n1", "2026-01-01T00:01:00.123456789Z", 20), id: "" }
+
+    const merged = mergeTelemetrySamples([httpRow], [liveRow])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].id).toBe("metric-1")
+  })
+
+  it("colapsa el mismo reporte en cualquier orden de llegada", () => {
+    const httpRow = { ...sample("n1", "2026-01-01T00:01:00.123456Z", 20), id: "metric-1" }
+    const liveRow = { ...sample("n1", "2026-01-01T00:01:00.123456789Z", 25), id: "" }
+
+    expect(mergeTelemetrySamples([liveRow], [httpRow])).toHaveLength(1)
+  })
+
+  it("conserva reportes distintos del mismo dispositivo en segundos distintos", () => {
+    const liveA = { ...sample("n1", "2026-01-01T00:01:00.000Z", 20), id: "" }
+    const liveB = { ...sample("n1", "2026-01-01T00:01:10.000Z", 30), id: "" }
+    const httpB = { ...sample("n1", "2026-01-01T00:01:10.000300Z", 30), id: "metric-2" }
+
+    expect(mergeTelemetrySamples([liveA], [liveB])).toHaveLength(2)
+    expect(mergeTelemetrySamples([liveA, liveB], [httpB])).toHaveLength(2)
   })
 
   it("does not let a stale snapshot replace the current metric", () => {
