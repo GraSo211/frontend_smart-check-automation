@@ -1,12 +1,13 @@
 import { cookies } from 'next/headers'
+import { getBackendUrlOrNull } from '@/lib/api-client'
 
-export const MONITORING_REQUEST_TIMEOUT_MS = 8_000
+const MONITORING_REQUEST_TIMEOUT_MS = 8_000
 
 const PRIVATE_NO_STORE = 'private, no-store'
 const SSE_NO_STORE = 'private, no-store, no-transform'
 
 function apiUrl(): string | null {
-  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') || null
+  return getBackendUrlOrNull()
 }
 
 function timeoutResponse(message: string, status: number): Response {

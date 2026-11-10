@@ -3,7 +3,7 @@ import { LoginForm } from './login-form'
 import { getSafeInternalRedirect } from '@/lib/auth-redirect'
 
 export const metadata: Metadata = {
-  title: 'Iniciar Sesión | Smart-Check Automation',
+  title: 'Iniciar Sesión | SmartCheck Automation',
   description:
     'Accedé al panel de supervisión de producción con tu cuenta corporativa de Google.',
 }

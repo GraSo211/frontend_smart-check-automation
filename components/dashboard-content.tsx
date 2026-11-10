@@ -15,17 +15,25 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react"
-import { formatKg, formatNumber, qualityRate } from "@/lib/format"
+import { formatNumber, formatPct, formatTemp, qualityRate } from "@/lib/format"
 import type { UserRole } from "@/lib/auth"
-import type { ProductionRun } from "@/lib/production-data"
+import type { LoteSector } from "@/lib/production-data"
+import type { ReporteEconomico } from "@/lib/reportes-types"
+import { EconomicImpactLive } from "@/components/economic-impact-live"
 import { useMonitoring, useProductionData } from "@/components/monitoring-provider"
 import { availabilityLabel } from "@/components/layout/monitoring-status"
 
-interface DashboardContentProps {
-  runs: ProductionRun[]
+interface HomeDashboardProps {
+  economia?: ReporteEconomico | null
+  economiaError?: string | null
+  runs: LoteSector[]
   lastSyncAt: string | null
   userRole?: UserRole
   error?: string | null
+  alertasActivas?: number | null
+  alertasError?: string | null
+  temperaturaPromedio?: number | null
+  temperaturaError?: string | null
 }
 
 const sections: Array<{
@@ -38,49 +46,65 @@ const sections: Array<{
 }> = [
   { href: "/supervision", label: "Supervisión en vivo", description: "Cámaras y señales de la línea en tiempo real.", icon: Eye, tone: "bg-info/10 text-info", metric: "" },
   { href: "/lotes", label: "Lotes y datos", description: "Consultá resultados y rendimiento cuando necesites profundizar.", icon: Database, tone: "bg-primary/10 text-primary", metric: "" },
-  { href: "/nodos", label: "Estado de los nodos", description: "Salud de los dispositivos conectados a la planta.", icon: Cpu, tone: "bg-success/10 text-success", metric: "Telemetría IoT" },
+  { href: "/dispositivos", label: "Estado de los dispositivos", description: "Salud de los dispositivos conectados a la planta.", icon: Cpu, tone: "bg-success/10 text-success", metric: "Telemetría IoT" },
   { href: "/configuracion", label: "Configuración", description: "Parámetros de producto y reglas operativas.", icon: Settings2, tone: "bg-warning/10 text-warning", metric: "Parámetros de línea" },
   { href: "/alertas", label: "Manejo de alertas", description: "Priorizá desvíos y mantené el equipo al tanto.", icon: BellRing, tone: "bg-destructive/10 text-destructive", metric: "Centro de atención" },
   { href: "/usuarios", label: "Usuarios y roles", description: "Accesos, permisos y responsables del sistema.", icon: Users, tone: "bg-accent/10 text-accent", metric: "Gestión de equipo" },
 ]
 
-// Proyección interna, no contable: se aplica sólo sobre la merma observada en runs.
-// Los supuestos son deliberadamente conservadores y se mantienen visibles en el microcopy.
-const ESTIMATION = {
-  avoidableWasteRate: 0.15,
-  replacementCostPerUnit: 85,
-} as const
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value)
-}
-
 function freshnessLabel(freshness: "fresh" | "stale" | "never") {
   return freshness === "fresh" ? "Actualizada" : freshness === "stale" ? "Desactualizada" : "Sin confirmar"
 }
 
-export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", error }: DashboardContentProps) {
+export function HomeDashboard({
+  economia,
+  economiaError,
+  runs,
+  lastSyncAt,
+  userRole = "Operario",
+  error,
+  alertasActivas = null,
+  alertasError = null,
+  temperaturaPromedio = null,
+  temperaturaError = null,
+}: HomeDashboardProps) {
   const monitoring = useMonitoring()
   const production = useProductionData(runs, lastSyncAt, error)
   const currentRuns = production.runs
   const currentError = production.error
 
   const metrics = useMemo(() => {
-    const units = currentRuns.reduce((sum, run) => sum + run.totalUnidades, 0)
-    const correctos = currentRuns.reduce((sum, run) => sum + run.correctos, 0)
-    const kg = currentRuns.reduce((sum, run) => sum + run.correctosKg + run.quemadosKg + (run.crudosKg ?? 0), 0)
-    const temperature = currentRuns.length ? currentRuns.reduce((sum, run) => sum + (run.tempHorno1 + run.tempHorno2) / 2, 0) / currentRuns.length : null
-    const alerts = currentRuns.filter((run) => run.quemados / run.totalUnidades >= 0.05).length
-    const wasteUnits = currentRuns.reduce((sum, run) => sum + run.quemados + (run.crudas ?? 0), 0)
-    const opportunityUnits = Math.round(wasteUnits * ESTIMATION.avoidableWasteRate)
+    const units = currentRuns.reduce((sum, run) => sum + run.conteos.total, 0)
+    // `ok` is the authoritative correct bucket when the model emits it. When it
+    // does not, the correct units are derived from the authoritative total minus
+    // the recorded defects, clamped at zero.
+    const correctos = currentRuns.reduce((sum, run) => {
+      if (run.conteos.ok !== null) return sum + run.conteos.ok
+      const defects = (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0)
+      return sum + Math.max(0, run.conteos.total - defects)
+    }, 0)
+    const wasteUnits = currentRuns.reduce((sum, run) => sum + (run.conteos.quemado ?? 0) + (run.conteos.crudo ?? 0), 0)
     const hasData = currentRuns.length > 0
-    return { units, kg, temperature: hasData ? temperature : null, alerts, wasteUnits, opportunityUnits, projectedSavings: opportunityUnits * ESTIMATION.replacementCostPerUnit, quality: hasData && units ? qualityRate(correctos, units) : null, hasData }
+    // An all-null `quemado`+`crudo` must render "—" instead of a fabricated 0.0%
+    // waste rate.
+    const hasWaste = currentRuns.some((run) => run.conteos.quemado !== null || run.conteos.crudo !== null)
+    // `quality` is null (renders "—") only when there is no unit to judge.
+    const wasteRate = hasData && hasWaste && units > 0 ? wasteUnits / units : null
+    return {
+      units,
+      correctos,
+      wasteUnits,
+      wasteRate,
+      quality: hasData && units > 0 ? qualityRate(correctos, units) : null,
+      hasData,
+      hasWaste,
+    }
   }, [currentRuns])
 
   const sectionMetrics = {
     "/supervision": availabilityLabel(monitoring.camera.availability),
     "/lotes": freshnessLabel(monitoring.sync.lotes.freshness),
-    "/nodos": availabilityLabel(monitoring.nodes.availability),
+    "/dispositivos": availabilityLabel(monitoring.nodes.availability),
   }
 
   return (
@@ -89,7 +113,7 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
         <div>
           <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-primary"><Factory className="size-4" aria-hidden="true" /> Centro de operaciones</p>
           <h1 className="mt-2 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Buen día, equipo</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Todo lo importante de Smart-Check Automation, en un solo lugar.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Todo lo importante de SmartCheck Automation, en un solo lugar.</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground/60" /> Monitoreo: {availabilityLabel(monitoring.overall.availability)} · {monitoring.overall.detail} · {userRole}</div>
       </header>
@@ -101,22 +125,49 @@ export function DashboardContent({ runs, lastSyncAt, userRole = "Operario", erro
       <section className="grid gap-5 lg:grid-cols-[1.45fr_0.75fr]">
         <div className="relative overflow-hidden rounded-xl bg-primary px-5 py-6 text-primary-foreground shadow-sm sm:p-8">
           <div className="absolute -right-20 -top-24 size-72 rounded-full border border-primary-foreground/10" />
-          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">{metrics.hasData ? formatKg(metrics.kg) : "—"}</p><p className="mt-2 text-sm text-primary-foreground/70">{currentError ? (metrics.hasData ? "datos confirmados anteriores" : "consulta no disponible") : metrics.hasData ? "producción registrada" : production.loading ? "consultando" : "sin datos registrados"}</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(currentRuns.length)}</strong> lotes consultados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
+          <div className="relative"><p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/60">Pulso de la operación</p><p className="mt-8 font-mono text-4xl font-semibold tracking-tight sm:text-5xl">{metrics.hasData ? formatNumber(metrics.units) : "—"}</p><p className="mt-2 text-sm text-primary-foreground/70">{currentError ? (metrics.hasData ? "datos confirmados anteriores" : "consulta no disponible") : metrics.hasData ? "producción registrada" : production.loading ? "consultando" : "sin datos registrados"}</p><div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-primary-foreground/75"><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(metrics.units)}</strong> unidades</span><span><strong className="text-primary-foreground">{currentError || production.loading ? "—" : formatNumber(currentRuns.length)}</strong> lotes consultados</span></div><Link href="/supervision" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-foreground/90">Abrir supervisión <ArrowUpRight className="size-4" /></Link></div>
         </div>
         <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm"><div><div className="flex items-center justify-between"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Calidad de línea</p><CheckCircle2 className="size-5 text-muted-foreground" /></div><p className="mt-8 font-mono text-4xl font-semibold tracking-tight text-foreground">{metrics.quality === null ? "—" : `${metrics.quality.toFixed(1)}%`}</p><p className="mt-2 text-sm text-muted-foreground">{metrics.hasData ? "unidades correctas" : "sin medición"}</p></div><div className="mt-8 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success" style={{ width: `${metrics.quality ?? 0}%` }} /></div></div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores operativos">
-        <Metric label="Temperatura promedio" value={metrics.temperature === null ? "—" : `${Math.round(metrics.temperature)}°C`} hint={metrics.hasData ? "Hornos 1 y 2" : "Sin medición"} />
-        <Metric label="Alertas para revisar" value={!metrics.hasData ? "—" : String(metrics.alerts)} hint={!metrics.hasData ? "Sin datos para evaluar" : currentError ? "Sobre datos confirmados anteriores" : metrics.alerts ? "Requieren atención" : "Sin desvíos críticos"} emphasis={metrics.alerts > 0} />
+        <Metric
+          label="Temperatura promedio"
+          value={temperaturaPromedio === null ? "—" : formatTemp(temperaturaPromedio)}
+          hint={
+            temperaturaError
+              ? "No se pudo consultar la telemetría"
+              : currentError
+                ? "Sin datos de producción"
+                : temperaturaPromedio === null
+                  ? "Sin telemetría de la Pi"
+                  : "Última lectura por sector con lote abierto"
+          }
+        />
+        <Metric
+          label="Alertas para revisar"
+          value={alertasActivas === null ? "—" : String(alertasActivas)}
+          hint={
+            alertasError
+              ? "No se pudieron consultar"
+              : alertasActivas === null
+                ? "Sin datos"
+                : alertasActivas > 0
+                  ? "Activas en el backend"
+                  : "Sin alertas activas"
+          }
+          emphasis={(alertasActivas ?? 0) > 0}
+        />
         <Metric label="Conectividad" value={availabilityLabel(monitoring.backend.availability)} hint={monitoring.backend.detail} />
         <Metric label="Sincronización de lotes" value={freshnessLabel(monitoring.sync.lotes.freshness)} hint="Consulta o evento válido recibido" />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2" aria-label="Indicadores de impacto estimado">
-        <ImpactCard eyebrow="Proyección interna" title="Ahorro potencial estimado" value={metrics.hasData ? formatCurrency(metrics.projectedSavings) : "—"} detail={metrics.hasData ? `${formatNumber(metrics.opportunityUnits)} unidades recuperables` : "Sin datos para estimar"} note={`Calculado sobre el ${ESTIMATION.avoidableWasteRate * 100}% de la merma observada, a ${formatCurrency(ESTIMATION.replacementCostPerUnit)} por unidad.`} tone="text-success" />
-        <ImpactCard eyebrow="Oportunidad de mejora" title="Impacto estimado en merma" value={metrics.hasData ? `${ESTIMATION.avoidableWasteRate * 100}% menos` : "—"} detail={metrics.hasData ? `${formatNumber(metrics.opportunityUnits)} de ${formatNumber(metrics.wasteUnits)} unidades de merma` : "Sin datos para estimar"} note="Proyección orientativa sobre quemados y crudas registrados; no representa un resultado garantizado." tone="text-info" />
+      <section className="grid gap-4 md:grid-cols-2" aria-label="Merma observada">
+        <ImpactCard eyebrow="Dato observado" title="Merma registrada" value={metrics.hasData && metrics.hasWaste ? `${formatNumber(metrics.wasteUnits)} u` : "—"} detail={metrics.hasData && metrics.hasWaste ? "unidades quemadas o crudas" : "Sin conteos de merma"} note="Suma de los lotes consultados. No es una proyección económica ni incluye merma no detectada." tone="text-warning" />
+        <ImpactCard eyebrow="Dato observado" title="Tasa de merma" value={metrics.wasteRate === null ? "—" : formatPct(metrics.wasteRate)} detail={metrics.hasData ? `sobre ${formatNumber(metrics.units)} unidades registradas` : "Sin datos para calcular"} note="Derivada de los conteos del backend. Si un lote no reporta merma, no se estima." tone="text-info" />
       </section>
+
+      <EconomicImpactLive initial={economia} initialError={economiaError} refreshKey={monitoring.sync.lotes.lastConfirmedAt} />
 
       <section aria-labelledby="modules-heading"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tu espacio de trabajo</p><h2 id="modules-heading" className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Accesos y estado</h2></div><span className="hidden text-xs text-muted-foreground sm:block">6 módulos disponibles</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{sections.map((section) => <SectionCard key={section.href} {...section} metric={sectionMetrics[section.href as keyof typeof sectionMetrics] ?? section.metric} />)}</div></section>
     </div>

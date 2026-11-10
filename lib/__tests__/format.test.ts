@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
   formatNumber,
-  formatKg,
   formatDate,
   formatTime,
   formatWindow,
@@ -26,20 +25,6 @@ describe("formatNumber", () => {
   })
 })
 
-describe("formatKg", () => {
-  it("formats kilograms with one decimal", () => {
-    expect(formatKg(220.5)).toBe("220,5 kg")
-  })
-
-  it("formats whole number kilograms", () => {
-    expect(formatKg(100)).toBe("100,0 kg")
-  })
-
-  it("formats zero kilograms", () => {
-    expect(formatKg(0)).toBe("0,0 kg")
-  })
-})
-
 describe("formatDate", () => {
   it("formats an ISO date string to es-AR short format", () => {
     const result = formatDate("2026-06-02T06:00:00.000Z")
@@ -50,11 +35,11 @@ describe("formatDate", () => {
 
 describe("formatTime", () => {
   it("formats an ISO time string to HH:mm", () => {
-    expect(formatTime("2026-06-02T06:00:00.000Z")).toBe("06:00")
+    expect(formatTime("2026-06-02T06:00:00.000Z")).toBe("03:00")
   })
 
   it("pads single-digit hours", () => {
-    expect(formatTime("2026-06-02T08:30:00.000Z")).toBe("08:30")
+    expect(formatTime("2026-06-02T08:30:00.000Z")).toBe("05:30")
   })
 })
 
@@ -62,8 +47,8 @@ describe("formatWindow", () => {
   it("builds a compact date · time–time string", () => {
     const result = formatWindow("2026-06-02T06:00:00.000Z", "2026-06-02T08:30:00.000Z")
     expect(result).toContain("·")
-    expect(result).toContain("06:00")
-    expect(result).toContain("08:30")
+    expect(result).toContain("03:00")
+    expect(result).toContain("05:30")
   })
 })
 

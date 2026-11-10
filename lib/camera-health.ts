@@ -1,7 +1,9 @@
+import type { Availability } from "@/lib/monitoring-types"
+
 export const CAMERA_EVIDENCE_TTL_MS = 10_000
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000]
 
-export type CameraAvailability = "available" | "degraded" | "disconnected" | "unknown"
+export type CameraAvailability = Availability
 
 export function getReconnectDelay(attempt: number) {
   return RECONNECT_DELAYS[Math.min(Math.max(attempt, 0), RECONNECT_DELAYS.length - 1)]
@@ -29,7 +31,7 @@ export function isCameraEvidenceFresh(lastEvidenceAt: number | null, now = Date.
   return lastEvidenceAt !== null && now - lastEvidenceAt <= CAMERA_EVIDENCE_TTL_MS
 }
 
-export function cameraEvidenceTimestamp(receivedAt = Date.now()) {
+function cameraEvidenceTimestamp(receivedAt = Date.now()) {
   return new Date(receivedAt).toISOString()
 }
 
@@ -82,14 +84,6 @@ export function getCameraHealth({
 
 export function isCurrentCameraGeneration(generation: number, currentGeneration: number) {
   return generation === currentGeneration
-}
-
-export function shouldPublishCameraEvidence(lastPublishedAt: number | null, evidenceAt: number, intervalMs = 1_000) {
-  return lastPublishedAt === null || evidenceAt - lastPublishedAt >= intervalMs
-}
-
-export function canRequestCameraFrame(pendingCallback: number | null) {
-  return pendingCallback === null
 }
 
 export function startCameraSessionDelete(location: string) {

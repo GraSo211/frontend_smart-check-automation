@@ -20,7 +20,6 @@ describe('monitoring store', () => {
   const device = (dispositivoId: string, estado: 'online' | 'offline') => ({
     dispositivoId,
     nombre: dispositivoId,
-    ubicacion: 'planta',
     estado,
     lastSeen: at,
   })
@@ -54,7 +53,7 @@ describe('monitoring store', () => {
     expect(view.overall.availability).toBe('unknown')
   })
 
-  it('mantiene observaciones por nodo y no renueva el inventario con un evento', () => {
+  it('mantiene observaciones por dispositivo y no renueva el inventario con un evento', () => {
     const observations = {
       a: { device: device('a', 'online'), observedAt: at },
       b: { device: device('b', 'online'), observedAt: at },

@@ -1,13 +1,35 @@
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
+import { SignJWT } from 'jose'
 import {
   ROLE_LEVEL,
   hasMinRole,
   decodeSessionToken,
-  isSessionExpired,
-  type SessionPayload,
 } from '@/lib/auth'
 
+const TEST_SECRET = 'test-jwt-secret-with-at-least-32-characters'
+const secretBytes = new TextEncoder().encode(TEST_SECRET)
+
+function sign(
+  claims: Record<string, unknown>,
+  options: { secret?: Uint8Array; issuer?: string; expiresIn?: string | number | null } = {},
+) {
+  let token = new SignJWT(claims)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(options.issuer ?? 'smart-check-automation')
+    .setIssuedAt()
+
+  if (options.expiresIn !== null) {
+    token = token.setExpirationTime(options.expiresIn ?? '1h')
+  }
+
+  return token.sign(options.secret ?? secretBytes)
+}
+
 describe('Auth Utilities & Role Hierarchy', () => {
+  beforeAll(() => {
+    process.env.JWT_SECRET = TEST_SECRET
+  })
+
   describe('ROLE_LEVEL & hasMinRole', () => {
     it('assigns correct level hierarchy to roles', () => {
       expect(ROLE_LEVEL.Administrador).toBeGreaterThan(ROLE_LEVEL.Supervisor)
@@ -28,42 +50,69 @@ describe('Auth Utilities & Role Hierarchy', () => {
   })
 
   describe('decodeSessionToken', () => {
-    it('returns null for empty or invalid token string', () => {
-      expect(decodeSessionToken('')).toBeNull()
-      expect(decodeSessionToken('invalid-token')).toBeNull()
+    it('returns null for empty or invalid token string', async () => {
+      expect(await decodeSessionToken('')).toBeNull()
+      expect(await decodeSessionToken('invalid-token')).toBeNull()
     })
-  })
 
-  describe('isSessionExpired', () => {
-    it('returns false if session has no expiration field (exp)', () => {
-      const session: SessionPayload = {
+    it('accepts a valid HS256 token and normalizes name/role', async () => {
+      const token = await sign({
+        email: 'user@fermar.com',
+        name: 'Juan Perez',
+        role: 'Supervisor',
+      })
+
+      expect(await decodeSessionToken(token)).toMatchObject({
         email: 'user@fermar.com',
         nombre: 'Juan Perez',
         rol: 'Supervisor',
-      }
-      expect(isSessionExpired(session)).toBe(false)
+      })
     })
 
-    it('returns true if exp is in the past', () => {
-      const pastTime = Math.floor(Date.now() / 1000) - 3600 // 1 hour ago
-      const session: SessionPayload = {
-        email: 'user@fermar.com',
-        nombre: 'Juan Perez',
-        rol: 'Supervisor',
-        exp: pastTime,
-      }
-      expect(isSessionExpired(session)).toBe(true)
+    it('rejects a token signed with another secret', async () => {
+      const token = await sign(
+        { email: 'user@fermar.com', name: 'Juan Perez', role: 'Administrador' },
+        { secret: new TextEncoder().encode('another-secret-with-32-characters!!') },
+      )
+
+      expect(await decodeSessionToken(token)).toBeNull()
     })
 
-    it('returns false if exp is in the future', () => {
-      const futureTime = Math.floor(Date.now() / 1000) + 3600 // 1 hour ahead
-      const session: SessionPayload = {
+    it('rejects an expired token', async () => {
+      const token = await sign(
+        { email: 'user@fermar.com', name: 'Juan Perez', role: 'Supervisor' },
+        { expiresIn: '-1h' },
+      )
+
+      expect(await decodeSessionToken(token)).toBeNull()
+    })
+
+    it('rejects a token without exp', async () => {
+      const token = await sign(
+        { email: 'user@fermar.com', name: 'Juan Perez', role: 'Supervisor' },
+        { expiresIn: null },
+      )
+
+      expect(await decodeSessionToken(token)).toBeNull()
+    })
+
+    it('rejects a token from another issuer', async () => {
+      const token = await sign(
+        { email: 'user@fermar.com', name: 'Juan Perez', role: 'Supervisor' },
+        { issuer: 'another-service' },
+      )
+
+      expect(await decodeSessionToken(token)).toBeNull()
+    })
+
+    it('rejects an unknown role', async () => {
+      const token = await sign({
         email: 'user@fermar.com',
-        nombre: 'Juan Perez',
-        rol: 'Supervisor',
-        exp: futureTime,
-      }
-      expect(isSessionExpired(session)).toBe(false)
+        name: 'Juan Perez',
+        role: 'Root',
+      })
+
+      expect(await decodeSessionToken(token)).toBeNull()
     })
   })
 })

@@ -3,10 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { validateLoginForm } from '@/lib/auth-validation'
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'https://backend-smart-check-automation-go.onrender.com'
+import { getBackendUrl } from '@/lib/api-client'
 
 const SESSION_COOKIE = 'session_token'
 const SESSION_MAX_AGE = 8 * 60 * 60
@@ -104,7 +101,7 @@ export async function logoutAction(): Promise<void> {
   const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
-    await fetch(`${API_URL}/api/v1/auth/logout`, {
+    await fetch(`${getBackendUrl()}/api/v1/auth/logout`, {
       method: 'POST',
       credentials: 'include',
       headers: { Cookie: `${SESSION_COOKIE}=${token}` },
@@ -131,7 +128,7 @@ export async function loginWithGoogleAction(
   const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/auth/google`, {
+    const response = await fetch(`${getBackendUrl()}/api/v1/auth/google`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -195,7 +192,7 @@ export async function loginWithLocalAction(
   const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+    const response = await fetch(`${getBackendUrl()}/api/v1/auth/login`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

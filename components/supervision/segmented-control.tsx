@@ -13,6 +13,7 @@ type SegmentedControlProps = {
   options: SegmentedOption[]
   value: string
   onChange: (id: string) => void
+  disabled?: boolean
   className?: string
 }
 
@@ -21,7 +22,7 @@ type SegmentedControlProps = {
  * al foco con las flechas, una sola opción queda en el orden de tabulación y
  * el foco visible usa el anillo del sistema de diseño.
  */
-export default function SegmentedControl({ label, options, value, onChange, className }: SegmentedControlProps) {
+export default function SegmentedControl({ label, options, value, onChange, disabled = false, className }: SegmentedControlProps) {
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
 
   if (options.length === 0) return null
@@ -82,12 +83,14 @@ export default function SegmentedControl({ label, options, value, onChange, clas
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={disabled}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
               "rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap outline-none transition-colors duration-200",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              disabled && "cursor-not-allowed opacity-60",
               selected
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-background/70 hover:text-foreground",

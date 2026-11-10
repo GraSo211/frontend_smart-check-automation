@@ -241,8 +241,8 @@ export function LoginForm({ redirectTo = '/' }: { redirectTo?: string }) {
           <div className="mb-8 flex flex-col items-center gap-3 text-center">
             <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/15 p-2 shadow-sm ring-1 ring-primary/20">
               <Image
-                src="/Isotipo ⁄ Icono.webp"
-                alt="Smart-Check Automation"
+                src="/fermar/isotipo-icono.webp"
+                alt="SmartCheck Automation"
                 width={36}
                 height={48}
                 className="h-full w-auto object-contain"
@@ -286,7 +286,7 @@ export function LoginForm({ redirectTo = '/' }: { redirectTo?: string }) {
 
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Smart-Check Automation · Fermar S.A.
+          © {new Date().getFullYear()} SmartCheck Automation · Fermar S.A.
         </p>
       </div>
     </GoogleOAuthProvider>

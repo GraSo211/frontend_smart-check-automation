@@ -1,6 +1,6 @@
-# Smart-Check Automation
+# SmartCheck Automation
 
-Frontend de **Smart-Check Automation** para la supervisión de producción de la
+Frontend de **SmartCheck Automation** para la supervisión de producción de la
 panificadora industrial **Fermar S.A.**. Centraliza el estado de la operación,
 los lotes, la telemetría IoT Edge, los parámetros de producto, los usuarios y la
 supervisión de video en vivo.
@@ -25,15 +25,25 @@ es un servicio externo en Go; no forma parte de este proyecto.
 
 ## Alcance funcional
 
+El panel y los reportes incluyen el **impacto económico de las mermas en ARS**,
+calculado con el costo unitario actual de cada variedad, configurable en
+`/configuracion`. Incluye estados de información incompleta y exportaciones.
+Ver [configuración y criterio de cálculo](docs/impacto-economico-mermas.md).
+
 | Área | Funcionalidad actual |
 |---|---|
-| Operación | Dashboard con indicadores de producción, calidad, temperatura, conectividad y sincronización. |
-| Supervisión | Lista y muestra la cámara de los dispositivos que tienen una URL WHEP configurada, con reconexión automática. Por capacidad de las Raspberry, cada nodo expone una sola cámara/stream. |
-| Lotes | Consulta de lotes, búsqueda por producto, filtro por turno y rango de temperatura, KPIs y tabla histórica. |
+| Operación | Dashboard con indicadores de producción, calidad, merma observada, alertas activas, temperatura promedio real del horno, conectividad y sincronización. |
+| Supervisión | Lista y muestra la cámara de los dispositivos con tipo (entrada/salida) derivando la URL WHEP a partir del nombre, el tipo y `NEXT_PUBLIC_MEDIAMTX_URL`, con reconexión automática. Por capacidad de las Raspberry, cada dispositivo expone una sola cámara/stream. |
+| Lotes | Consulta de lotes, búsqueda por producto, filtro por estado y sector (en la URL), KPIs y tabla histórica. |
+| Consigna manual | Envía una consigna de temperatura y velocidad de cinta al horno del sector seleccionado, asociada a un lote abierto en modo `MANUAL`, y muestra la última telemetría real de la Pi (`/horno/consigna`) y el historial de consignas. El formulario queda bloqueado si no hay un lote abierto o si el lote está en `SUPERVISION` o `AUTOMATICO`; para enviar, el lote debe estar en `MANUAL` (se cambia desde Control del lote). El historial muestra `Pendiente` (encolada), `Aplicada` (confirmada por ack de la Pi) y `Rechazada` (no se pudo encolar), junto con el `decisionId` cuando existe; `exitosa` sigue presente por compatibilidad con respuestas viejas. |
+| Línea de producción | Vista por sector del lote abierto: modo de operación, setpoints contra el rango del producto, KPIs de calidad y alertas activas del sector. |
 | Configuración | Selección de producto, edición de parámetros de horno/cinta/calidad y consulta del historial de corridas. La edición en la interfaz está habilitada para Supervisor y Administrador. |
-| Nodos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, alta/edición/baja de dispositivos y la URL WHEP de su cámara. |
+| Notificaciones | Configuración de canales de alerta (email con Resend o Gmail API, y Telegram) y preferencias por usuario. Requiere rol Administrador. Los secretos de los proveedores se configuran únicamente en el backend. |
+| Sectores | Administración de los sectores productivos: indicadores, búsqueda, alta/edición/baja y conteo de dispositivos asignados. La gestión requiere rol Supervisor o Administrador. |
+| Dispositivos | Estado de Raspberry Pi, última telemetría, métricas en vivo, historial, solicitudes de registro (aprobar/rechazar), edición de sector y baja de dispositivos. La URL WHEP de la cámara se deriva del nombre y el tipo y es de solo lectura en el panel; el nombre se sincroniza con la Raspberry, que es la fuente de verdad. |
 | Usuarios | Listado, búsqueda, alta, cambio de rol y activación/desactivación de usuarios corporativos. |
-| Alertas | Página de módulo reservada para la gestión de alertas y notificaciones; actualmente muestra una sección informativa. |
+| Alertas | Listado de alertas operativas con filtro por estado (`ACTIVA`, `ACK`, `RESUELTA`, `TODAS`) y acuse de recibo para Supervisor y Administrador. |
+| Reportes | Centro de reportes con KPIs de producción, calidad, proceso, alertas, MPC y OEE (A/P/Q). Filtros por rango de fechas (ART), sector, producto y turno; descarga del detalle en CSV, CSV para Excel es-AR, JSON y PDF operativo, alertas del período en CSV/JSON, y PDF/CSV de trazabilidad por lote con métricas, consignas, alertas y decisiones MPC. |
 
 ## Stack y servicios
 
@@ -49,43 +59,41 @@ es un servicio externo en Go; no forma parte de este proyecto.
 | Tiempo real | `EventSource`/SSE del navegador, proxificado por handlers internos de Next.js |
 | Video | WebRTC del navegador consumiendo una sesión WHEP de MediaMTX |
 | Notificaciones UI | `sonner` |
+| PDF | `@react-pdf/renderer` `4.9.x` (Route Handler Node, Helvetica built-in) |
 | Analítica | `@vercel/analytics` `1.6.1`, montada únicamente con `NODE_ENV=production` |
-| Pruebas | Vitest `4.1.x` |
+| Pruebas | Vitest `4.1.x`; entorno `node` por defecto y `jsdom` en los tests de componentes |
 | Gestor de paquetes | `pnpm` (canónico; usar el lockfile `pnpm-lock.yaml`) |
 
 ### Servicios externos por funcionalidad
 
 | Funcionalidad | Requisito y conexión |
 |---|---|
-| Login, usuarios, lotes, parámetros y nodos | API Go accesible desde el servidor Next.js mediante `NEXT_PUBLIC_API_URL`: `http://localhost:8080` en desarrollo o la URL de Render en producción. |
-| Actualizaciones de lotes y nodos | La misma API Go debe exponer SSE; el navegador se conecta a los handlers internos de Next.js. |
-| Supervisión de video | Servidor MediaMTX con una fuente de video por Raspberry. La URL WHEP de cada cámara es un dato del dispositivo (campo `whepUrl`) y el navegador accede directamente al endpoint del nodo seleccionado. La infraestructura está pendiente de definición. |
+| Login, usuarios, lotes, parámetros y dispositivos | API Go accesible desde el servidor Next.js mediante `NEXT_PUBLIC_API_URL`: `http://localhost:8080` en desarrollo o la URL de Render en producción. |
+| Actualizaciones de lotes y dispositivos | La misma API Go debe exponer SSE; el navegador se conecta a los handlers internos de Next.js. |
+| Supervisión de video | Servidor MediaMTX con una fuente de video por Raspberry. La URL WHEP de cada cámara se deriva en el front a partir del nombre del dispositivo, su tipo (entrada/salida) y `NEXT_PUBLIC_MEDIAMTX_URL`; el navegador accede directamente al endpoint del dispositivo seleccionado. La infraestructura está pendiente de definición. |
 | Login con Google (opcional) | Client ID de Google OAuth configurado para el origen del frontend y soporte del endpoint Google en la API Go. |
 
 ### MediaMTX y video
 
-La página `/supervision` requiere que al menos un dispositivo tenga configurada
-su URL WHEP de MediaMTX. Esa URL es un dato del dispositivo (campo opcional
-`whepUrl`) que se administra desde `/nodos`, no una variable de entorno del
-frontend. MediaMTX todavía no tiene host, puerto, path ni esquema de
-autenticación definidos en este frontend; la URL acepta, por ejemplo, esta
-forma:
+La página `/supervision` requiere que al menos un dispositivo tenga tipo
+(`ENTRADA_HORNO` o `SALIDA_HORNO`) y que esté definida la variable de entorno
+`NEXT_PUBLIC_MEDIAMTX_URL`. La URL WHEP se deriva en el frontend como:
 
 ```text
-https://<host-de-mediamtx>/<path-de-stream>/whep
+<NEXT_PUBLIC_MEDIAMTX_URL>/<slug(nombre)>-<entrada|salida>/whep
 ```
 
-El segmento `<path-de-stream>` es solo ilustrativo; no es un path obligatorio
-para este proyecto. Quedan pendientes de definir el host, el puerto, la red,
-la autenticación y la URL final.
+Por ejemplo, un dispositivo llamado `RB-1` de tipo `ENTRADA_HORNO` genera
+`https://mediamtx.example/rb-1-entrada/whep`. El path usa guiones para formar
+un único segmento, igual que la publicación de la Raspberry.
 
 El frontend muestra **una Raspberry a la vez**. Por capacidad de las Raspberry,
-cada nodo publica una sola cámara/stream: la entrada y la salida del horno son
+cada dispositivo publica una sola cámara/stream: la entrada y la salida del horno son
 **dos dispositivos distintos**. Las fuentes se publican en MediaMTX en
 simultáneo, pero el navegador mantiene una sola sesión WHEP activa: al cambiar
-de nodo libera la sesión anterior y abre la nueva. `/supervision` lista
-únicamente los dispositivos con `whepUrl`; si hay más de uno, muestra un
-selector segmentado de nodo, y con uno solo lo muestra como contexto.
+de dispositivo libera la sesión anterior y abre la nueva. `/supervision` lista
+únicamente los dispositivos cuya URL pudo derivarse; si hay más de uno, muestra
+un selector segmentado de dispositivo, y con uno solo lo muestra como contexto.
 
 El navegador establece una conexión WebRTC de recepción (`recvonly`) y hace
 directamente un `POST` WHEP con una oferta SDP. Para que funcione en cada
@@ -100,13 +108,21 @@ Las variables reconocidas por el código son:
 
 | Variable | Uso | Requerida |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Configurarla siempre, incluso cuando algunas acciones de autenticación y usuarios tienen un default de producción. |
+| `NEXT_PUBLIC_API_URL` | URL base de la API Go. Se usa desde el servidor para server actions, páginas y handlers SSE; también es una variable pública por el prefijo `NEXT_PUBLIC_`. | Sí. Es obligatoria para todas las actions; si falta, la action falla con un error de configuración en vez de usar un fallback. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID público de Google para mostrar y utilizar el login con Google. No es un client secret. | Solo para login con Google. |
+| `NEXT_PUBLIC_MEDIAMTX_URL` | Base pública del servidor MediaMTX (sin path final). El front arma la URL WHEP de cada dispositivo como `<base>/<slug(nombre)>-<entrada|salida>/whep`. | Sí, para que `/supervision` pueda reproducir video. |
+| `JWT_SECRET` | Secreto de firma del JWT interno. Debe coincidir con el `JWT_SECRET` del backend Go. Se usa en el servidor (`proxy.ts` y server components) para verificar la cookie de sesión; no debe llevar prefijo `NEXT_PUBLIC_`. | Sí. |
 | `NODE_ENV` | Controla, entre otras cosas, la analítica de producción y el atributo `Secure` de la cookie. Next.js lo establece según el modo de ejecución. | No se configura manualmente para el uso normal. |
 
-La URL WHEP de la cámara **ya no se configura por variables de entorno**: es el
-campo opcional `whepUrl` de cada dispositivo, editable desde `/nodos`. Las
-variables `NEXT_PUBLIC_CAMERA_NODES`, `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`,
+`JWT_SECRET` se lee en el servidor (incluido el proxy) y debe estar definida en
+el entorno de build/ejecución (por ejemplo, Vercel) con el mismo valor que el
+backend Go. Si falta, el proxy falla en vez de aceptar sesiones sin verificar.
+
+`next.config.mjs` agrega headers de seguridad base: `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS y una CSP
+mínima (`frame-ancestors`, `base-uri`, `form-action`).
+
+Las variables `NEXT_PUBLIC_CAMERA_NODES`, `NEXT_PUBLIC_MEDIAMTX_WHEP_URL`,
 `NEXT_PUBLIC_MEDIAMTX_WHEP_URL_ENTRADA` y `NEXT_PUBLIC_MEDIAMTX_WHEP_URL_SALIDA`
 quedaron deprecadas y no se leen en el código.
 
@@ -118,7 +134,13 @@ lee en código de servidor, por lo que debe estar disponible en el entorno de
 ejecución.
 
 No colocar contraseñas, tokens privados ni otros secretos en variables
-`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador.
+`NEXT_PUBLIC_*`: sus valores pueden quedar expuestos al navegador. La
+configuración y los secretos de los proveedores de notificaciones
+(`NOTIFICACIONES_EMAIL_PROVIDER`, `RESEND_API_KEY`, `GMAIL_CLIENT_ID`,
+`GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `NOTIFICACIONES_EMAIL_FROM`,
+`TELEGRAM_BOT_TOKEN`) se leen y almacenan únicamente en el backend; el frontend
+solo muestra el estado de configuración y los nombres de las variables. El
+proveedor de email (Resend o Gmail API) se elige en el backend.
 
 ### Ejemplo local
 
@@ -127,12 +149,13 @@ Crear `.env.local` en la raíz, sin subirlo al repositorio:
 ```dotenv
 NEXT_PUBLIC_API_URL=http://localhost:8080
 # NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+JWT_SECRET=your-jwt-signing-secret-minimum-32-characters
 ```
 
 El backend local confirmado para desarrollo es `http://localhost:8080`.
 La variable comentada deja deshabilitado el login Google, sin introducir
-valores ficticios ni secretos. Para habilitar el video no hace falta una
-variable de entorno: se configura la URL WHEP de cada cámara desde `/nodos`.
+valores ficticios ni secretos. Para habilitar el video también definí
+`NEXT_PUBLIC_MEDIAMTX_URL` apuntando a la base pública de MediaMTX.
 
 Para producción, tomar como referencia `.env.example` y definir los valores en
 la configuración del proveedor. Actualmente el frontend se despliega en
@@ -141,17 +164,18 @@ la URL pública de Render y ejemplos no secretos para las demás variables.
 
 ### Cámaras por dispositivo
 
-Cada dispositivo puede tener una URL WHEP opcional. El backend la expone como
-`whepUrl` en `GET /api/v1/dispositivos` y la acepta como `whepUrl` opcional en
-el alta y la edición. Con el dispositivo seleccionado en `/nodos` se puede
-cargar o editar desde el formulario ("URL WHEP (cámara)"); la validación es
-suave y sólo exige una URL `http(s)://` que termine en `/whep`.
+La URL WHEP de cada dispositivo se deriva en el frontend a partir de su nombre,
+su tipo (`ENTRADA_HORNO` → `entrada`, `SALIDA_HORNO` → `salida`) y la variable
+de entorno `NEXT_PUBLIC_MEDIAMTX_URL`. El backend puede seguir devolviendo
+`whepUrl`, pero el front lo ignora: la fuente de verdad visual es la URL
+derivada. No se edita desde `/dispositivos`.
 
-`/supervision` construye la lista de cámaras con los dispositivos que tienen
-`whepUrl` no vacío (el `dispositivoId` identifica la fuente y se preserva el
-orden de la flota). Si no hay ninguna cámara configurada, muestra un estado
-vacío con un acceso a `/nodos` para configurarla. Si se declaran más de una,
-aparece un selector segmentado de nodo; con una sola, se muestra su nombre y
+`/supervision` construye la lista de cámaras con los dispositivos cuya URL se
+pudo derivar (tienen tipo y existe `NEXT_PUBLIC_MEDIAMTX_URL`). El
+`dispositivoId` identifica la fuente y se preserva el orden de la flota. Si no
+hay ninguna cámara disponible, muestra un estado vacío con un acceso a
+`/dispositivos` para revisar el tipo asignado. Si se declaran más de una,
+aparece un selector segmentado de dispositivo; con una sola, se muestra su nombre y
 ubicación como contexto.
 
 ## Puesta en marcha local
@@ -170,6 +194,10 @@ API Go debe estar accesible en `http://localhost:8080` y se debe conservar la
 variable `NEXT_PUBLIC_API_URL` del ejemplo. La ejecución o instalación de
 servicios externos no forma parte de este repositorio.
 
+La guía paso a paso de instalación, variables de entorno, despliegue y
+verificación funcional está en
+[`MANUAL_INSTALACION.md`](MANUAL_INSTALACION.md).
+
 Comandos disponibles en `package.json`:
 
 | Comando | Uso |
@@ -179,6 +207,12 @@ Comandos disponibles en `package.json`:
 | `pnpm start` | Sirve el build con `next start`. |
 | `pnpm lint` | Ejecuta ESLint. |
 | `pnpm test` | Ejecuta las pruebas con `vitest run`. |
+
+`pnpm test` usa Vitest con entorno `node` por defecto. Las pruebas de validación
+de consigna están en `lib/__tests__/consigna-validation.test.ts` y las de los
+componentes de consigna en `components/horno/__tests__/consigna-form.test.tsx`,
+que declara `// @vitest-environment jsdom`. Para un chequeo de tipos aislado,
+ejecutá `pnpm exec tsc --noEmit`.
 
 ## Arquitectura y flujo de datos
 
@@ -191,18 +225,19 @@ Comandos disponibles en `package.json`:
 3. El servicio Go responde los datos de producción, dispositivos,
    parámetros, usuarios y autenticación. El frontend no implementa esos
    endpoints de negocio.
-4. Para los eventos de lotes y nodos, el navegador abre `EventSource` contra
-   rutas internas de Next (`/api/...`). Esas rutas leen la cookie y mantienen
-   la conexión SSE con el endpoint equivalente de la API Go.
+4. Para los eventos de lotes, control de lote y dispositivos, el navegador abre
+   `EventSource` contra rutas internas de Next (`/api/...`). Esas rutas leen la
+   cookie y mantienen la conexión SSE con el endpoint equivalente de la API Go.
 5. Para video, el navegador no pasa por una action de Next: negocia WHEP
-   directamente con MediaMTX usando la URL `whepUrl` del dispositivo
-   seleccionado en `/supervision`.
-6. El proxy de Next aplica la comprobación de presencia, decodificación y
+   directamente con MediaMTX usando la URL derivada del dispositivo
+   seleccionado en `/supervision` (`<NEXT_PUBLIC_MEDIAMTX_URL>/<slug(nombre)>-<entrada|salida>/whep`).
+6. El proxy de Next comprueba la presencia, la firma HS256, el issuer y la
    expiración de la sesión antes de las páginas protegidas. Las APIs externas
    siguen siendo responsables de validar la sesión en cada request.
 
-El fetch inicial de lotes, nodos y parámetros usa `cache: "no-store"`; el
-dashboard y las páginas dinámicas de lotes, nodos y configuración están
+El fetch inicial de lotes, dispositivos y parámetros usa `cache: "no-store"`; el
+dashboard y las páginas dinámicas de lotes, control de lote, dispositivos,
+configuración, consigna manual, línea de producción, alertas y reportes están
 marcadas como dinámicas. Las consultas de datos de esas áreas tienen un
 timeout de 8 segundos para no bloquear indefinidamente cuando Render está
 iniciando.
@@ -211,15 +246,23 @@ iniciando.
 
 | Ruta | Descripción |
 |---|---|
-| `/` | Dashboard operativo: métricas calculadas de los lotes, accesos a módulos y estado general. |
+| `/` | Dashboard operativo: métricas calculadas de los lotes, merma observada (unidades y tasa), alertas activas del backend, promedio de temperatura real por sector con lote abierto, accesos a módulos y estado general. Con sesión muestra el dashboard; un acceso anónimo reescribe a `/inicio`. |
+| `/inicio` | Landing pública de presentación; no requiere sesión. |
 | `/login` | Inicio de sesión con email/contraseña o Google, según la configuración disponible. |
 | `/unauthorized` | Pantalla mostrada cuando el rol no alcanza la regla de acceso aplicada. |
 | `/usuarios` | Administración de usuarios, roles y estado activo. |
 | `/lotes` | Lotes y datos históricos con filtros locales, KPIs y tabla de supervisión. |
+| `/lotes/<id>/control` | Control automático/supervisión de un lote: modo (`MANUAL`, `SUPERVISION`, `AUTOMATICO`), Iniciar/Detener, estado del MPC, propuesta pendiente y confianza del modelo. |
+| `/linea-produccion` | Vista por sector del lote abierto: modo, setpoints, KPIs de calidad y alertas activas. |
+| `/horno/consigna` | Consigna manual de temperatura y velocidad de cinta para un lote abierto en modo `MANUAL`, última telemetría real de la Pi por sector/lote e historial de consignas. |
 | `/configuracion?productoId=<id>` | Parámetros de un producto e historial de corridas. Sin `productoId` se muestra el selector. |
-| `/alertas` | Placeholder funcional del módulo de alertas. |
-| `/supervision` | Lista los dispositivos con cámara (`whepUrl`), permite cambiar de nodo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
-| `/nodos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de nodos y la URL WHEP de la cámara. |
+| `/configuracion/notificaciones` | Canales de notificación (email con Resend o Gmail API, y Telegram) y preferencias por usuario. Requiere rol Administrador. |
+| `/sectores` | Gestión de sectores productivos: indicadores, búsqueda, alta/edición/baja y dispositivos asignados. Requiere rol Supervisor o Administrador. |
+| `/alertas` | Alertas operativas con filtro por estado y acuse de recibo. |
+| `/reportes` | Centro de reportes: resumen de KPIs y gráficos por período, OEE, filtros por sector/producto/turno, descargas CSV/Excel es-AR/JSON/PDF, alertas del período y PDF/CSV de trazabilidad por lote (métricas, alertas, decisiones y consignas). |
+| `/planificacion` | Importación CSV de plan de producción y paradas para habilitar OEE; rechaza planes solapados por sector, lista lo cargado con eliminación y permite editar reimportando el CSV (upsert). Requiere Supervisor o Administrador. |
+| `/supervision` | Lista los dispositivos con cámara derivada, permite cambiar de dispositivo y transmite en vivo por WHEP/WebRTC con estado de reconexión. |
+| `/dispositivos` | Estado de dispositivos, telemetría SSE, métricas históricas, operaciones CRUD de dispositivos y vista de solo lectura de la URL WHEP derivada. |
 
 La navegación lateral agrupa estas páginas en **Operación** y **Sistema**.
 
@@ -241,20 +284,47 @@ especificación completa del backend.
 | `POST /api/v1/auth/login` | Login local. | JSON `{ email, password }`. |
 | `POST /api/v1/auth/google` | Login con Google. | JSON `{ googleToken }`. |
 | `POST /api/v1/auth/logout` | Cierre de sesión. | Sin cuerpo relevante. |
-| `GET /api/v1/lotes-productivos` | Dashboard y `/lotes`. | `page=1&pageSize=100`. |
-| `GET /api/v1/lotes-productivos` | Historial de `/configuracion`. | `productoId`, `page`, `pageSize`; la página actual solicita `page=1&pageSize=100`. |
-| `GET /api/v1/dispositivos` | Carga inicial de `/nodos` y fuentes de `/supervision`. | Sin query. Cada dispositivo puede incluir `whepUrl` (opcional). |
-| `GET /api/v1/dispositivos/metricas` | Historial del nodo seleccionado. | `dispositivoId`, `page`, `pageSize`; el valor por defecto de la action es `page=1&pageSize=20`. |
-| `POST /api/v1/dispositivos` | Alta de un nodo Raspberry Pi. | JSON del dispositivo con `nombre`, `ubicacion` y `whepUrl` opcional; el backend genera el identificador. |
-| `PUT /api/v1/dispositivos` | Actualización del nombre/ubicación y de la cámara de un nodo. | JSON con `dispositivoId`, `nombre`, `ubicacion` y `whepUrl` opcional. |
-| `DELETE /api/v1/dispositivos` | Baja de un nodo. | `dispositivoId` como query. |
-| `GET /api/v1/parametros-producto` | Listado de productos y parámetros recomendados. | Sin query relevante. |
-| `PUT /api/v1/parametros-producto` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso y tolerancias. |
+| `GET /api/v1/sectores` | Dashboard, `/lotes`, `/sectores`, `/configuracion` y snapshot global. | Sin query. |
+| `GET /api/v1/lotes` | Dashboard, `/lotes`, `/configuracion` y snapshot global. Paginación por cursor. | `sector_id` (obligatorio con OAuth), `producto_id`, `limite`, `antes_de` (cursor); el backend omite `siguiente_cursor` en la última página. |
+| `GET /api/v1/lotes/abierto` | Lote abierto del sector en `/lotes`. | `sector_id`; responde `lote: null` cuando no hay ninguno. |
+| `POST /api/v1/lotes/{id}/control/start` | Inicia el loop MPC del lote desde `ControlCard`. | Sin cuerpo; requiere Supervisor/Admin. |
+| `POST /api/v1/lotes/{id}/control/stop` | Detiene el loop MPC del lote. | Sin cuerpo; requiere Supervisor/Admin. |
+| `GET /api/v1/lotes/{id}/control/estado` | Estado runtime del loop en `ControlCard`. | Sin query; un 404 degrada a `null`. |
+| `PATCH /api/v1/lotes/{id}/control/parametros` | Ajuste de parámetros del control desde `ControlCard`. | JSON parcial con los parámetros editables. |
+| `PATCH /api/v1/lotes/{id}/modo` | Cambio de modo `MANUAL`/`SUPERVISION`/`AUTOMATICO`. | JSON `{ modo }`; requiere Supervisor/Admin. |
+| `GET /api/v1/lotes/{id}/decisiones` | Audit del MPC en `ControlCard`. | `limite` (default 50, máximo 100). |
+| `GET /api/v1/lotes/{id}/metricas-horno` | Últimas lecturas del horno para el estado actual. | `limite` (default 1, máximo 200). |
+| `GET /api/v1/lotes/{id}/confianza-clases` | Confianza agregada del modelo de visión. | `limite` (default 200, máximo 2000); un 404 degrada a `[]`. |
+| `GET /api/v1/lotes/{id}/consigna-propuesta` | Propuesta pendiente del MPC en `SUPERVISION`. | Sin query; `204` = sin propuesta. |
+| `POST /api/v1/lotes/{id}/aplicar-consigna` | Aprueba/aplica la propuesta pendiente. | JSON opcional `{ decision_id }`; requiere propuesta no autorizada. |
+| `GET /api/v1/lotes/{id}/control/events` | SSE de propuestas y cambios de modo del lote. | `Accept: text/event-stream`; eventos `control.propuesta` y `control.evento`. |
+| `GET /api/v1/dispositivos` | Carga inicial de `/dispositivos`, `/sectores` y fuentes de `/supervision`. | Sin query. El front ignora el campo `whepUrl` si el backend lo envía; la URL se deriva localmente. |
+| `GET /api/v1/dispositivos/metricas` | Historial del dispositivo seleccionado. | `dispositivoId`, `page`, `pageSize`; el valor por defecto de la action es `page=1&pageSize=20`. |
+| `POST /api/v1/dispositivos` | **No se usa**: responde 405. El alta pasa por solicitudes de registro. | — |
+| `PUT /api/v1/dispositivos` | Actualiza el sector de un dispositivo. La URL WHEP no se edita desde el panel y el backend rechaza `nombre` en este cuerpo (400). | JSON con `dispositivoId` y `sectorId`; un 409 indica rol de dispositivo duplicado en el sector. |
+| `PUT /api/v1/dispositivos/{id}/nombre` | Renombra un dispositivo desde el panel (Supervisor/Administrador). La Raspberry es la fuente de verdad y también puede renombrarse por su propio endpoint. | JSON `{ nombre }`; un 404 indica que el dispositivo no existe. |
+| `DELETE /api/v1/dispositivos` | Baja (soft delete) de un dispositivo. | `dispositivoId` como query. |
+| `GET /api/v1/registration-requests` | Solicitudes de registro pendientes en `/dispositivos`. | Sólo Supervisor/Admin. |
+| `POST /api/v1/registration-requests/{id}/approve` | Aprobar una solicitud de registro. | — |
+| `POST /api/v1/registration-requests/{id}/reject` | Rechazar una solicitud de registro. | — |
+| `GET /api/v1/productos` | Listado de productos y parámetros recomendados. | Sin query relevante. |
+| `PUT /api/v1/productos/{id}` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso y tolerancias. |
+| `POST /api/v1/sectores` | Alta de sector en `/sectores`. | JSON `{ nombre }`. |
+| `PUT /api/v1/sectores/{id}` | Renombrar un sector. | JSON `{ nombre }`. |
+| `DELETE /api/v1/sectores/{id}` | Baja de un sector; 409 si tiene lotes asociados. | — |
 | `GET /api/v1/admin/usuarios` | Listado de usuarios en `/usuarios`. | Sin query relevante. |
 | `POST /api/v1/admin/usuarios` | Alta de usuario corporativo. | JSON con `email`, `nombre`, `rol` y `password` opcional. |
 | `PATCH /api/v1/admin/usuarios/{id}` | Cambio de nombre, rol o estado. | JSON con `nombre`, `rol` y/o `activo`. |
-| `GET /api/v1/lotes-productivos/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
+| `GET /api/v1/admin/notificaciones` | Estado de canales y destinatarios de `/configuracion/notificaciones`. | Responde `canales` (email/telegram) y `destinatarios`. |
+| `PATCH /api/v1/admin/notificaciones/{usuarioID}` | Actualiza chat ID de Telegram y/o toggles de email/Telegram de un usuario. | JSON opcional `{ telegram_chat_id, notificar_email, notificar_telegram }`. |
+| `POST /api/v1/admin/notificaciones/test` | Envía un mensaje de prueba por el canal indicado. | JSON `{ canal: "EMAIL" \| "TELEGRAM", usuario_id }`. |
+| `GET /api/v1/lotes/events` | SSE de nuevos lotes. | `Accept: text/event-stream`. |
 | `GET /api/v1/dispositivos/events` | SSE de estado y métricas de dispositivos. | `Accept: text/event-stream`. |
+| `GET /api/v1/horno` | Última telemetría real del horno de un sector en `/horno/consigna` (proyección de `metricas_horno`). | `sector_id` obligatorio; si el sector no existe (404), degrada a `null`. |
+| `GET /api/v1/horno/consigna/historial` | Historial de consignas del lote seleccionado. | `loteId` obligatorio; un 404 degrada a lista vacía. |
+| `POST /api/v1/horno/consigna` | Envío de una consigna manual al horno del sector. Requiere un lote abierto en modo `MANUAL`; el backend la encola para la Pi y la aplicación se confirma por ack en `decisiones_control`. El campo `usuario` se completa desde la sesión. | JSON `{ sectorId, productoId, temperaturaObjetivo, velocidadCintaObjetivo, loteId, usuario? }`. |
+| `GET /api/v1/alertas` | Listado de alertas en `/alertas` y alertas activas de `/linea-produccion`. | `estado=ACTIVA\|ACK\|RESUELTA`; un 404 degrada a lista vacía. |
+| `POST /api/v1/alertas/{id}/ack` | Acuse de recibo de una alerta. | Sin cuerpo; 409 si la alerta ya fue reconocida o resuelta. |
 
 Las server actions y los handlers envían la cookie `session_token` al backend
 cuando existe. Los detalles de validación, persistencia y autorización de la
@@ -262,26 +332,37 @@ API Go pertenecen al backend.
 
 ### Handlers internos de Next.js
 
-Estas rutas sí pertenecen a este repositorio y funcionan como una capa interna
-para conservar la cookie de sesión al abrir streams desde el navegador:
+Estas rutas sí pertenecen a este repositorio y funcionan como una capa interna:
+conservan la cookie de sesión al abrir streams y generan descargas desde el
+servidor.
 
 | Método y ruta interna | Reenvía a |
 |---|---|
-| `GET /api/lotes/events` | `GET /api/v1/lotes-productivos/events` |
-| `GET /api/nodos/events` | `GET /api/v1/dispositivos/events` |
-| `GET /api/nodos/snapshot` | `GET /api/v1/dispositivos` |
+| `GET /api/lotes/events` | `GET /api/v1/lotes/events` |
+| `GET /api/lotes/snapshot` | `GET /api/v1/sectores` + `GET /api/v1/lotes` (recorrido por cursor de cada sector) |
+| `GET /api/lotes/{id}/control/events` | `GET /api/v1/lotes/{id}/control/events` (SSE `control.propuesta` y `control.evento`) |
+| `GET /api/dispositivos/events` | `GET /api/v1/dispositivos/events` |
+| `GET /api/dispositivos/snapshot` | `GET /api/v1/dispositivos` |
+| `GET /api/reportes/lotes` | Genera CSV/JSON/PDF a partir de `GET /api/v1/reportes/resumen` y `GET /api/v1/reportes/lotes`; el PDF se renderiza con `@react-pdf/renderer` |
+| `GET /api/reportes/trazabilidad` | Genera el PDF de trazabilidad de un lote, o CSV de `dataset=proceso|alertas|decisiones|consignas`, a partir de `GET /api/v1/reportes/trazabilidad?lote_id=...` |
+| `GET /api/reportes/alertas` | Genera CSV/JSON de alertas del período desde `GET /api/v1/reportes/alertas` |
+| `GET /api/reportes/oee` | Consume `GET /api/v1/reportes/oee` para el bloque OEE del panel y del PDF |
+| `POST /api/planificacion/[tipo]/import` | Reenvía el CSV multipart a `POST /api/v1/planificacion/{plan,paradas}/import` |
+| `GET /api/planificacion/[tipo]` | Lista lo importado desde `GET /api/v1/planificacion/{plan,paradas}` |
+| `DELETE /api/planificacion/[tipo]/[id]` | Elimina una fila importada vía `DELETE /api/v1/planificacion/{tipo}/{id}` |
+| `GET /api/system-status` | `GET /health` |
 
 ### Sesiones WHEP de MediaMTX
 
 `components/supervision/live-camera.tsx` realiza el siguiente intercambio
-directamente desde el browser, usando la URL WHEP de la cámara del nodo
-seleccionado (campo `whepUrl` del dispositivo):
+directamente desde el browser, usando la URL WHEP derivada del dispositivo
+seleccionado en `/supervision`:
 
 1. `POST <whepUrl>` con `Content-Type: application/sdp`
    y una oferta SDP de video `recvonly`.
 2. Usa la respuesta SDP como answer y conserva el header `Location` de la
    sesión, cuando MediaMTX lo devuelve.
-3. Al desmontar, fallar, reconectar o cambiar de nodo, hace `DELETE <Location>`
+3. Al desmontar, fallar, reconectar o cambiar de dispositivo, hace `DELETE <Location>`
    para liberar la sesión WHEP. La URL final de MediaMTX, red, CORS y
    autenticación todavía están pendientes de definición.
 
@@ -290,20 +371,23 @@ seleccionado (campo `whepUrl` del dispositivo):
 - La sesión del navegador se guarda en la cookie `session_token`, `HttpOnly`,
   `SameSite=Strict`, con `Secure` en producción y duración local configurada
   para ocho horas al recibir la cookie del backend.
-- `/login` y `/unauthorized` son las rutas públicas. Las demás páginas pasan
-  por `proxy.ts`, que redirige a `/login` si no hay cookie, el payload no se
-  puede leer o la sesión está vencida.
-- El frontend decodifica el payload del token para conocer `email`, `nombre`,
-  `rol` y `exp`, pero **no verifica criptográficamente su firma**. La API Go
-  debe rechazar tokens falsos en cada request.
-- La regla configurada para `/usuarios` exige como mínimo el rol
-  `Administrador`.
+- `/login`, `/unauthorized` e `/inicio` son las rutas públicas. Un acceso
+  anónimo a `/` reescribe a `/inicio`; el resto pasa por `proxy.ts`, que redirige
+  a `/login` si no hay cookie o la sesión no es válida.
+- El frontend verifica la cookie `session_token` con `lib/auth.ts`: firma HS256
+  con `JWT_SECRET`, issuer `smart-check-automation` y expiración (`exp`
+  obligatorio). Un token que no verifica se trata como sesión ausente; la API Go
+  sigue validando la sesión en cada request.
+- Las reglas configuradas para `/usuarios` y `/configuracion/notificaciones`
+  exigen como mínimo el rol `Administrador`.
 - La ruta `/supervision` exige como mínimo el rol `Supervisor`; también puede
   acceder `Administrador`.
 - En `/configuracion`, la interfaz deja editar parámetros a `Supervisor` y
   `Administrador`; los demás roles los ven en modo lectura. Las operaciones
   sobre usuarios se realizan mediante las actions administrativas y el
   backend.
+- `/horno/consigna` sólo requiere una sesión válida; el backend acepta
+  Operario, Supervisor y Administrador para enviar la consigna.
 
 ## Disponibilidad y tiempo real
 
@@ -314,19 +398,20 @@ datos cuando corresponda:
 
 | Función | Comportamiento ante falta de API, timeout o error |
 |---|---|
-| `/` y `/lotes` | `getAllProductionRuns()` propaga el error; la página informa que la consulta no está disponible. |
-| `/configuracion` listado de productos | `getProductosConParametros()` propaga el error; una respuesta `data: []` se conserva como resultado vacío válido. |
-| `/configuracion` historial por producto | `getLotesPorProducto()` propaga el error y conserva los metadatos de paginación; una lista vacía es válida. |
-| `/nodos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
-| Historial de telemetría | `getDeviceHistory()` propaga el error e informa que el historial no está disponible. |
-| Usuarios y autenticación | Devuelven un error de conexión o de autenticación. Algunas actions tienen la URL pública de Render como default, pero se recomienda configurar siempre `NEXT_PUBLIC_API_URL`. |
-| Video | Se listan los dispositivos con `whepUrl`; el nodo con la cámara seleccionada se conecta y, ante una falla, intenta reconectar. Sin ninguna cámara configurada se muestra un estado vacío con acceso a `/nodos`. |
+| `/` y `/lotes` | `getAllLotes()` propaga el error; la página informa que la consulta no está disponible. |
+| `/configuracion` listado de productos | `getProductos()` propaga el error; una respuesta `data: []` se conserva como resultado vacío válido. |
+| `/configuracion` historial por producto | `getLotes()` propaga el error y conserva los metadatos de paginación; una lista vacía es válida. |
+| `/dispositivos` | `getDevices()` propaga el error y la página informa que los dispositivos no están disponibles. |
+| `/horno/consigna` | Productos, sectores, lote abierto, estado del horno e historial se consultan por separado; el error de cada bloque se muestra sin bloquear el resto de la página. |
+| Historial de telemetría | `getDeviceHistoryPage()` propaga el error e informa que el historial no está disponible. |
+| Usuarios y autenticación | Devuelven un error de conexión o de autenticación. `NEXT_PUBLIC_API_URL` es obligatoria: no hay fallback a Render. |
+| Video | Se listan los dispositivos cuya URL WHEP se pudo derivar; el dispositivo con la cámara seleccionada se conecta y, ante una falla, intenta reconectar. Sin ninguna cámara disponible se muestra un estado vacío con acceso a `/dispositivos`. |
 
-Los streams SSE de lotes y nodos se conectan desde el cliente y el navegador
-puede reintentarlos. Los nodos además hacen un snapshot inicial y una
-reconciliación periódica. Un cold start del backend en Render puede demorar la
-primera respuesta o dejar el stream reconectando; las consultas tienen un
-timeout de 8 segundos y exponen el error si se agota.
+Los streams SSE de lotes, control de lote y dispositivos se conectan desde el
+cliente y el navegador puede reintentarlos. Los dispositivos además hacen un
+snapshot inicial y una reconciliación periódica. Un cold start del backend en
+Render puede demorar la primera respuesta o dejar el stream reconectando; las
+consultas tienen un timeout de 8 segundos y exponen el error si se agota.
 
 ## Problemas frecuentes
 
@@ -334,14 +419,15 @@ timeout de 8 segundos y exponen el error si se agota.
 |---|---|
 | `NEXT_PUBLIC_API_URL no está definida` | Crear `.env.local` con `NEXT_PUBLIC_API_URL=http://localhost:8080` y reiniciar el servidor de desarrollo. |
 | Dashboard sin datos o con error | Verificar que la API esté disponible, que la URL sea correcta y que la sesión tenga acceso. En Render también puede tratarse de un cold start. |
-| Nodos vacíos o sin historial | Revisar la API Go, la cookie de sesión y los endpoints de dispositivos/metricas. |
-| La vista de video dice “Configuración pendiente” | Verificar que la URL WHEP del dispositivo esté cargada y sea correcta. Se edita desde `/nodos`; después, comprobar alcance desde el navegador, HTTPS, CORS e ICE. |
-| No aparece el selector de Raspberry | Revisar que haya más de un dispositivo con `whepUrl` cargado desde `/nodos`. Con un solo nodo se muestra como contexto, sin selector. |
-| La cámara de un nodo no aparece en `/supervision` | Confirmar que el dispositivo tenga el campo `whepUrl` no vacío (el formulario valida que sea `http(s)://` y termine en `/whep`). |
+| Dispositivos vacíos o sin historial | Revisar la API Go, la cookie de sesión y los endpoints de dispositivos/metricas. |
+| La vista de video dice "Sin cámaras disponibles" | Verificar que esté definida `NEXT_PUBLIC_MEDIAMTX_URL` y que los dispositivos tengan tipo (`ENTRADA_HORNO` o `SALIDA_HORNO`). La URL ya no se edita desde `/dispositivos`. |
+| No aparece el selector de Raspberry | Revisar que haya más de un dispositivo con tipo asignado y URL derivada. Con un solo dispositivo se muestra como contexto, sin selector. |
+| La cámara de un dispositivo no aparece en `/supervision` | Confirmar que el dispositivo tenga tipo (entrada/salida) y que `NEXT_PUBLIC_MEDIAMTX_URL` esté configurada. El path derivado debe coincidir con el que publica la Raspberry. |
 | WHEP responde pero no hay video | Revisar la URL final de WHEP, la conectividad ICE y que el endpoint devuelva SDP y, si corresponde, `Location`. La configuración de red y autenticación de MediaMTX está pendiente. |
 | Login Google no aparece o falla | Definir el `NEXT_PUBLIC_GOOGLE_CLIENT_ID` público correspondiente y reconstruir. El login local no depende de esa variable. |
 | Se cambió una variable en Vercel pero el cliente conserva el valor anterior | Las variables `NEXT_PUBLIC_*` del cliente se inlinéan en build: hacer un nuevo deploy/build, no solo reiniciar. |
 | Redirección inesperada a login o unauthorized | Revisar `session_token`, su expiración y el rol contenido en el payload. `/supervision` requiere `Supervisor` o `Administrador`. |
+| El formulario de consigna manual está bloqueado | No hay un lote abierto en el sector, o el lote seleccionado está en `SUPERVISION` o `AUTOMATICO`. Abrí un lote o cambialo a `MANUAL` desde el control del lote. |
 
 ## Despliegue
 
@@ -349,9 +435,9 @@ timeout de 8 segundos y exponen el error si se agota.
 
 1. Configurar el proyecto Next.js desde este repositorio.
 2. Definir en Vercel `NEXT_PUBLIC_API_URL` apuntando al backend Go de Render.
-3. Definir opcionalmente el Client ID de Google. La URL WHEP de cada cámara se
-   carga por dispositivo desde `/nodos`, no como variable de entorno.
-4. Ejecutar un nuevo build/deploy cada vez que cambie una variable
+3. Definir `NEXT_PUBLIC_MEDIAMTX_URL` con la base pública de MediaMTX.
+4. Definir opcionalmente el Client ID de Google.
+5. Ejecutar un nuevo build/deploy cada vez que cambie una variable
    `NEXT_PUBLIC_*` que consuma el cliente.
 
 El proyecto usa `output: "standalone"` y `images.unoptimized: true` en
@@ -371,15 +457,21 @@ SSE intentan reconectarse.
 app/
 ├── (auth)/                  Login y pantalla de no autorizado
 ├── (modulos)/               Dashboard y páginas de operación/sistema
-├── api/                     Handlers internos de SSE y snapshot de nodos
+│   └── horno/consigna/      Consigna manual del horno
+├── api/                     Handlers internos: snapshot/SSE de lotes y control, dispositivos, reportes y health check
 ├── globals.css              Tokens y estilos Tailwind v4
 └── layout.tsx               Layout raíz, metadata, tema y Analytics
 actions/
-├── api.ts                   Server actions para lotes, nodos y parámetros
+├── api.ts                   Server actions para lotes, control, horno, dispositivos, alertas y parámetros
 ├── auth.ts                  Server actions de login y logout
+├── reports.ts               Armado de reportes CSV/JSON de lotes
 └── users.ts                 Server actions administrativas de usuarios
 components/                  UI por módulo y primitivas shadcn/ui
+├── horno/                   Panel, formulario, estado e historial de consigna manual
+└── ...
 lib/                         Tipos, formateadores, auth y utilidades
+├── __tests__/               Pruebas unitarias, incluye consigna-validation.test.ts
+└── ...
 proxy.ts                     Protección de rutas y headers de sesión
 public/                      Recursos estáticos
 next.config.mjs              Configuración standalone e imágenes sin optimizar

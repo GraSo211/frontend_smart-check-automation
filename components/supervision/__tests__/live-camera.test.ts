@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { CAMERA_EVIDENCE_TTL_MS, canRequestCameraFrame, getCameraHealth, getReconnectDelay, isCameraEvidenceFresh, isCurrentCameraGeneration, shouldPublishCameraEvidence, startCameraSessionDelete } from "@/lib/camera-health"
+import { CAMERA_EVIDENCE_TTL_MS, getCameraHealth, getReconnectDelay, isCameraEvidenceFresh, isCurrentCameraGeneration, startCameraSessionDelete } from "@/lib/camera-health"
 
 describe("reconexión de cámara", () => {
   it("usa backoff progresivo y mantiene el máximo en 10 segundos", () => {
@@ -75,17 +75,6 @@ describe("evidencia de salud de cámara", () => {
   it("rechaza callbacks de una generación vieja", () => {
     expect(isCurrentCameraGeneration(3, 4)).toBe(false)
     expect(isCurrentCameraGeneration(4, 4)).toBe(true)
-  })
-
-  it("publica evidencia como máximo una vez por segundo, pero permite la primera y las transiciones", () => {
-    expect(shouldPublishCameraEvidence(null, 1_000)).toBe(true)
-    expect(shouldPublishCameraEvidence(1_000, 1_500)).toBe(false)
-    expect(shouldPublishCameraEvidence(1_000, 2_000)).toBe(true)
-  })
-
-  it("mantiene como máximo un callback de frame pendiente", () => {
-    expect(canRequestCameraFrame(null)).toBe(true)
-    expect(canRequestCameraFrame(42)).toBe(false)
   })
 
 })

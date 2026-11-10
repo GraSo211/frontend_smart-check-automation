@@ -5,18 +5,31 @@ import Link from "next/link"
 import { Camera, CircleDot, LoaderCircle, RefreshCw, VideoOff } from "lucide-react"
 import NodeSelector from "@/components/supervision/node-selector"
 import LiveCamera from "@/components/supervision/live-camera"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { useMonitoringActions, useMonitoringNodes } from "@/components/monitoring-provider"
 import { cameraNodesFromDevices } from "@/lib/camera-sources"
+import type { Sector } from "@/lib/production-data"
 
 // The provider's own node request has an 8s timeout; after that we surface a
 // retry instead of an endless spinner if the API never answered.
 const LOAD_TIMEOUT_MS = 8_000
 
-export default function SupervisionView() {
+interface SupervisionViewProps {
+  /** Sectores para resolver el nombre del sector de cada dispositivo (sectorId→nombre). */
+  sectores?: Sector[]
+}
+
+export default function SupervisionView({ sectores = [] }: SupervisionViewProps) {
   const devices = useMonitoringNodes()
   const { refreshNodes } = useMonitoringActions()
-  const cameraNodes = useMemo(() => cameraNodesFromDevices(devices), [devices])
+  const sectorNamesById = useMemo(
+    () => new Map(sectores.map((sector) => [sector.id, sector.nombre])),
+    [sectores],
+  )
+  const cameraNodes = useMemo(
+    () => cameraNodesFromDevices(devices, sectorNamesById),
+    [devices, sectorNamesById],
+  )
   const [selectedNodeId, setSelectedNodeId] = useState("")
   const [loadTimedOut, setLoadTimedOut] = useState(false)
   const node = cameraNodes.find((item) => item.id === selectedNodeId) ?? cameraNodes[0] ?? null
@@ -43,7 +56,7 @@ export default function SupervisionView() {
             <LiveCamera
               whepUrl={node.whepUrl}
               title={node.nombre}
-              subtitle={node.ubicacion || "Nodo de supervisión"}
+              subtitle={node.sector || "Dispositivo de supervisión"}
               videoAriaLabel={`Transmisión en vivo de la cámara de ${node.nombre}`}
             />
           </>
@@ -59,12 +72,12 @@ export default function SupervisionView() {
           </div>
           <dl className="mt-4 space-y-3">
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Nodo</dt>
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Dispositivo</dt>
               <dd className="mt-0.5 break-words text-sm text-foreground">{node?.nombre ?? "Sin definir"}</dd>
             </div>
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Ubicación</dt>
-              <dd className="mt-0.5 break-words text-sm text-foreground">{node?.ubicacion || "Sin definir"}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sector</dt>
+              <dd className="mt-0.5 break-words text-sm text-foreground">{node?.sector || "Sin definir"}</dd>
             </div>
             <div>
               <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Cámara</dt>
@@ -80,9 +93,16 @@ export default function SupervisionView() {
               </dd>
             </div>
           </dl>
-          <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <Camera className="size-3.5" aria-hidden="true" />
-            Señal de baja latencia
+          <div className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
+            <p className="flex items-center gap-2">
+              <Camera className="size-3.5" aria-hidden="true" />
+              Señal de baja latencia
+            </p>
+            <p className="mt-2 leading-relaxed">
+              La URL se arma automáticamente con el nombre y el tipo del dispositivo
+              ({`<slug(nombre)>-entrada|salida/whep`}). Requiere la variable{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">NEXT_PUBLIC_MEDIAMTX_URL</code>.
+            </p>
           </div>
         </div>
         <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-5">
@@ -111,14 +131,16 @@ function NoCameras() {
       <span className="flex size-12 items-center justify-center rounded-2xl bg-secondary/70 text-muted-foreground">
         <VideoOff className="size-6" aria-hidden="true" />
       </span>
-      <p className="font-heading text-base font-semibold text-foreground">Sin cámaras configuradas</p>
+      <p className="font-heading text-base font-semibold text-foreground">Sin cámaras disponibles</p>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Ningún nodo tiene una URL WHEP configurada. Definí la URL de la cámara (WHEP) en la configuración del dispositivo desde{" "}
-        <Link href="/nodos" className="font-medium text-primary underline-offset-4 hover:underline">
-          Nodos
-        </Link>
-        .
+        Ningún dispositivo pudo derivar una URL WHEP. Revisá que los dispositivos tengan tipo
+        (entrada/salida) y que esté definida la variable{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono">NEXT_PUBLIC_MEDIAMTX_URL</code>{" "}
+        en el entorno. La URL ya no se configura desde el dispositivo.
       </p>
+      <Link href="/dispositivos" className={buttonVariants({ variant: "outline", size: "sm" })}>
+        Ir a Dispositivos
+      </Link>
     </div>
   )
 }
@@ -129,7 +151,7 @@ function NodesError({ onRetry }: { onRetry: () => void }) {
       <span className="flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
         <VideoOff className="size-6" aria-hidden="true" />
       </span>
-      <p className="font-heading text-base font-semibold text-foreground">No se pudieron cargar los nodos</p>
+      <p className="font-heading text-base font-semibold text-foreground">No se pudieron cargar los dispositivos</p>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
         No pudimos obtener la lista de dispositivos. Revisá la conexión con la API e intentá de nuevo.
       </p>

@@ -1,30 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { decodeSessionToken, isSessionExpired, ROLE_LEVEL, type UserRole } from '@/lib/auth'
+import { decodeSessionToken, ROLE_LEVEL, type UserRole } from '@/lib/auth'
 
 // ─── Configuración de rutas ───────────────────────────────────────────────────
 
 /** Rutas que NO requieren autenticación */
-const PUBLIC_PATHS = ['/login', '/unauthorized']
+const PUBLIC_PATHS = ['/login', '/unauthorized', '/inicio']
 
 /** Mínimo rol requerido por prefijo de ruta */
 const PROTECTED_ROUTES: Array<{ prefix: string; minRole: UserRole }> = [
   { prefix: '/usuarios', minRole: 'Administrador' },
+  { prefix: '/configuracion/notificaciones', minRole: 'Administrador' },
   { prefix: '/supervision', minRole: 'Supervisor' },
+  { prefix: '/sectores', minRole: 'Supervisor' },
 ]
 
 const SESSION_COOKIE = 'session_token'
 
 // ─── Proxy (reemplaza al middleware en Next.js 16) ───────────────────────────
 
-export default function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Ignorar rutas de archivos estáticos y API interna de Next.js
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.includes('.')
-  ) {
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api')) {
     return NextResponse.next()
   }
 
@@ -37,16 +35,16 @@ export default function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value
 
   if (!token) {
+    // La home sin sesión es el landing público; se mantiene la URL "/".
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/inicio', request.url))
+    }
     return redirectToLogin(request)
   }
 
-  const session = decodeSessionToken(token)
+  const session = await decodeSessionToken(token)
 
   if (!session) {
-    return redirectToLogin(request)
-  }
-
-  if (isSessionExpired(session)) {
     return redirectToLogin(request)
   }
 
@@ -64,13 +62,7 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  // Pasar rol como header interno para que Server Components lo lean si necesitan
-  const response = NextResponse.next()
-  response.headers.set('X-User-Role', session.rol)
-  response.headers.set('X-User-Email', session.email)
-  response.headers.set('X-User-Nombre', session.nombre)
-
-  return response
+  return NextResponse.next()
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

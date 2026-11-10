@@ -1,4 +1,4 @@
-const INTERNAL_ORIGIN = 'https://smart-check.internal'
+const INTERNAL_ORIGIN = 'https://smartcheck.internal'
 
 function decodeRepeatedly(value: string): string | null {
   let decoded = value

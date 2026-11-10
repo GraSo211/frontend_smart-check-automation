@@ -16,7 +16,7 @@ const sora = Sora({
 })
 
 export const metadata: Metadata = {
-  title: 'Smart-Check Automation | Fermar S.A.',
+  title: 'SmartCheck Automation | Fermar S.A.',
   description:
     'Panel de supervisión de producción para la panificadora industrial Fermar S.A. — control de calidad en tiempo real y telemetría de hornos vía IoT Edge.',
 }
