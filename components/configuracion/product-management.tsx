@@ -58,9 +58,6 @@ function errorMessages(result: MutationResult, fallback: string): string[] {
 function controlParams(producto: Producto): Omit<ProductoRequest, "nombre"> {
   const params: Omit<ProductoRequest, "nombre"> = {
     pesoReferenciaKg: producto.pesoReferenciaKg,
-    toleranciaPesoPct: producto.toleranciaPesoPct,
-    dimensionBaseCm: producto.dimensionBaseCm,
-    toleranciaDimensionCm: producto.toleranciaDimensionCm,
     tempMin: producto.tempMin,
     tempMax: producto.tempMax,
     velocidadCintaMin: producto.velocidadCintaMin,

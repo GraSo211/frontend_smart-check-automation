@@ -143,9 +143,6 @@ function isProducto(value: unknown): value is Producto {
         typeof value.nombre === "string" && value.nombre !== "" &&
         typeof value.activo === "boolean" &&
         typeof value.pesoReferenciaKg === "number" &&
-        typeof value.toleranciaPesoPct === "number" &&
-        typeof value.dimensionBaseCm === "number" &&
-        typeof value.toleranciaDimensionCm === "number" &&
         typeof value.tempMin === "number" &&
         typeof value.tempMax === "number" &&
         typeof value.velocidadCintaMin === "number" &&

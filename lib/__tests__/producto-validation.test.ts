@@ -5,9 +5,6 @@ function request(overrides: Partial<ProductoRequest> = {}): ProductoRequest {
   return {
     nombre: "Pan",
     pesoReferenciaKg: 0.5,
-    toleranciaPesoPct: 5,
-    dimensionBaseCm: 10,
-    toleranciaDimensionCm: 1,
     tempMin: 180,
     tempMax: 220,
     velocidadCintaMin: 0.5,

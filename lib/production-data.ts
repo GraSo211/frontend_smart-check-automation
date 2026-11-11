@@ -268,9 +268,6 @@ export type Producto = {
   nombre: string
   activo: boolean
   pesoReferenciaKg: number
-  toleranciaPesoPct: number
-  dimensionBaseCm: number
-  toleranciaDimensionCm: number
   tempMin: number
   tempMax: number
   velocidadCintaMin: number
@@ -290,9 +287,6 @@ export type ProductoRequest = {
   costoFabricacionUnitarioArs?: number | null
   nombre: string
   pesoReferenciaKg: number
-  toleranciaPesoPct: number
-  dimensionBaseCm: number
-  toleranciaDimensionCm: number
   tempMin: number
   tempMax: number
   velocidadCintaMin: number
@@ -393,15 +387,6 @@ export function validateProducto(values: ProductoRequest): ProductoErrores {
 
   if (!(values.pesoReferenciaKg > 0)) {
     errors.pesoReferenciaKg = "Debe ser mayor a 0."
-  }
-  if (!(values.toleranciaPesoPct >= 0)) {
-    errors.toleranciaPesoPct = "Debe ser mayor o igual a 0."
-  }
-  if (!(values.dimensionBaseCm > 0)) {
-    errors.dimensionBaseCm = "Debe ser mayor a 0."
-  }
-  if (!(values.toleranciaDimensionCm >= 0)) {
-    errors.toleranciaDimensionCm = "Debe ser mayor o igual a 0."
   }
   if (!Number.isFinite(values.tempMin)) {
     errors.tempMin = "Ingresá un número."

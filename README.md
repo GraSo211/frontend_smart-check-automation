@@ -308,7 +308,7 @@ especificación completa del backend.
 | `POST /api/v1/registration-requests/{id}/approve` | Aprobar una solicitud de registro. | — |
 | `POST /api/v1/registration-requests/{id}/reject` | Rechazar una solicitud de registro. | — |
 | `GET /api/v1/productos` | Listado de productos y parámetros recomendados. | Sin query relevante. |
-| `PUT /api/v1/productos/{id}` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso y tolerancias. |
+| `PUT /api/v1/productos/{id}` | Actualización de parámetros de un producto. | JSON completo con `productoId`, temperaturas, velocidades, peso de referencia y capacidad nominal. |
 | `POST /api/v1/sectores` | Alta de sector en `/sectores`. | JSON `{ nombre }`. |
 | `PUT /api/v1/sectores/{id}` | Renombrar un sector. | JSON `{ nombre }`. |
 | `DELETE /api/v1/sectores/{id}` | Baja de un sector; 409 si tiene lotes asociados. | — |

@@ -80,23 +80,6 @@ const GROUPS: FieldGroup[] = [
     campos: [
       { key: "pesoReferenciaKg", label: "Peso de referencia", unidad: "kg", min: 0, placeholder: "ej: 0,8" },
       {
-        key: "toleranciaPesoPct",
-        label: "Tolerancia de peso",
-        unidad: "%",
-        min: 0,
-        placeholder: "ej: 5",
-        helper: "Porcentaje de diferencia admitido respecto al peso de referencia.",
-      },
-      { key: "dimensionBaseCm", label: "Dimensión base", unidad: "cm", min: 0, placeholder: "ej: 30" },
-      {
-        key: "toleranciaDimensionCm",
-        label: "Tolerancia de dimensión",
-        unidad: "cm",
-        min: 0,
-        placeholder: "ej: 2",
-        helper: "Diferencia en centímetros admitida respecto a la dimensión base.",
-      },
-      {
         key: "capacidadNominalKgH",
         label: "Capacidad nominal",
         unidad: "kg/h",
@@ -126,9 +109,6 @@ function toFormValues(initial?: Producto): FormValues {
     nombre: initial?.nombre ?? "",
     costoFabricacionUnitarioArs: initial?.costoFabricacionUnitarioArs != null ? String(initial.costoFabricacionUnitarioArs) : "",
     pesoReferenciaKg: initial ? String(initial.pesoReferenciaKg) : "",
-    toleranciaPesoPct: initial ? String(initial.toleranciaPesoPct) : "",
-    dimensionBaseCm: initial ? String(initial.dimensionBaseCm) : "",
-    toleranciaDimensionCm: initial ? String(initial.toleranciaDimensionCm) : "",
     tempMin: initial ? String(initial.tempMin) : "",
     tempMax: initial ? String(initial.tempMax) : "",
     velocidadCintaMin: initial ? String(initial.velocidadCintaMin) : "",
@@ -153,9 +133,6 @@ export function toRequest(values: FormValues): ProductoRequest {
     nombre: values.nombre.trim(),
     costoFabricacionUnitarioArs: optionalNum(values.costoFabricacionUnitarioArs ?? "") ?? null,
     pesoReferenciaKg: num(values.pesoReferenciaKg),
-    toleranciaPesoPct: num(values.toleranciaPesoPct),
-    dimensionBaseCm: num(values.dimensionBaseCm),
-    toleranciaDimensionCm: num(values.toleranciaDimensionCm),
     tempMin: num(values.tempMin),
     tempMax: num(values.tempMax),
     velocidadCintaMin: num(values.velocidadCintaMin),
@@ -198,7 +175,7 @@ export interface ProductFormProps {
   className?: string
 }
 
-// Formulario reutilizable de producto: nombre + los 8 parámetros de control.
+// Formulario reutilizable de producto: nombre + los parámetros de control.
 // Valida contra las mismas reglas que el backend y expone los errores por campo.
 export default function ProductForm({
   mode,
