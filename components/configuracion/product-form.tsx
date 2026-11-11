@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState, type FormEvent } from "react"
-import { Banknote, Gauge, Loader2, Scale, Target, Thermometer } from "lucide-react"
+import { Banknote, Gauge, Loader2, Scale, SlidersHorizontal, Target, Thermometer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,6 +23,7 @@ interface FieldDef {
   min?: number
   placeholder: string
   helper?: string
+  required?: boolean
 }
 
 interface FieldGroup {
@@ -41,15 +42,16 @@ const GROUPS: FieldGroup[] = [
       unidad: "ARS / pieza",
       min: 0,
       placeholder: "ej: 125,50",
-      helper: "Opcional, hasta 2 decimales. Vacío = sin configurar; 0 = costo cero. Cambiarlo recalcula la merma de los reportes al costo actual.",
+      helper: "Vacío = sin configurar; 0 = costo cero. Cambiarlo recalcula la merma de los reportes al costo actual.",
+      required: false,
     }],
   },
   {
     titulo: "Horno",
     icono: Thermometer,
     campos: [
-      { key: "tempMin", label: "Temperatura mínima", unidad: "°C", min: 0, placeholder: "ej: 180" },
-      { key: "tempMax", label: "Temperatura máxima", unidad: "°C", min: 0, placeholder: "ej: 220" },
+      { key: "tempMin", label: "Temperatura mínima", unidad: "°C", min: 0, placeholder: "ej: 180", required: true },
+      { key: "tempMax", label: "Temperatura máxima", unidad: "°C", min: 0, placeholder: "ej: 220", required: true },
     ],
   },
   {
@@ -63,6 +65,7 @@ const GROUPS: FieldGroup[] = [
         min: 0,
         placeholder: "ej: 0,5",
         helper: "Rango de velocidad de la cinta transportadora.",
+        required: true,
       },
       {
         key: "velocidadCintaMax",
@@ -71,6 +74,7 @@ const GROUPS: FieldGroup[] = [
         min: 0,
         placeholder: "ej: 1,5",
         helper: "Rango de velocidad de la cinta transportadora.",
+        required: true,
       },
     ],
   },
@@ -78,14 +82,15 @@ const GROUPS: FieldGroup[] = [
     titulo: "Control de calidad",
     icono: Scale,
     campos: [
-      { key: "pesoReferenciaKg", label: "Peso de referencia", unidad: "kg", min: 0, placeholder: "ej: 0,8" },
+      { key: "pesoReferenciaKg", label: "Peso de referencia", unidad: "kg", min: 0, placeholder: "ej: 0,8", required: true },
       {
         key: "capacidadNominalKgH",
         label: "Capacidad nominal",
         unidad: "kg/h",
         min: 0,
         placeholder: "ej: 120",
-        helper: "Opcional. Se usa para calcular Performance/OEE. Dejá en blanco si no aplica.",
+        helper: "Se usa para calcular Performance/OEE. Dejá en blanco si no aplica.",
+        required: false,
       },
     ],
   },
@@ -93,8 +98,8 @@ const GROUPS: FieldGroup[] = [
 
 // Setpoints opcionales: se agrupan aparte del resto de los parámetros.
 const SETPOINTS: FieldDef[] = [
-  { key: "tempSetpoint", label: "Temperatura objetivo", unidad: "°C", placeholder: "ej: 200" },
-  { key: "velocidadCintaSetpoint", label: "Velocidad objetivo", unidad: "m/s", placeholder: "ej: 1,0" },
+  { key: "tempSetpoint", label: "Temperatura objetivo", unidad: "°C", placeholder: "ej: 200", required: false },
+  { key: "velocidadCintaSetpoint", label: "Velocidad objetivo", unidad: "m/s", placeholder: "ej: 1,0", required: false },
 ]
 
 // Orden de foco/validación: nombre primero, luego los grupos tal como se ven.
@@ -259,81 +264,147 @@ export default function ProductForm({
     pendingLabel ?? (mode === "create" ? "Creando…" : "Guardando…")
 
   return (
-    <form onSubmit={handleSubmit} noValidate className={cn("space-y-5", className)}>
-      {formErrors.length > 0 && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {formErrors.length === 1 ? (
-            <p>{formErrors[0]}</p>
-          ) : (
-            <ul className="list-inside list-disc space-y-0.5">
-              {formErrors.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
+    <form onSubmit={handleSubmit} noValidate className={cn("flex flex-col", className)}>
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-5">
+        {formErrors.length > 0 && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {formErrors.length === 1 ? (
+              <p>{formErrors[0]}</p>
+            ) : (
+              <ul className="list-inside list-disc space-y-0.5">
+                {formErrors.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="producto-nombre" className="gap-1">
+            Nombre
+            <span className="text-destructive" aria-hidden="true">*</span>
+            <span className="sr-only"> (obligatorio)</span>
+          </Label>
+          {serverError("nombre") && (
+            <p id="producto-nombre-server-error" role="alert" className="text-xs text-destructive">
+              {serverError("nombre")}
+            </p>
+          )}
+          <Input
+            id="producto-nombre"
+            ref={(el) => {
+              fieldRefs.current.nombre = el
+            }}
+            value={values.nombre}
+            placeholder="ej: Pan de campo"
+            autoFocus={mode === "create"}
+            disabled={disabled}
+            aria-invalid={serverError("nombre") || clientError("nombre") ? true : undefined}
+            aria-describedby={
+              serverError("nombre")
+                ? "producto-nombre-server-error"
+                : clientError("nombre")
+                  ? "producto-nombre-error"
+                  : undefined
+            }
+            onChange={(e) => setField("nombre", e.target.value)}
+            onBlur={() => setTouched((prev) => ({ ...prev, nombre: true }))}
+          />
+          {clientError("nombre") && (
+            <p id="producto-nombre-error" className="text-xs text-destructive">
+              {clientError("nombre")}
+            </p>
           )}
         </div>
-      )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="producto-nombre">Nombre</Label>
-        {serverError("nombre") && (
-          <p id="producto-nombre-server-error" role="alert" className="text-xs text-destructive">
-            {serverError("nombre")}
-          </p>
-        )}
-        <Input
-          id="producto-nombre"
-          ref={(el) => {
-            fieldRefs.current.nombre = el
-          }}
-          value={values.nombre}
-          placeholder="ej: Pan de campo"
-          autoFocus={mode === "create"}
-          disabled={disabled}
-          aria-invalid={serverError("nombre") || clientError("nombre") ? true : undefined}
-          aria-describedby={
-            serverError("nombre")
-              ? "producto-nombre-server-error"
-              : clientError("nombre")
-                ? "producto-nombre-error"
-                : undefined
-          }
-          onChange={(e) => setField("nombre", e.target.value)}
-          onBlur={() => setTouched((prev) => ({ ...prev, nombre: true }))}
-        />
-        {clientError("nombre") && (
-          <p id="producto-nombre-error" className="text-xs text-destructive">
-            {clientError("nombre")}
-          </p>
-        )}
-      </div>
-
-      {GROUPS.map((grupo) => (
         <fieldset
-          key={grupo.titulo}
           disabled={disabled}
-          className="space-y-3 rounded-xl border border-border bg-muted/20 p-4 disabled:opacity-70"
+          className="space-y-4 rounded-xl border border-border bg-muted/20 p-4 disabled:opacity-70"
         >
-          <legend className="flex w-full items-center gap-2 px-1 text-sm font-semibold text-foreground">
-            <span className="flex size-6 items-center justify-center rounded-md bg-secondary/70 text-muted-foreground">
-              <grupo.icono className="size-3.5" aria-hidden="true" />
+          <legend className="flex w-full items-start gap-3 px-1 text-sm font-semibold text-foreground">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary/70 text-muted-foreground">
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
             </span>
-            {grupo.titulo}
+            <span className="flex flex-col">
+              <span>Parámetros de control</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Datos de costo, operación y calidad del producto.
+              </span>
+            </span>
+          </legend>
+
+          <div className="space-y-5">
+            {GROUPS.map((grupo, idx) => (
+              <div
+                key={grupo.titulo}
+                role="group"
+                aria-label={grupo.titulo}
+                className={cn("space-y-3", idx > 0 && "border-t border-border pt-4")}
+              >
+                <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <grupo.icono className="size-3.5" aria-hidden="true" />
+                  {grupo.titulo}
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {grupo.campos.map((campo) => (
+                    <NumberField
+                      key={campo.key}
+                      id={`producto-${campo.key}`}
+                      label={campo.label}
+                      unidad={campo.unidad}
+                      step={campo.key === "costoFabricacionUnitarioArs" ? "0.01" : "any"}
+                      min={campo.min}
+                      placeholder={campo.placeholder}
+                      helper={campo.helper}
+                      required={campo.required}
+                      value={values[campo.key]}
+                      serverError={serverError(campo.key)}
+                      error={clientError(campo.key)}
+                      disabled={disabled}
+                      inputRef={(el) => {
+                        fieldRefs.current[campo.key] = el
+                      }}
+                      onChange={(value) => setField(campo.key, value)}
+                      onBlur={() => setTouched((prev) => ({ ...prev, [campo.key]: true }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset
+          disabled={disabled}
+          className="space-y-4 rounded-xl border border-border bg-muted/20 p-4 disabled:opacity-70"
+        >
+          <legend className="flex w-full items-start gap-3 px-1 text-sm font-semibold text-foreground">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary/70 text-muted-foreground">
+              <Target className="size-4" aria-hidden="true" />
+            </span>
+            <span className="flex flex-col">
+              <span>Setpoints (opcional)</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Valor objetivo dentro del rango. Sólo se usa si se reactiva el despacho automático.
+                Dejá en blanco para no usarlo.
+              </span>
+            </span>
           </legend>
           <div className="grid gap-3 sm:grid-cols-2">
-            {grupo.campos.map((campo) => (
+            {SETPOINTS.map((campo) => (
               <NumberField
                 key={campo.key}
                 id={`producto-${campo.key}`}
                 label={campo.label}
                 unidad={campo.unidad}
-                step={campo.key === "costoFabricacionUnitarioArs" ? "0.01" : "any"}
                 min={campo.min}
                 placeholder={campo.placeholder}
                 helper={campo.helper}
+                required={campo.required}
                 value={values[campo.key]}
                 serverError={serverError(campo.key)}
                 error={clientError(campo.key)}
@@ -347,74 +418,38 @@ export default function ProductForm({
             ))}
           </div>
         </fieldset>
-      ))}
+      </div>
 
-      <fieldset
-        disabled={disabled}
-        className="space-y-3 rounded-xl border border-border bg-muted/20 p-4 disabled:opacity-70"
-      >
-        <legend className="flex w-full items-center gap-2 px-1 text-sm font-semibold text-foreground">
-          <span className="flex size-6 items-center justify-center rounded-md bg-secondary/70 text-muted-foreground">
-            <Target className="size-3.5" aria-hidden="true" />
-          </span>
-          Setpoints (opcional)
-        </legend>
-        <p className="text-xs text-muted-foreground">
-          Valor objetivo dentro del rango. Sólo se usa si se reactiva el despacho automático. Dejá en
-          blanco para no usarlo.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {SETPOINTS.map((campo) => (
-            <NumberField
-              key={campo.key}
-              id={`producto-${campo.key}`}
-              label={campo.label}
-              unidad={campo.unidad}
-              min={campo.min}
-              placeholder={campo.placeholder}
-              helper={campo.helper}
-              value={values[campo.key]}
-              serverError={serverError(campo.key)}
-              error={clientError(campo.key)}
-              disabled={disabled}
-              inputRef={(el) => {
-                fieldRefs.current[campo.key] = el
-              }}
-              onChange={(value) => setField(campo.key, value)}
-              onBlur={() => setTouched((prev) => ({ ...prev, [campo.key]: true }))}
-            />
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="flex flex-col-reverse items-stretch justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
-        {showDirtyHint && !disabled ? (
-          <span className="text-xs text-muted-foreground">
-            {isDirty ? "Tenés cambios sin guardar" : "Sin cambios"}
-          </span>
-        ) : (
-          <span aria-hidden="true" />
-        )}
-        <div className="flex items-center justify-end gap-2">
-          {onCancel && (
-            <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
-            </Button>
+      <div className="shrink-0 border-t border-border bg-card pt-4">
+        <div className="flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          {showDirtyHint && !disabled ? (
+            <span className="text-xs text-muted-foreground">
+              {isDirty ? "Tenés cambios sin guardar" : "Sin cambios"}
+            </span>
+          ) : (
+            <span aria-hidden="true" />
           )}
-          <Button
-            type="submit"
-            disabled={disabled || pending || hasErrors || isPristine}
-            className="gap-2"
-          >
-            {pending ? (
-              <>
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                {resolvedPendingLabel}
-              </>
-            ) : (
-              resolvedSubmitLabel
+          <div className="flex items-center justify-end gap-2">
+            {onCancel && (
+              <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
+                Cancelar
+              </Button>
             )}
-          </Button>
+            <Button
+              type="submit"
+              disabled={disabled || pending || hasErrors || isPristine}
+              className="gap-2"
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  {resolvedPendingLabel}
+                </>
+              ) : (
+                resolvedSubmitLabel
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </form>
@@ -429,6 +464,7 @@ function NumberField({
   min,
   placeholder,
   helper,
+  required,
   value,
   serverError,
   error,
@@ -444,6 +480,7 @@ function NumberField({
   min?: number
   placeholder: string
   helper?: string
+  required?: boolean
   value: string
   serverError?: string
   error?: string
@@ -463,7 +500,15 @@ function NumberField({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <Label htmlFor={id}>{label}</Label>
+        <Label htmlFor={id} className="gap-1">
+          {label}
+          {required ? (
+            <span className="text-destructive" aria-hidden="true">*</span>
+          ) : (
+            <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+          )}
+          {required && <span className="sr-only"> (obligatorio)</span>}
+        </Label>
         <span className="text-xs tabular-nums text-muted-foreground">{unidad}</span>
       </div>
       {serverError && (

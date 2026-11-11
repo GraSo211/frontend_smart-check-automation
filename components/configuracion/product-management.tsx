@@ -299,8 +299,8 @@ export function ProductManagement({
             if (!open) setCreateFieldErrors({})
           }}
         >
-          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-h-[85vh] flex flex-col overflow-hidden sm:max-w-3xl">
+            <DialogHeader className="shrink-0">
               <DialogTitle className="font-heading text-lg font-bold text-foreground">
                 Nuevo producto
               </DialogTitle>
@@ -314,6 +314,7 @@ export function ProductManagement({
               serverErrors={createFieldErrors}
               onSubmit={handleCreate}
               onCancel={() => setCreateOpen(false)}
+              className="flex-1 min-h-0"
             />
           </DialogContent>
         </Dialog>
