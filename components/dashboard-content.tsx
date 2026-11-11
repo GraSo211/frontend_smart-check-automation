@@ -98,6 +98,7 @@ export function HomeDashboard({
       quality: hasData && units > 0 ? qualityRate(correctos, units) : null,
       hasData,
       hasWaste,
+      hasOpenLote: currentRuns.some((run) => run.estado === "ABIERTO"),
     }
   }, [currentRuns])
 
@@ -140,8 +141,10 @@ export function HomeDashboard({
               : currentError
                 ? "Sin datos de producción"
                 : temperaturaPromedio === null
-                  ? "Sin telemetría de la Pi"
-                  : "Última lectura por sector con lote abierto"
+                  ? metrics.hasOpenLote
+                    ? "Sin telemetría de la Pi"
+                    : "Sin lotes abiertos"
+                  : "Promedio de la última lectura de cada sector con lote abierto"
           }
         />
         <Metric

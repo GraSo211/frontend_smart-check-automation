@@ -84,8 +84,22 @@ describe("panel principal sin base evaluable", () => {
     expect(html).toContain(">0</strong> unidades")
     expect(html).toContain(">0</strong> lotes consultados")
     expect(html).toContain("Sin datos")
-    expect(html).toContain("Sin telemetría de la Pi")
+    expect(html).toContain("Sin lotes abiertos")
     expect(html).not.toContain("Sin alertas activas")
+  })
+
+  it("distingue un lote abierto sin telemetría de la falta de lotes abiertos", () => {
+    const abierto = lote({ estado: "ABIERTO", cerrado_en: null })
+    monitoringMocks.useProductionData.mockReturnValue({ runs: [abierto], lastSyncAt: new Date().toISOString(), error: null, loading: false, truncated: false })
+    const html = renderToStaticMarkup(
+      React.createElement(HomeDashboard, {
+        runs: [abierto],
+        lastSyncAt: new Date().toISOString(),
+      }),
+    )
+
+    expect(html).toContain("Sin telemetría de la Pi")
+    expect(html).not.toContain("Sin lotes abiertos")
   })
 
   it("calcula los indicadores reales desde conteos y refleja alertas y temperatura reales", () => {
